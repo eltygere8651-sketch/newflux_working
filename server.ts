@@ -2164,6 +2164,9 @@ app.get("/api/radio/welcome", async (req, res) => {
     }
 
     // Attempt ElevenLabs if the API Key is defined
+    console.log(`[Diagnostic] ELEVENLABS_API_KEY present: ${!!process.env.ELEVENLABS_API_KEY}`);
+    console.log(`[Diagnostic] Request Header API Key present: ${!!req.headers["x-elevenlabs-api-key"]}`);
+
     if (elApiKey) {
       try {
         console.log(`[TTS] Requesting ElevenLabs TTS for phrase index ${index} using voice ${elVoiceId}...`);
@@ -2195,15 +2198,17 @@ app.get("/api/radio/welcome", async (req, res) => {
           return res.json({ text: selectedText, audio: base64Audio });
         } else {
           const errBody = await elResponse.text();
-          console.error(`[TTS] ElevenLabs API error (status ${elResponse.status}):`, errBody);
+          console.error(`[Diagnostic] ElevenLabs API failed with status ${elResponse.status}. Error body:`, errBody);
         }
-      } catch (elErr) {
-        console.error("[TTS] ElevenLabs fetch exception:", elErr);
+      } catch (elErr: any) {
+        console.error("[Diagnostic] ElevenLabs fetch exception:", elErr?.message || elErr);
       }
+    } else {
+      console.log("[Diagnostic] Skipping ElevenLabs: No API Key found in process.env or headers.");
     }
 
     // Fallback to Gemini 3.1 TTS if ElevenLabs key is not set or failed
-    console.log("[TTS] Falling back to Gemini TTS...");
+    console.log("[Diagnostic] Falling back to Gemini TTS because ElevenLabs failed or was skipped.");
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: { headers: { "User-Agent": "aistudio-build" } }
