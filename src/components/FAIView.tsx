@@ -39,17 +39,29 @@ interface FAIViewProps {
   position?: number;
   duration?: number;
   triggerAiDj?: (context: string, force?: boolean) => void;
+  isAdmin?: boolean;
 }
 
 const cleanTrackTitle = (title: string) => {
   return title.replace(/\[.*?\]|\(.*?\)|\- mix|mix \-|Mix|MIX|Audio Oficial|Official Video|Video Oficial|Lyric Video|Lyrics/gi, "").trim();
 };
 
-const extractArtist = (title: string, defaultArtist: string) => {
+const extractArtist = (title: string, defaultArtist: string, d?: any) => {
+  if (d && d.artist && !d.artist.includes("YouTube") && !d.artist.includes("Variado") && d.artist !== "Music") {
+    return d.artist;
+  }
   if (title.includes(" - ")) {
     return title.split(" - ")[0].trim();
   }
-  return defaultArtist;
+  if (d && d.channelTitle && !d.channelTitle.includes("YouTube")) {
+    return d.channelTitle;
+  }
+  // Try to parse out anything before a hyphen or just use the title
+  const parts = title.split("-");
+  if (parts.length > 1) return parts[0].trim();
+
+  // If we can't extract, we'll try to just return the clean title so at least they see something.
+  return defaultArtist === "Variado" || defaultArtist === "SOFIA_DJ MEZCLA" ? extractCleanTitle(title) : defaultArtist;
 };
 
 const extractCleanTitle = (title: string) => {
@@ -83,6 +95,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
   position = 0,
   duration = 0,
   triggerAiDj,
+  isAdmin,
 }) => {
   const [topRatio, setTopRatio] = useState(() => {
     const saved = localStorage.getItem("fai_top_ratio");
@@ -253,7 +266,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                       foundTracks = tracksArray.map((d: any) => ({
                         id: d.id,
                         title: extractCleanTitle(d.title),
-                        artist: extractArtist(d.title, selectedGenre),
+                        artist: extractArtist(d.title, selectedGenre, d),
                         url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                         thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                         duration: d.duration || "N/A"
@@ -271,7 +284,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                    foundTracks = validData.map((d: any) => ({
                     id: d.id,
                     title: extractCleanTitle(d.title),
-                    artist: extractArtist(d.title, selectedGenre),
+                    artist: extractArtist(d.title, selectedGenre, d),
                     url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                     thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                     duration: d.duration || "N/A"
@@ -331,7 +344,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                       const plTracks = tracksArray2.map((d: any) => ({
                         id: d.id,
                         title: extractCleanTitle(d.title),
-                        artist: extractArtist(d.title, "Variado"),
+                        artist: extractArtist(d.title, "Variado", d),
                         url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                         thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                         duration: d.duration || "N/A"
@@ -349,7 +362,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                   foundTracks = validData.map((d: any) => ({
                     id: d.id,
                     title: extractCleanTitle(d.title),
-                    artist: extractArtist(d.title, "Variado"),
+                    artist: extractArtist(d.title, "Variado", d),
                     url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                     thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                     duration: d.duration || "N/A"
@@ -457,6 +470,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
     const targetGenre = "SOFIA_DJ MEZCLA";
     setSelectedGenre(targetGenre);
     localStorage.setItem("fai_selected_genre", targetGenre);
+    setGenreExploration(true);
+    localStorage.setItem("fai_genre_exploration", "true");
     setGenreBuffer([]); // Clear previous genre buffer to ensure fresh Sofia Mix tracks
 
     const myRequestId = ++welcomeRequestIdRef.current;
@@ -467,6 +482,42 @@ export const FAIView: React.FC<FAIViewProps> = ({
     setIsRadioActive(true);
     setWelcomePosition(0);
     setWelcomeDuration(0);
+
+    // Prefetch next track buffer if empty to eliminate delay when speech ends
+    setTimeout(async () => {
+       try {
+         const randomQuery = "los 40 principales españa 2024 hoy official audio";
+         const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+         if (resp.ok) {
+           const data = await resp.json();
+           if (data && data.length > 0) {
+             const playlists = data.filter((d: any) => d.isPlaylist);
+             if (playlists.length > 0) {
+               const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
+               if (plResp.ok) {
+                 const plData = await plResp.json();
+                 const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+                 if (tracksArray.length > 0) {
+                   const formatted = tracksArray.map((d: any) => ({
+                      id: d.id,
+                      title: d.title,
+                      artist: "SOFIA_DJ MEZCLA",
+                      bpm: 120,
+                      url: `https://www.youtube.com/watch?v=${d.id}`,
+                      duration: d.duration || "N/A"
+                   })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
+                   if (formatted.length > 0) {
+                     setGenreBuffer(formatted.sort(() => Math.random() - 0.5));
+                   }
+                 }
+               }
+             }
+           }
+         }
+       } catch (e) {
+         console.log("Prefetch failed", e);
+       }
+    }, 100);
 
     // Pause any background music currently playing
     if (isPlaying) {
@@ -806,29 +857,18 @@ export const FAIView: React.FC<FAIViewProps> = ({
       {/* Main Viewport */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 pb-4 sm:pt-6 sm:pb-6 z-10 max-w-lg mx-auto w-full overflow-y-auto overflow-x-hidden premium-scrollbar relative">
         <div className="w-full flex flex-col items-center justify-center min-h-min py-8 sm:py-12 overflow-x-hidden">
-        {/* Mode Selector Pill */}
-        <div className="w-full flex justify-center mb-4 sm:mb-8 shrink-0 relative z-20 mt-2 sm:mt-0">
+        {/* Top Controls / Settings */}
+        <div className="w-full flex justify-end shrink-0 relative z-20 mb-4 px-2">
           <button
             onClick={() => setShowConfig(true)}
-            className="group relative flex items-center gap-2.5 bg-[#1a1c23] hover:bg-[#242730] border border-white/10 rounded-full py-2 px-5 transition-all shadow-xl hover:shadow-[#17d1a5]/20"
+            className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/5 rounded-full backdrop-blur-md transition-all shadow-xl hover:shadow-[#17d1a5]/20 text-white/40 hover:text-white"
+            title="Configuración de Mezcla"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#17d1a5]/10 to-blue-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            {!genreExploration ? (
-              <>
-                <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-[#17d1a5]" />
-                <span className="text-sm sm:text-base font-black text-white tracking-widest uppercase mt-[1px]">Modo Algoritmo</span>
-              </>
-            ) : (
-              <>
-                <Music className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400" />
-                <span className="text-sm sm:text-base font-black text-white tracking-widest uppercase mt-[1px] truncate max-w-[150px]">{selectedGenre}</span>
-              </>
-            )}
-            <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+            <Settings2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <div className="w-full flex justify-center items-center shrink-0 mb-4 sm:mb-8 px-2 relative mt-2 sm:mt-0">
+        <div className="w-full flex justify-center items-center shrink-0 mb-4 sm:mb-8 px-2 relative">
           
           {/* Album Art Card */}
           <motion.div 
@@ -887,36 +927,16 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
         <div className="w-full flex flex-col shrink-0">
         {/* Track Metadata Section */}
-        <div className="w-full mb-4 sm:mb-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0 text-left">
-              <motion.h2 
-                key={isSpeaking ? "welcome" : currentTrack?.title}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="text-lg sm:text-xl font-black tracking-tight truncate mb-0.5 leading-tight text-white"
-              >
-                {isSpeaking ? "Sofía DJ — En Directo" : (currentTrack?.title || "SOFIA DJ")}
-              </motion.h2>
-              <p className="text-white/60 text-sm sm:text-base sm:text-[13px] font-bold truncate">
-                {isSpeaking ? "Actualidad, Tendencias y Mix de Éxitos" : (currentTrack?.artist || "Tu DJ")}
-              </p>
-            </div>
-            
-            {!isSpeaking && (
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={(e) => {
-                    if (currentTrack && onToggleFavorite) {
-                      onToggleFavorite(currentTrack, e);
-                    }
-                  }}
-                  className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-white/5 rounded-full transition-all ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760]' : 'text-white/40 hover:text-white'}`}
-                >
-                  <Heart className={`w-5 h-5 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'fill-current' : ''}`} />
-                </button>
-              </div>
-            )}
+        <div className="w-full mb-6 sm:mb-8 mt-2">
+          <div className="flex items-center justify-center relative w-full">
+            <motion.h2 
+              key={isSpeaking ? "welcome" : currentTrack?.artist}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-2xl sm:text-3xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 truncate px-4 text-center"
+            >
+              {isSpeaking ? "Sofía DJ" : (currentTrack?.artist || "Sofía Mix")}
+            </motion.h2>
           </div>
         </div>
 
@@ -938,51 +958,62 @@ export const FAIView: React.FC<FAIViewProps> = ({
         </div>
 
         {/* Main Playback Controls */}
-        <div className="w-full flex items-center justify-between px-1">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 pointer-events-none opacity-0" />
-          
-          <div className="flex items-center gap-5 sm:gap-6">
+        <div className="flex items-center justify-between w-full px-4 sm:px-8 max-w-lg mb-8 sm:mb-12 mt-auto pb-4">
+          {/* Favorite button on the left */}
+          <div className="flex justify-start items-center gap-1 sm:gap-3 w-full pl-1 sm:pl-2">
             <button 
-              onClick={() => {
-                // Seek logic goes here if implemented, or ignore for radio
+              onClick={(e) => {
+                if (currentTrack && onToggleFavorite && !isSpeaking) {
+                  onToggleFavorite(currentTrack, e);
+                }
               }}
-              className="text-white/40 hover:text-white transition-all transform active:scale-90"
-              disabled={isSpeaking}
+              className={`p-1 sm:p-2 transition-all transform active:scale-90 flex-shrink-0 ${isSpeaking ? 'opacity-0 pointer-events-none' : ''} ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760] hover:text-[#17b54e]' : 'text-white/40 hover:text-white'}`}
             >
-              <SkipBack className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
-            </button>
-            
-            <button
-              onClick={toggleRadio}
-              className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-full flex items-center justify-center text-black shadow-xl hover:scale-105 active:scale-95 transition-all"
-            >
-              {showPauseIcon ? <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" /> : <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />}
-            </button>
-            
-            <button 
-              onClick={() => handleNextTrack(true)}
-              className="text-white hover:scale-110 active:scale-90 transition-all"
-            >
-              <SkipForward className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+              <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'fill-current' : ''}`} />
             </button>
           </div>
 
-          <div className="flex items-center justify-end gap-1.5 group/vol w-12 sm:w-20">
+          {/* Center Play Controls */}
+          <div className="flex items-center justify-center gap-4 sm:gap-8 flex-shrink-0 min-w-max mx-2 sm:mx-0">
             <button 
-              onClick={() => onVolumeChange && onVolumeChange(volume > 0 ? 0 : 100)}
-              className="text-white/40 group-hover/vol:text-white transition-colors shrink-0"
+              onClick={() => {}}
+              className="p-1 sm:p-2 text-white/40 hover:text-white transition-all transform active:scale-90 flex-shrink-0"
+              disabled={isSpeaking}
             >
-              <Volume2 className="w-6 h-6 sm:w-8 sm:h-8 sm:w-5 sm:h-5" />
+              <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
             </button>
-            <div
-              onPointerDown={handleVolumePointerDown}
-              className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
+            
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
+              onClick={toggleRadio}
+              className="rounded-full w-12 h-12 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl flex-shrink-0"
             >
+              {showPauseIcon ? <Pause className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7" /> : <Play className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />}
+            </motion.button>
+            
+            <button 
+              onClick={() => handleNextTrack(true)}
+              className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
+            >
+              <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
+            </button>
+          </div>
+
+          {/* Volume Adjuster */}
+          <div className="flex justify-end items-center gap-1.5 sm:gap-3 w-full pr-1 sm:pr-2">
+            <div className="flex items-center justify-end gap-1 sm:gap-1.5 group/vol w-[65px] sm:w-[100px]">
+              <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
               <div
-                className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
-                style={{ width: `${volume}%` }}
+                onPointerDown={handleVolumePointerDown}
+                className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
               >
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                <div
+                  className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
+                  style={{ width: `${volume}%` }}
+                >
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                </div>
               </div>
             </div>
           </div>
@@ -1155,7 +1186,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                        )}
                      </div>
                      <div className="flex-1 flex flex-col gap-2 pb-4">
-                       {DJ_GENRES.map((genre) => (
+                       {DJ_GENRES.filter(g => isAdmin || g !== "SOFIA_DJ MEZCLA").map((genre) => (
                          <button
                            key={genre}
                            onClick={() => {
@@ -1176,15 +1207,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
                    </div>
                  )}
 
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0">
-                <button 
-                  onClick={() => setShowConfig(false)}
-                  className="flex-1 py-4 rounded-xl border border-white/10 bg-white/5 text-white font-black uppercase tracking-widest text-sm sm:text-base hover:bg-white/10 transition-colors"
-                >
-                  Cerrar
-                </button>
               </div>
             </motion.div>
           </motion.div>

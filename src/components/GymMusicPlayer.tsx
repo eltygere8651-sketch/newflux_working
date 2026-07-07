@@ -6960,6 +6960,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   ) : trackListTab === "radio-fai" ? (
                     <div className="flex-1 h-full overflow-hidden">
                       <FAIView 
+                        isAdmin={isAdmin}
                         favorites={userPlaylists.find(pl => pl.name?.toLowerCase() === "favoritos")?.tracks || []}
                         topTracks={Object.values(getPlayHistory())
                           .sort((a, b) => b.playCount - a.playCount)
