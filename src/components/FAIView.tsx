@@ -109,48 +109,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
     return localStorage.getItem("fai_selected_genre") || "SOFIA_DJ MEZCLA";
   });
   const [customGenre, setCustomGenre] = useState("");
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState(() => localStorage.getItem("fai_elevenlabs_api_key") || "");
-  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => localStorage.getItem("fai_elevenlabs_voice_id") || "");
-  const [elevenLabsStatus, setElevenLabsStatus] = useState<"idle" | "checking" | "valid" | "error">("idle");
-  const [elevenLabsVoiceName, setElevenLabsVoiceName] = useState<string>("");
-  const [elevenLabsErrorMsg, setElevenLabsErrorMsg] = useState<string>("");
-
-  const checkElevenLabsVoice = async (apiKeyToTest: string, voiceIdToTest: string) => {
-    const key = apiKeyToTest.trim();
-    const voice = voiceIdToTest.trim() || "jBpfuIE2acCO8zBIW8W7";
-
-    if (!key) {
-      setElevenLabsStatus("idle");
-      setElevenLabsVoiceName("");
-      setElevenLabsErrorMsg("");
-      return;
-    }
-
-    setElevenLabsStatus("checking");
-    try {
-      const headers: Record<string, string> = {
-        "x-elevenlabs-api-key": key,
-        "x-elevenlabs-voice-id": voice,
-      };
-
-      const res = await fetch("/api/radio/test-voice", { headers });
-      const data = await res.json();
-
-      if (res.ok && data.valid) {
-        setElevenLabsStatus("valid");
-        setElevenLabsVoiceName(data.name || "Voz Personalizada");
-        setElevenLabsErrorMsg("");
-      } else {
-        setElevenLabsStatus("error");
-        setElevenLabsVoiceName("");
-        setElevenLabsErrorMsg(data.error || "No se pudo validar la voz");
-      }
-    } catch (err: any) {
-      setElevenLabsStatus("error");
-      setElevenLabsVoiceName("");
-      setElevenLabsErrorMsg(err?.message || "Error al conectar con el servidor");
-    }
-  };
 
   const [djMessage, setDjMessage] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
@@ -158,25 +116,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const [isRadioActive, setIsRadioActive] = useState(false);
   const [genreBuffer, setGenreBuffer] = useState<MusicTrack[]>([]);
   const [triggerPlay, setTriggerPlay] = useState(false);
-
-  // Debounced validation on input changes or when config modal is opened
-  useEffect(() => {
-    if (!showConfig) return;
-    
-    const delayDebounceFn = setTimeout(() => {
-      checkElevenLabsVoice(elevenLabsApiKey, elevenLabsVoiceId);
-    }, 800);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [elevenLabsApiKey, elevenLabsVoiceId, showConfig]);
-
-  useEffect(() => {
-    localStorage.setItem("fai_elevenlabs_api_key", elevenLabsApiKey);
-  }, [elevenLabsApiKey]);
-
-  useEffect(() => {
-    localStorage.setItem("fai_elevenlabs_voice_id", elevenLabsVoiceId);
-  }, [elevenLabsVoiceId]);
 
   // Auto-start welcome on mount if not yet played in session - DISABLED as per user request to play only on Play click
   /*
@@ -1210,75 +1149,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
                    </div>
                  )}
 
-                 {/* ElevenLabs Configuration Section */}
-                 <div className="mt-6 border-t border-white/10 pt-5 z-10 shrink-0">
-                   <h4 className="text-sm font-black text-white flex items-center gap-2">
-                     <Sparkles className="w-5 h-5 text-[#17d1a5]" />
-                     Voz de Sofía Personalizada (ElevenLabs)
-                   </h4>
-                   <p className="text-xs text-white/50 mt-1.5 leading-relaxed">
-                     Si tienes una voz propia en ElevenLabs que deseas utilizar para Sofía DJ, introduce tus credenciales aquí. Se guardarán de manera segura en tu navegador.
-                   </p>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider">ElevenLabs API Key</label>
-                       <input
-                         type="password"
-                         placeholder="Tu API Key de ElevenLabs..."
-                         value={elevenLabsApiKey}
-                         onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#17d1a5] focus:ring-1 focus:ring-[#17d1a5] transition-all"
-                       />
-                     </div>
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider">ElevenLabs Voice ID</label>
-                       <input
-                         type="text"
-                         placeholder="ID de la voz (Ej: jBpfuIE2acCO8zBIW8W7)"
-                         value={elevenLabsVoiceId}
-                         onChange={(e) => setElevenLabsVoiceId(e.target.value)}
-                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#17d1a5] focus:ring-1 focus:ring-[#17d1a5] transition-all"
-                       />
-                     </div>
-                   </div>
-
-                   {/* ElevenLabs Status Feedback */}
-                   {elevenLabsApiKey.trim() && (
-                     <div className="mt-4 text-xs">
-                       {elevenLabsStatus === "checking" && (
-                         <div className="flex items-center gap-2.5 text-[#17d1a5] bg-[#17d1a5]/5 border border-[#17d1a5]/20 p-3 rounded-xl">
-                           <span className="w-2.5 h-2.5 rounded-full bg-[#17d1a5] animate-ping" />
-                           <span className="font-semibold">Verificando credenciales con ElevenLabs...</span>
-                         </div>
-                       )}
-                       {elevenLabsStatus === "valid" && (
-                         <div className="flex flex-col gap-1 bg-[#17d1a5]/10 border border-[#17d1a5]/30 p-3 rounded-xl text-white">
-                           <div className="flex items-center gap-2 text-[#17d1a5] font-black uppercase tracking-wider text-[10px]">
-                             <span className="w-2 h-2 rounded-full bg-[#17d1a5]" />
-                             ¡Conectado con éxito!
-                           </div>
-                           <span className="text-white/80 mt-0.5">
-                             Sofía DJ hablará usando tu voz activa: <strong className="text-[#17d1a5] font-bold">{elevenLabsVoiceName}</strong>.
-                           </span>
-                         </div>
-                       )}
-                       {elevenLabsStatus === "error" && (
-                         <div className="flex flex-col gap-1.5 bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-white">
-                           <div className="flex items-center gap-2 text-red-400 font-black uppercase tracking-wider text-[10px]">
-                             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                             Error de Conexión
-                           </div>
-                           <span className="text-red-300 font-medium text-xs leading-relaxed">
-                             {elevenLabsErrorMsg}
-                           </span>
-                           <span className="text-white/40 text-[10px] leading-relaxed">
-                             Por favor, comprueba que tu API Key sea correcta, que tu Voice ID esté bien escrito y que te queden caracteres de cuota disponibles en ElevenLabs.
-                           </span>
-                         </div>
-                       )}
-                     </div>
-                   )}
-                 </div>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
