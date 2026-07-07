@@ -138,6 +138,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const [welcomeText, setWelcomeText] = useState(cachedWelcomeText);
 
   const isSpeakingRef = useRef(false);
+  const isSearchingRef = useRef(false);
   const welcomeAudioRef = useRef<HTMLAudioElement | null>(null);
   const handleNextTrackRef = useRef<((isManualParam?: boolean) => Promise<void>) | null>(null);
   const handleEndWelcomeRef = useRef<(() => void) | null>(null);
@@ -217,14 +218,16 @@ export const FAIView: React.FC<FAIViewProps> = ({
   };
 
   const handleNextTrack = useCallback(async (isManualParam = false) => {
-    if (isSpeakingRef.current) {
-      handleEndWelcomeRef.current?.();
+    if (isSpeakingRef.current || isSearchingRef.current) {
+      if (isSpeakingRef.current) handleEndWelcomeRef.current?.();
       return;
     }
+    isSearchingRef.current = true;
     const isManual = isManualParam === true;
     let next: MusicTrack | null = null;
 
-    if (genreExploration && selectedGenre !== "Variado Mix" && selectedGenre !== "SOFIA_DJ MEZCLA") {
+    try {
+      if (genreExploration && selectedGenre !== "Variado Mix" && selectedGenre !== "SOFIA_DJ MEZCLA") {
       if (genreBuffer.length > 0) {
         next = genreBuffer[0];
         setGenreBuffer(prev => prev.slice(1));
@@ -277,7 +280,10 @@ export const FAIView: React.FC<FAIViewProps> = ({
               }
 
               if (foundTracks.length > 0) {
-                const shuffled = foundTracks.sort(() => Math.random() - 0.5);
+                // Filter out current track to ensure variety
+                const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
+                const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
+                const shuffled = pool.sort(() => Math.random() - 0.5);
                 next = shuffled[0];
                 setGenreBuffer(shuffled.slice(1));
               }
@@ -352,7 +358,10 @@ export const FAIView: React.FC<FAIViewProps> = ({
               }
 
               if (foundTracks.length > 0) {
-                const shuffled = foundTracks.sort(() => Math.random() - 0.5);
+                // Filter out current track to ensure variety
+                const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
+                const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
+                const shuffled = pool.sort(() => Math.random() - 0.5);
                 next = shuffled[0];
                 setGenreBuffer(shuffled.slice(1));
               }
@@ -378,7 +387,21 @@ export const FAIView: React.FC<FAIViewProps> = ({
       onPlayTrack(next);
       setIsRadioActive(true);
     }
+    } catch (e) {
+      console.error("FAI handleNextTrack failed", e);
+    } finally {
+      isSearchingRef.current = false;
+    }
   }, [topTracks, favorites, allTracks, discoveryLevel, topRatio, favRatio, discRatio, genreExploration, selectedGenre, onPlayTrack, showDJMessage, genreBuffer, triggerAiDj]);
+
+  useEffect(() => {
+    const onFaiNext = () => {
+      console.log("[FAI] External next track requested");
+      handleNextTrack();
+    };
+    window.addEventListener("fai_next_track", onFaiNext);
+    return () => window.removeEventListener("fai_next_track", onFaiNext);
+  }, [handleNextTrack]);
 
   useEffect(() => {
     handleNextTrackRef.current = handleNextTrack;
@@ -430,6 +453,12 @@ export const FAIView: React.FC<FAIViewProps> = ({
   }, [currentTrack, isPlaying, onTogglePlay]);
 
   const handleStartWelcome = async () => {
+    // FORCE "SOFIA_DJ MEZCLA" genre immediately when starting radio
+    const targetGenre = "SOFIA_DJ MEZCLA";
+    setSelectedGenre(targetGenre);
+    localStorage.setItem("fai_selected_genre", targetGenre);
+    setGenreBuffer([]); // Clear previous genre buffer to ensure fresh Sofia Mix tracks
+
     const myRequestId = ++welcomeRequestIdRef.current;
     speechStartTimeRef.current = Date.now();
     setWelcomeStep("speaking");

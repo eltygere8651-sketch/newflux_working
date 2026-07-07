@@ -2509,41 +2509,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       recordTrackSkip(currentActiveTrack);
     }
 
+    if (trackListTab === "radio-fai") {
+      window.dispatchEvent(new Event("fai_next_track"));
+      return;
+    }
+
     let nextTrackTarget = null;
     let nextIndex = 0;
-
-    if (trackListTab === "radio-fai") {
-      // Get the discovery level from localStorage or default
-      const storedVal = localStorage.getItem("fai_discovery");
-      const discoveryLevel = storedVal ? parseInt(storedVal, 10) : 30;
-      
-      const favorites = userPlaylists.find(p => p.name.toLowerCase() === "favoritos")?.tracks || [];
-      const topTracks = Object.values(getPlayHistory())
-        .sort((a, b) => b.playCount - a.playCount)
-        .slice(0, 30)
-        .map((h) => {
-          const dbT = ALL_DATABASE_TRACKS.find(t => t.id === h.trackId);
-          return {
-            id: h.trackId,
-            title: h.title,
-            artist: h.artist,
-            bpm: h.bpm,
-            url: h.url || (dbT ? dbT.url : `https://www.youtube.com/watch?v=${h.trackId}`),
-            duration: "N/A",
-          };
-        });
-      
-      const nextTrack = selectNextDJTrack(topTracks, favorites, ALL_DATABASE_TRACKS, { discoveryLevel });
-      
-      if (nextTrack) {
-        
-
-        setOverrideCurrentTrack(nextTrack);
-        setIsPlaying(true);
-        loadIframeVideoDirectly(nextTrack);
-        return;
-      }
-    }
 
     if (trackQueueRef.current.length > 0) {
       nextTrackTarget = trackQueueRef.current[0];
