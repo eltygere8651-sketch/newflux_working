@@ -419,11 +419,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
     sessionStorage.setItem("flux_radio_welcome_played_session", "true");
     
     // Auto start the radio playback correctly!
-    if (!currentTrack) {
-      handleNextTrackRef.current?.(false);
-    } else if (!isPlaying) {
-      onTogglePlay();
-    }
+    // We always trigger a new track selection from the DJ logic after the intro
+    // to ensure the user enters the "Radio" experience even if they had a previous track.
+    handleNextTrackRef.current?.(false);
     setIsRadioActive(true);
   };
 
