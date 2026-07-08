@@ -247,8 +247,10 @@ const INVIDIOUS_INSTANCES = [
   "https://vid.puffyan.us",
 ];
 const PIPED_INSTANCES = [
-  "https://api.piped.projectsegfau.lt",
-  "https://pipedapi.in.projectsegfau.lt",
+  "https://pipedapi.kavin.rocks",
+  "https://piped-api.garudalinux.org",
+  "https://piped-api.privacydev.net",
+  "https://api.piped.yt",
   "https://pipedapi.lunar.icu",
 ];
 
@@ -379,16 +381,19 @@ app.get("/api/user/playlists", async (req, res) => {
 // YouTube Search Endpoint
 app.get("/api/youtube/search", async (req, res) => {
   const query = req.query.q as string;
-  if (!query) return res.status(400).json({ error: "Missing query" });
-
-  res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
+  if (!query) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    return res.status(400).json({ error: "Missing query" });
+  }
 
   const normalizedQuery = query.toLowerCase().trim();
+  const bypassCache = req.query.refresh === "true" || req.query.bypass === "true";
 
   // Check cache
   const cached = searchCache.get(normalizedQuery);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (!bypassCache && cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log("Serving YouTube search from cache (ECO):", normalizedQuery);
+    res.setHeader("Cache-Control", "public, max-age=86400");
     return res.json(cached.data);
   }
 
@@ -396,6 +401,7 @@ app.get("/api/youtube/search", async (req, res) => {
     try {
       yt = await Innertube.create({ generate_session_locally: true });
     } catch (e) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       return res.status(503).json({ error: "YouTube service unavailable" });
     }
   }
@@ -683,6 +689,7 @@ app.get("/api/youtube/search", async (req, res) => {
       });
     }
 
+    res.setHeader("Cache-Control", "public, max-age=86400");
     res.json(combined);
   } catch (error) {
     console.warn(
@@ -740,6 +747,7 @@ app.get("/api/youtube/search", async (req, res) => {
                 data: combined,
                 timestamp: Date.now(),
               }); // Cache fallback results
+              res.setHeader("Cache-Control", "public, max-age=86400");
               return res.json(combined);
             }
           }
@@ -751,6 +759,7 @@ app.get("/api/youtube/search", async (req, res) => {
       console.error("All fallbacks failed.");
     }
 
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res
       .status(500)
       .json({ error: "Internal YouTube search error (and fallbacks failed)" });
@@ -764,8 +773,8 @@ const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 const ytClients = new Map<string, any>();
 
 app.get("/api/youtube/explore", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
   const country = ((req.query.country as string) || "ES").toUpperCase();
+  const bypassCache = req.query.refresh === "true" || req.query.bypass === "true";
   const countryMap: Record<string, string> = {
     GLOBAL: "Global",
     US: "Estados Unidos",
@@ -784,7 +793,8 @@ app.get("/api/youtube/explore", async (req, res) => {
   const countryName = countryMap[country] || "España";
 
   const cached = exploreCache.get(country);
-  if (cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
+  if (!bypassCache && cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
+    res.setHeader("Cache-Control", "public, max-age=86400");
     return res.json(cached.data);
   }
 
@@ -795,6 +805,7 @@ app.get("/api/youtube/explore", async (req, res) => {
       yt = await Innertube.create({ gl: country === 'GLOBAL' ? 'US' : country, hl: 'es' });
       ytClients.set(country, yt);
     } catch (e) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       return res.status(503).json({ error: "YouTube unavailable for region" });
     }
   }
@@ -991,6 +1002,7 @@ app.get("/api/youtube/explore", async (req, res) => {
 
 
     exploreCache.set(country, { data, timestamp: Date.now() });
+    res.setHeader("Cache-Control", "public, max-age=86400");
     res.json(data);
   } catch (error) {
     console.warn(
@@ -1041,6 +1053,7 @@ app.get("/api/youtube/explore", async (req, res) => {
                 party: [],
               };
               exploreCache.set(country, { data, timestamp: Date.now() });
+              res.setHeader("Cache-Control", "public, max-age=86400");
               return res.json(data);
             }
           }
@@ -1052,6 +1065,7 @@ app.get("/api/youtube/explore", async (req, res) => {
       console.error("Explore fallback failed.");
     }
 
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.status(500).json({ error: "Internal error (and fallbacks failed)" });
   }
 });

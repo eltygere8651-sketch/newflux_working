@@ -8,22 +8,14 @@ import {
   SkipBack,
   Settings2, 
   Heart,
-  Plus,
-  Share2,
   Volume2,
-  RotateCcw,
   Radio,
-  Users,
   Music,
-  Tv,
   Sparkles,
-  MoreHorizontal,
-  X,
-  Compass,
-  ChevronRight
+  X
 } from "lucide-react";
 import { MusicTrack } from "../types";
-import { selectNextDJTrack, FLUX_PAYOLA, DJ_GENRES, isReasonableTrack } from "../lib/djLogic";
+import { selectNextDJTrack, DJ_GENRES, isReasonableTrack } from "../lib/djLogic";
 
 interface FAIViewProps {
   favorites: MusicTrack[];
@@ -78,7 +70,7 @@ const extractCleanTitle = (title: string) => {
   return cleaned.trim() || title;
 };
 
-const cachedWelcomeText = "¡Qué pasa chavales! 🔥 Aquí Sofía DJ al mando de los platos. Os traigo un set que es puro fuego, ¡así que subid el volumen al máximo y que empiece el desmadre! ⚡️";
+const cachedWelcomeText = "¡Qué pasa chavales! 🔥 Aquí Radio Mix al mando de los platos. Os traigo un set que es puro fuego, ¡así que subid el volumen al máximo y que empiece el desmadre! ⚡️";
 
 
 export const FAIView: React.FC<FAIViewProps> = ({
@@ -130,17 +122,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const [genreBuffer, setGenreBuffer] = useState<MusicTrack[]>([]);
   const [triggerPlay, setTriggerPlay] = useState(false);
 
-  // Auto-start welcome on mount if not yet played in session - DISABLED as per user request to play only on Play click
-  /*
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!welcomePlayed && !isRadioActive) {
-        handleStartWelcome();
-      }
-    }, 500); 
-    return () => clearTimeout(timer);
-  }, [welcomePlayed, isRadioActive]);
-  */
   const [welcomePlayed, setWelcomePlayed] = useState(false);
 
   const [welcomeStep, setWelcomeStep] = useState<"idle" | "loading" | "speaking">("idle");
@@ -484,212 +465,54 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
     const myRequestId = ++welcomeRequestIdRef.current;
     speechStartTimeRef.current = Date.now();
-    setWelcomeStep("speaking");
-    setSpeaking(true);
+    setWelcomeStep("idle");
+    setSpeaking(false);
     setIsSpeakingPaused(false);
     setIsRadioActive(true);
     setWelcomePosition(0);
     setWelcomeDuration(0);
+    setWelcomePlayed(true);
+    sessionStorage.setItem("flux_radio_welcome_played_session", "true");
 
-    // Prefetch next track buffer if empty to eliminate delay when speech ends
-    setTimeout(async () => {
-       try {
-         const randomQuery = "los 40 principales españa 2024 hoy official audio";
-         const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
-         if (resp.ok) {
-           const data = await resp.json();
-           if (data && data.length > 0) {
-             const playlists = data.filter((d: any) => d.isPlaylist);
-             if (playlists.length > 0) {
-               const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
-               if (plResp.ok) {
-                 const plData = await plResp.json();
-                 const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
-                 if (tracksArray.length > 0) {
-                   const formatted = tracksArray.map((d: any) => ({
-                      id: d.id,
-                      title: extractCleanTitle(d.title),
-                      artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
-                      bpm: 120,
-                      url: `https://www.youtube.com/watch?v=${d.id}`,
-                      duration: d.duration || "N/A"
-                   })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
-                   if (formatted.length > 0) {
-                     setGenreBuffer(formatted.sort(() => Math.random() - 0.5));
-                   }
-                 }
-               }
-             }
-           }
-         }
-       } catch (e) {
-         console.log("Prefetch failed", e);
-       }
-    }, 100);
-
-    // Pause any background music currently playing
-    if (isPlaying) {
-      onTogglePlay();
-    }
-
-    if (welcomeAudioRef.current) {
-      welcomeAudioRef.current.pause();
-      welcomeAudioRef.current = null;
-    }
-
-
+    // Start fetching tracks for the radio and play them directly
     try {
-      let data = null;
-      if (prefetchPromiseRef.current) {
-        data = await prefetchPromiseRef.current;
-        prefetchPromiseRef.current = null;
-        prefetchWelcome(); // Start prefetching next
-      } else {
-        const res = await fetch("/api/radio/welcome");
-        if (res.ok) {
-          data = await res.json();
-        }
-      }
-
-      if (myRequestId !== welcomeRequestIdRef.current) {
-        return;
-      }
-
-      if (data) {
-        if (myRequestId !== welcomeRequestIdRef.current) {
-          return;
-        }
-
-        let currentText = welcomeText;
-        if (data.text) {
-          setWelcomeText(data.text);
-          currentText = data.text;
-        }
-
-        const audioSrc = data.audioUrl || (data.audio ? (data.audio.startsWith("data:") ? data.audio : "data:audio/mp3;base64," + data.audio) : "");
-        if (audioSrc) {
-          const audio = new Audio(audioSrc);
-          
-          if (myRequestId !== welcomeRequestIdRef.current) {
-            return;
+      const randomQuery = "los 40 principales españa 2024 hoy official audio";
+      const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.length > 0) {
+          const playlists = data.filter((d: any) => d.isPlaylist);
+          if (playlists.length > 0) {
+            const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
+            if (plResp.ok) {
+              const plData = await plResp.json();
+              const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+              if (tracksArray.length > 0) {
+                const formatted = tracksArray.map((d: any) => ({
+                   id: d.id,
+                   title: extractCleanTitle(d.title),
+                   artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
+                   bpm: 120,
+                   url: `https://www.youtube.com/watch?v=${d.id}`,
+                   duration: d.duration || "N/A"
+                })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
+                if (formatted.length > 0) {
+                  const shuffled = formatted.sort(() => Math.random() - 0.5);
+                  setGenreBuffer(shuffled);
+                  onPlayTrack(shuffled[0]);
+                }
+              }
+            }
           }
-
-          welcomeAudioRef.current = audio;
-          audio.volume = volume / 100;
-
-          audio.onloadedmetadata = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              setWelcomeDuration(audio.duration || 0);
-            }
-          };
-
-          audio.ontimeupdate = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              setWelcomePosition(audio.currentTime || 0);
-            }
-          };
-
-          audio.onended = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              handleEndWelcome();
-            }
-          };
-
-          audio.onerror = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              speakFallback(currentText, myRequestId);
-            }
-          };
-
-          audio.play().catch((e) => {
-            console.error("Audio playback error, falling back", e);
-            if (myRequestId === welcomeRequestIdRef.current) {
-              speakFallback(currentText, myRequestId);
-            }
-          });
-        } else {
-          speakFallback(currentText, myRequestId);
         }
-      } else {
-        speakFallback(undefined, myRequestId);
       }
     } catch (e) {
-      console.error("Welcome request failed, falling back", e);
-      if (myRequestId === welcomeRequestIdRef.current) {
-        speakFallback(undefined, myRequestId);
-      }
+      console.error("FAI handleNextTrack prefetch failed", e);
     }
   };
 
-  /* Auto-start removed */
-  
-  useEffect(() => {
-    // ACTIVE PLAYER LOCK: If Sofía is currently speaking, the background music MUST be paused.
-    // This resolves any race conditions where a track starts playing before Sofía finishes her intro.
-    if (isSpeaking && isPlaying) {
-      console.log("[Sync] Sofía is speaking. Pausing background music.");
-      onTogglePlay();
-    }
-  }, [isSpeaking, isPlaying, onTogglePlay]);
-
   const speakFallback = async (overrideText?: string, reqId?: number) => {
-    if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
-      return;
-    }
-    speechStartTimeRef.current = Date.now();
-    setWelcomeStep("speaking");
-    setSpeaking(true);
-    setIsSpeakingPaused(false);
-    const textToSpeak = overrideText || welcomeText;
-    
-    try {
-      const res = await fetch(`/api/radio/tts?text=${encodeURIComponent(textToSpeak)}`);
-      if (res.ok) {
-        const data = await res.json();
-        const audioSrc = data.audioUrl || (data.audio ? (data.audio.startsWith("data:") ? data.audio : "data:audio/mp3;base64," + data.audio) : "");
-        if (data && audioSrc) {
-          const audio = new Audio(audioSrc);
-          welcomeAudioRef.current = audio;
-          audio.volume = volume / 100;
-
-          audio.onloadedmetadata = () => {
-            if (reqId === welcomeRequestIdRef.current) {
-              setWelcomeDuration(audio.duration || 0);
-            }
-          };
-
-          audio.ontimeupdate = () => {
-            if (reqId === welcomeRequestIdRef.current) {
-              setWelcomePosition(audio.currentTime || 0);
-            }
-          };
-
-          audio.onended = () => {
-            if (reqId === welcomeRequestIdRef.current) {
-              handleEndWelcome();
-            }
-          };
-
-          audio.onerror = () => {
-            if (reqId === welcomeRequestIdRef.current) {
-              setTimeout(() => handleEndWelcome(), 3000);
-            }
-          };
-
-          await audio.play();
-          return;
-        }
-      }
-    } catch (e) {
-      console.error("Fallback TTS fetch failed", e);
-    }
-    
-    // If even the Google TTS proxy fails, just wait 3 seconds and continue
-    setTimeout(() => {
-      if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-        handleEndWelcome();
-      }
-    }, 3000);
+    // Completely deactivated as per user request to avoid any TTS/speech
   };
 
   // Keep welcome audio volume in sync
@@ -876,7 +699,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               </div>
 
               <span className="text-[10px] font-black text-[#17d1a5] tracking-widest uppercase mb-1 text-center select-none">
-                Sofía en el aire 🎙️
+                Radio Mix Activa 🎙️
               </span>
 
               {/* Dynamic Equalizer Visualizer */}
@@ -920,7 +743,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               animate={{ opacity: 1, y: 0 }}
               className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/80 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Sofía DJ" : (currentTrack?.title || "Radio en Vivo")}
+              {isSpeaking ? "Radio Mix" : (currentTrack?.title || "Radio en Vivo")}
             </motion.h2>
             <motion.p
               key={(isSpeaking ? "welcome" : currentTrack?.artist) + "-artist"}
@@ -928,7 +751,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               animate={{ opacity: 1, y: 0 }}
               className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Sofía Mix")}
+              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Radio Mix")}
             </motion.p>
           </div>
         </div>

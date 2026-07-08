@@ -3156,186 +3156,189 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
   }, [isPlaying, playingPlaylist?.id, currentTrack?.id]);
 
-  useEffect(() => {
-    if (trackListTab === "search" && !exploreData && !isLoadingExplore) {
-      const fetchExplore = async () => {
-        setIsLoadingExplore(true);
+  const fetchExploreData = async (forceRefresh = false) => {
+    setIsLoadingExplore(true);
+    try {
+      const res = await fetch(
+        `/api/youtube/explore?country=${selectedCountry || "ES"}${forceRefresh ? "&refresh=true" : ""}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+
+        // --- SILENT MIX PARA TI INJECTION ---
         try {
-          const res = await fetch(
-            `/api/youtube/explore?country=${selectedCountry || "ES"}`,
-          );
-          if (res.ok) {
-            const data = await res.json();
+          const history = getPlayHistory();
+          const historyList = Object.values(history);
+          if (historyList.length > 2) {
+            // Ensure arrays exist
+            data.mixParaTi = [];
 
-            // --- SILENT MIX PARA TI INJECTION ---
-            try {
-              const history = getPlayHistory();
-              const historyList = Object.values(history);
-              if (historyList.length > 2) {
-                // Ensure arrays exist
-                data.mixParaTi = [];
-
-                // Mix 1: Tus Más Escuchados
-                const topPlayed = [...historyList]
-                  .sort((a, b) => b.playCount - a.playCount)
-                  .slice(0, 30);
-                if (topPlayed.length > 0) {
-                  data.mixParaTi.push({
-                    id: "mix_mas_escuchados",
-                    title: "Tus Más Escuchados",
-                    artist: "Historia Flux",
-                    isPlaylist: true,
-                    isLocalMix: true,
-                    thumbnail: topPlayed[0].url
-                      ? undefined
-                      : `https://i.ytimg.com/vi/${topPlayed[0].trackId}/mqdefault.jpg`,
-                    tracks: topPlayed.map((t, i) => {
-                      let vId = t.trackId;
-                      if (t.url && t.url.includes("v=")) {
-                        vId = t.url.split("v=")[1].split("&")[0];
-                      }
-                      return {
-                        id: `local_his_${i}_${vId}`,
-                        title: t.title,
-                        artist: t.artist,
-                        duration: "0:00",
-                        url: t.url || `https://www.youtube.com/watch?v=${vId}`,
-                        thumbnail: `https://i.ytimg.com/vi/${vId}/mqdefault.jpg`,
-                      };
-                    }),
-                  });
-                  // Fix thumbnail
-                  const firstTrack = data.mixParaTi[0].tracks[0];
-                  data.mixParaTi[0].thumbnail = firstTrack.thumbnail;
-                }
-
-                // Mix 2: Mix Descubrimiento (Silent YouTube search based on multiple top played artists)
-                const topUniqueArtists: string[] = [];
-                for (const item of topPlayed) {
-                  const artistName =
-                    item.artist || item.title?.split("-")[0]?.trim();
-                  if (
-                    artistName &&
-                    artistName !== "Artista" &&
-                    artistName !== "Flux" &&
-                    !topUniqueArtists.includes(artistName)
-                  ) {
-                    topUniqueArtists.push(artistName);
-                    if (topUniqueArtists.length >= 6) break;
+            // Mix 1: Tus Más Escuchados
+            const topPlayed = [...historyList]
+              .sort((a, b) => b.playCount - a.playCount)
+              .slice(0, 30);
+            if (topPlayed.length > 0) {
+              data.mixParaTi.push({
+                id: "mix_mas_escuchados",
+                title: "Tus Más Escuchados",
+                artist: "Historia Flux",
+                isPlaylist: true,
+                isLocalMix: true,
+                thumbnail: topPlayed[0].url
+                  ? undefined
+                  : `https://i.ytimg.com/vi/${topPlayed[0].trackId}/mqdefault.jpg`,
+                tracks: topPlayed.map((t, i) => {
+                  let vId = t.trackId;
+                  if (t.url && t.url.includes("v=")) {
+                    vId = t.url.split("v=")[1].split("&")[0];
                   }
-                }
+                  return {
+                    id: `local_his_${i}_${vId}`,
+                    title: t.title,
+                    artist: t.artist,
+                    duration: "0:00",
+                    url: t.url || `https://www.youtube.com/watch?v=${vId}`,
+                    thumbnail: `https://i.ytimg.com/vi/${vId}/mqdefault.jpg`,
+                  };
+                }),
+              });
+              // Fix thumbnail
+              const firstTrack = data.mixParaTi[0].tracks[0];
+              data.mixParaTi[0].thumbnail = firstTrack.thumbnail;
+            }
 
-                if (topUniqueArtists.length > 0) {
-                  setTimeout(() => {
-                    Promise.all(
-                      topUniqueArtists.map(
-                        (artist) =>
-                          fetch(
-                            `/api/youtube/search?q=${encodeURIComponent(artist + " audio")}`,
-                          )
-                            .then((res) => (res.ok ? res.json() : []))
-                            .catch(() => []), // Prevent single failures from rejecting all
+            // Mix 2: Mix Descubrimiento (Silent YouTube search based on multiple top played artists)
+            const topUniqueArtists: string[] = [];
+            for (const item of topPlayed) {
+              const artistName =
+                item.artist || item.title?.split("-")[0]?.trim();
+              if (
+                artistName &&
+                artistName !== "Artista" &&
+                artistName !== "Flux" &&
+                !topUniqueArtists.includes(artistName)
+              ) {
+                topUniqueArtists.push(artistName);
+                if (topUniqueArtists.length >= 6) break;
+              }
+            }
+
+            if (topUniqueArtists.length > 0) {
+              setTimeout(() => {
+                Promise.all(
+                  topUniqueArtists.map(
+                    (artist) =>
+                      fetch(
+                        `/api/youtube/search?q=${encodeURIComponent(artist + " audio")}`,
+                      )
+                        .then((res) => (res.ok ? res.json() : []))
+                        .catch(() => []), // Prevent single failures from rejecting all
+                  ),
+                )
+                  .then((results) => {
+                    const mixedTracks: any[] = [];
+                    const maxLen = Math.max(
+                      0,
+                      ...results.map((r) =>
+                        Array.isArray(r) ? r.length : 0,
                       ),
-                    )
-                      .then((results) => {
-                        const mixedTracks: any[] = [];
-                        const maxLen = Math.max(
-                          0,
-                          ...results.map((r) =>
-                            Array.isArray(r) ? r.length : 0,
-                          ),
-                        );
+                    );
 
-                        for (let i = 0; i < maxLen; i++) {
-                          for (let j = 0; j < results.length; j++) {
-                            const trackList = results[j];
-                            if (Array.isArray(trackList)) {
-                              const track = trackList[i];
-                              if (track && !track.isPlaylist && isReasonableTrack(track.duration, track.title)) {
-                                // Avoid duplicate tracks
-                                if (
-                                  !mixedTracks.find(
-                                    (t) =>
-                                      t.url === track.url || t.id === track.id,
-                                  )
-                                ) {
-                                  mixedTracks.push(track);
-                                }
-                              }
+                    for (let i = 0; i < maxLen; i++) {
+                      for (let j = 0; j < results.length; j++) {
+                        const trackList = results[j];
+                        if (Array.isArray(trackList)) {
+                          const track = trackList[i];
+                          if (track && !track.isPlaylist && isReasonableTrack(track.duration, track.title)) {
+                            // Avoid duplicate tracks
+                            if (
+                              !mixedTracks.find(
+                                (t) =>
+                                  t.url === track.url || t.id === track.id,
+                              )
+                            ) {
+                              mixedTracks.push(track);
                             }
                           }
-                          if (mixedTracks.length >= 40) break;
                         }
+                      }
+                      if (mixedTracks.length >= 40) break;
+                    }
 
-                        if (mixedTracks.length > 3) {
-                          setExploreData((prev: any) => {
-                            if (!prev) return prev;
-                            const newPrev = { ...prev };
-                            newPrev.mixParaTi = newPrev.mixParaTi || [];
-                            newPrev.mixParaTi = newPrev.mixParaTi.filter(
-                              (m: any) => m.id !== "mix_descubrimiento",
-                            );
+                    if (mixedTracks.length > 3) {
+                      setExploreData((prev: any) => {
+                        if (!prev) return prev;
+                        const newPrev = { ...prev };
+                        newPrev.mixParaTi = newPrev.mixParaTi || [];
+                        newPrev.mixParaTi = newPrev.mixParaTi.filter(
+                          (m: any) => m.id !== "mix_descubrimiento",
+                        );
 
-                            const titleString =
-                              topUniqueArtists.slice(0, 3).join(", ") +
-                              (topUniqueArtists.length > 3 ? " y más" : "");
+                        const titleString =
+                          topUniqueArtists.slice(0, 3).join(", ") +
+                          (topUniqueArtists.length > 3 ? " y más" : "");
 
-                            newPrev.mixParaTi.push({
-                              id: "mix_descubrimiento",
-                              title: "Mix Descubrimiento",
-                              artist: "Basado en " + titleString,
-                              isPlaylist: true,
-                              isLocalMix: true,
-                              thumbnail:
-                                mixedTracks[0]?.thumbnail ||
-                                `https://i.ytimg.com/vi/${mixedTracks[0]?.id}/mqdefault.jpg`,
-                              tracks: mixedTracks.map((t: any, i: number) => ({
-                                id: `local_rec_${i}_${t.id}`,
-                                title: t.title,
-                                artist: t.artist || "Descubrimiento",
-                                duration: t.duration || "0:00",
-                                url:
-                                  t.url ||
-                                  `https://www.youtube.com/watch?v=${t.id}`,
-                                thumbnail:
-                                  t.thumbnail ||
-                                  `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-                              })),
-                            });
-                            return newPrev;
-                          });
-                        }
-                      })
-                      .catch((e) => console.warn("Discovery Mix Error:", e));
-                  }, 800); // 800ms delay to not block UI thread
-                }
-              }
-            } catch (e) {
-              console.warn("Silent Mix Gen Error:", e);
+                        newPrev.mixParaTi.push({
+                          id: "mix_descubrimiento",
+                          title: "Mix Descubrimiento",
+                          artist: "Basado en " + titleString,
+                          isPlaylist: true,
+                          isLocalMix: true,
+                          thumbnail:
+                            mixedTracks[0]?.thumbnail ||
+                            `https://i.ytimg.com/vi/${mixedTracks[0]?.id}/mqdefault.jpg`,
+                          tracks: mixedTracks.map((t: any, i: number) => ({
+                            id: `local_rec_${i}_${t.id}`,
+                            title: t.title,
+                            artist: t.artist || "Descubrimiento",
+                            duration: t.duration || "0:00",
+                            url:
+                              t.url ||
+                              `https://www.youtube.com/watch?v=${t.id}`,
+                            thumbnail:
+                              t.thumbnail ||
+                              `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+                          })),
+                        });
+                        return newPrev;
+                      });
+                    }
+                  })
+                  .catch((e) => console.warn("Discovery Mix Error:", e));
+              }, 800); // 800ms delay to not block UI thread
             }
-            // -------------------------------------
-
-            setExploreData(data);
-          } else {
-            throw new Error("Explore API failed");
           }
-        } catch (err) {
-          console.error("Explore fallback:", err);
-          setExploreData({
-            trending: [],
-            dailyTop: [],
-            top100: [],
-            workout: [],
-            focus: [],
-            trends: [],
-            latin: [],
-            party: [],
-          });
-        } finally {
-          setIsLoadingExplore(false);
+        } catch (e) {
+          console.warn("Silent Mix Gen Error:", e);
         }
-      };
-      fetchExplore();
+        // -------------------------------------
+
+        setExploreData(data);
+      } else {
+        throw new Error("Explore API failed");
+      }
+    } catch (err) {
+      console.error("Explore fallback:", err);
+      if (!forceRefresh) {
+        setExploreData({
+          trending: [],
+          dailyTop: [],
+          top100: [],
+          workout: [],
+          focus: [],
+          trends: [],
+          latin: [],
+          party: [],
+        });
+      }
+    } finally {
+      setIsLoadingExplore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (trackListTab === "search" && !exploreData && !isLoadingExplore) {
+      fetchExploreData(false);
     }
   }, [trackListTab, exploreData, isLoadingExplore, selectedCountry]);
 
@@ -5547,7 +5550,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          Sofia DJ
+          Radio Mix
           {Date.now() < new Date("2026-07-06T17:16:26Z").getTime() && (
             <span className="absolute -top-1.5 -right-2 px-1 py-[1px] bg-red-500 text-white text-[7px] font-black uppercase tracking-widest rounded shadow-[0_0_10px_rgba(239,68,68,0.6)] rotate-[8deg] animate-pulse">
               Novedad
@@ -7062,6 +7065,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       customPlaylists={customExplorePlaylists}
                                       exploreLayout={exploreLayout}
                                       isAdmin={isAdmin}
+                                      onForceRefresh={() => fetchExploreData(true)}
                                       onAddCustomPlaylist={
                                         handleAddCustomExplorePlaylist
                                       }
