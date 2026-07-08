@@ -247,23 +247,55 @@ const INVIDIOUS_INSTANCES = [
   "https://vid.puffyan.us",
 ];
 const PIPED_INSTANCES = [
+  "https://api.piped.private.coffee",
   "https://pipedapi.kavin.rocks",
-  "https://pipedapi.lunar.icu",
-  "https://piped-api.mha.fi",
-  "https://piped-api.privacydev.net",
-  "https://pipedapi.colby.cafe",
-  "https://pipedapi.leptons.xyz",
-  "https://pipedapi.drgns.space",
-  "https://pipedapi.swg.rocks",
-  "https://pipedapi.r4fo.com",
-  "https://piped-api.lre.su",
-  "https://pipedapi.oxit.co",
-  "https://pipedapi.river.rocks",
-  "https://pipedapi.nosearch.org",
-  "https://pipedapi.tokhmi.xyz",
-  "https://api.piped.yt",
   "https://piped-api.garudalinux.org",
+  "https://piped-api.privacydev.net",
+  "https://api.piped.yt",
+  "https://pipedapi.lunar.icu",
 ];
+
+let activePipedInstances: string[] = [];
+
+// Dynamic health check to filter and rotate active Piped instances at startup
+async function checkPipedHealth() {
+  console.log("[HEALTH CHECK] Starting Piped instances health check...");
+  const verified: string[] = [];
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(`${instance}/healthcheck`, {
+        signal: controller.signal,
+        headers: { "User-Agent": "Mozilla/5.0" },
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        verified.push(instance);
+        console.log(`[HEALTH CHECK] Instance ${instance} is active.`);
+      } else {
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 3500);
+        const res2 = await fetch(`${instance}/trending?region=US`, {
+          signal: controller2.signal,
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        clearTimeout(timeoutId2);
+        if (res2.ok) {
+          verified.push(instance);
+          console.log(`[HEALTH CHECK] Instance ${instance} is active (via trending fallback).`);
+        } else {
+          console.warn(`[HEALTH CHECK] Instance ${instance} is down (HTTP ${res.status}).`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[HEALTH CHECK] Instance ${instance} failed check:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  activePipedInstances = verified;
+  console.log("[HEALTH CHECK] Active Piped instances list updated:", activePipedInstances);
+}
 
 // YouTube Search Cache (Eco-Friendly)
 const searchCache = new Map<string, { data: any; timestamp: number }>();
@@ -710,7 +742,8 @@ app.get("/api/youtube/search", async (req, res) => {
 
     // Ant-block fallback: Piped API
     try {
-      for (const instance of PIPED_INSTANCES) {
+      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
+      for (const instance of instancesToTry) {
         try {
           const pRes = await fetch(
             `${instance}/search?q=${encodeURIComponent(query)}&filter=all`,
@@ -785,7 +818,6 @@ const ytClients = new Map<string, any>();
 
 app.get("/api/youtube/explore", async (req, res) => {
   const country = ((req.query.country as string) || "ES").toUpperCase();
-  const bypassCache = req.query.refresh === "true" || req.query.bypass === "true";
   const countryMap: Record<string, string> = {
     GLOBAL: "Global",
     US: "Estados Unidos",
@@ -804,12 +836,22 @@ app.get("/api/youtube/explore", async (req, res) => {
   const countryName = countryMap[country] || "España";
 
   const cached = exploreCache.get(country);
-  if (!bypassCache && cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
+  if (cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
     res.setHeader("Cache-Control", "public, max-age=86400");
     return res.json(cached.data);
   }
 
   let yt = ytClients.get(country);
+  if (!yt) {
+    try {
+      // @ts-ignore - youtubei.js SessionOptions types don't include gl/hl in some versions but they work
+      yt = await Innertube.create({ gl: country === 'GLOBAL' ? 'US' : country, hl: 'es' });
+      ytClients.set(country, yt);
+    } catch (e) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      return res.status(503).json({ error: "YouTube unavailable for region" });
+    }
+  }
 
   const parseInnertubeItem = (p: any): any => {
     try {
@@ -909,11 +951,6 @@ app.get("/api/youtube/explore", async (req, res) => {
   };
 
   try {
-    if (!yt) {
-      // @ts-ignore - youtubei.js SessionOptions types don't include gl/hl in some versions but they work
-      yt = await Innertube.create({ gl: country === 'GLOBAL' ? 'US' : country, hl: 'es' });
-      ytClients.set(country, yt);
-    }
     
     const globalSeen = new Set();
     const uniqueFilter = (items: any[]) => {
@@ -996,10 +1033,6 @@ app.get("/api/youtube/explore", async (req, res) => {
     if (trending.length === 0) trending = dailyTop;
     if (dailyTop.length === 0) dailyTop = top100;
     
-    if (trending.length === 0 && dailyTop.length === 0 && top100.length === 0) {
-      throw new Error("Innertube explore fetched 0 trends/charts. All playlists and feeds are empty (likely datacenter IP blocked/rate-limited by Google).");
-    }
-    
     const data = {
       mixParaTi: trending,
       top100: top100,
@@ -1021,7 +1054,8 @@ app.get("/api/youtube/explore", async (req, res) => {
     );
 
     try {
-      for (const instance of PIPED_INSTANCES) {
+      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
+      for (const instance of instancesToTry) {
         try {
           const pRes = await fetch(`${instance}/trending?region=${country}`);
           if (pRes.ok) {
@@ -1120,7 +1154,8 @@ app.get("/api/youtube/video-info", async (req, res) => {
       }
     }
 
-    for (const instance of PIPED_INSTANCES) {
+    const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
+    for (const instance of instancesToTry) {
       try {
         const pRes = await fetch(`${instance}/streams/${videoId}`);
         if (pRes.ok) {
@@ -1220,7 +1255,8 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
       }
     }
 
-    for (const instance of PIPED_INSTANCES) {
+    const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
+    for (const instance of instancesToTry) {
       try {
         const pRes = await fetch(`${instance}/playlists/${playlistId}`);
         if (pRes.ok) {
@@ -1481,7 +1517,8 @@ app.get("/api/youtube/playlist", async (req, res) => {
     );
 
     try {
-      for (const instance of PIPED_INSTANCES) {
+      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
+      for (const instance of instancesToTry) {
         try {
           const pRes = await fetch(`${instance}/playlists/${playlistId}`);
           if (pRes.ok) {
@@ -2159,31 +2196,24 @@ app.get("/api/system/health", async (req, res) => {
     mainLibraryStatus = "offline";
   }
 
-  // Check Plan B (Piped) in parallel for high speed and responsiveness
+  // Check Plan B (Piped)
   planBStatus = "offline";
-  try {
-    const checkPromises = PIPED_INSTANCES.slice(0, 6).map(async (instance) => {
+  for (const instance of PIPED_INSTANCES) {
+    try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5 sec timeout
-      try {
-        const response = await fetch(`${instance}/trending?region=US`, {
-          method: "GET",
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (response.ok) {
-          return "online";
-        }
-      } catch (err) {
-        // fail silent
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
+      const response = await fetch(`${instance}/trending?region=US`, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        planBStatus = "online";
+        break; // found one working
       }
-      throw new Error("fail");
-    });
-    
-    await Promise.any(checkPromises);
-    planBStatus = "online";
-  } catch (e) {
-    planBStatus = "offline";
+    } catch (e) {
+      // try next
+    }
   }
 
   res.json({
@@ -2340,6 +2370,12 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+    // Run Piped active health checking on startup and keep list refreshed
+    checkPipedHealth().then(() => {
+      setInterval(checkPipedHealth, 1000 * 60 * 15); // Refresh every 15 minutes
+    }).catch(err => {
+      console.error("[HEALTH CHECK] Initial health check failed to start:", err);
+    });
   });
 }
 

@@ -3156,11 +3156,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
   }, [isPlaying, playingPlaylist?.id, currentTrack?.id]);
 
-  const fetchExploreData = async (forceRefresh = false) => {
+  const fetchExploreData = async () => {
     setIsLoadingExplore(true);
     try {
       const res = await fetch(
-        `/api/youtube/explore?country=${selectedCountry || "ES"}${forceRefresh ? "&refresh=true" : ""}`,
+        `/api/youtube/explore?country=${selectedCountry || "ES"}`,
       );
       if (res.ok) {
         const data = await res.json();
@@ -3319,18 +3319,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       }
     } catch (err) {
       console.error("Explore fallback:", err);
-      if (!forceRefresh) {
-        setExploreData({
-          trending: [],
-          dailyTop: [],
-          top100: [],
-          workout: [],
-          focus: [],
-          trends: [],
-          latin: [],
-          party: [],
-        });
-      }
+      setExploreData({
+        trending: [],
+        dailyTop: [],
+        top100: [],
+        workout: [],
+        focus: [],
+        trends: [],
+        latin: [],
+        party: [],
+      });
     } finally {
       setIsLoadingExplore(false);
     }
@@ -3338,7 +3336,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
   useEffect(() => {
     if (trackListTab === "search" && !exploreData && !isLoadingExplore) {
-      fetchExploreData(false);
+      fetchExploreData();
     }
   }, [trackListTab, exploreData, isLoadingExplore, selectedCountry]);
 
@@ -7065,7 +7063,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       customPlaylists={customExplorePlaylists}
                                       exploreLayout={exploreLayout}
                                       isAdmin={isAdmin}
-                                      onForceRefresh={() => fetchExploreData(true)}
                                       onAddCustomPlaylist={
                                         handleAddCustomExplorePlaylist
                                       }

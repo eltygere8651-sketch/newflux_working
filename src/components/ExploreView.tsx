@@ -16,7 +16,6 @@ import {
   ArrowDown,
   Pencil,
   Check,
-  RefreshCw,
 } from "lucide-react";
 import { MusicTrack } from "../types";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
@@ -29,7 +28,6 @@ interface ExploreViewProps {
   customPlaylists?: any[];
   exploreLayout?: any[] | null;
   isAdmin?: boolean;
-  onForceRefresh?: () => Promise<void>;
   onAddCustomPlaylist?: (url: string, sectionId?: string) => Promise<void>;
   onDeleteCustomPlaylist?: (docId: string) => Promise<void>;
   onUpdateExploreLayout?: (layout: any[]) => Promise<void>;
@@ -116,7 +114,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     customPlaylists = [],
     exploreLayout,
     isAdmin,
-    onForceRefresh,
     onAddCustomPlaylist,
     onDeleteCustomPlaylist,
     onUpdateExploreLayout,
@@ -139,20 +136,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     const [selectedSectionId, setSelectedSectionId] = useState("custom_0");
     const [isAdding, setIsAdding] = useState(false);
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-    const [isRefreshing, setIsRefreshing] = useState(false);
-
-    const handleForceRefresh = async () => {
-      if (!onForceRefresh || isRefreshing) return;
-      setIsRefreshing(true);
-      try {
-        await onForceRefresh();
-        showNotification("Tendencias actualizadas con éxito");
-      } catch (e) {
-        showNotification("Error al actualizar tendencias");
-      } finally {
-        setIsRefreshing(false);
-      }
-    };
 
     const [itemToDelete, setItemToDelete] = useState<{
       docId?: string;
@@ -213,31 +196,16 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       return (
         <div className="p-12 text-center space-y-4">
           <div className="flex justify-center">
-            {isRefreshing ? (
-              <Loader2 className="w-8 h-8 text-[#1ED760] animate-spin" />
-            ) : (
-              <Sparkles className="w-8 h-8 text-emerald-500/30 animate-pulse" />
-            )}
+            <Sparkles className="w-8 h-8 text-emerald-500/30 animate-pulse" />
           </div>
           <p className="text-slate-400 text-sm font-medium">
             No se han podido cargar las tendencias en este momento.
           </p>
           <button
-            onClick={async () => {
-              if (onForceRefresh) {
-                try {
-                  await handleForceRefresh();
-                } catch (e) {
-                  window.location.reload();
-                }
-              } else {
-                window.location.reload();
-              }
-            }}
-            disabled={isRefreshing}
-            className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all disabled:opacity-50"
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all"
           >
-            {isRefreshing ? "Actualizando..." : "Reintentar"}
+            Reintentar
           </button>
         </div>
       );
@@ -500,68 +468,53 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     return (
       <div className="space-y-4 pb-32 px-0 sm:px-2">
         {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
-        <div className="px-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {setSelectedCountry && selectedCountry && (
-              <div className="relative max-w-[200px] w-full">
-                <button
-                  onClick={() => setIsCountryModalOpen(!isCountryModalOpen)}
-                  className="w-full text-left bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer flex justify-between items-center"
-                >
-                  <span className="truncate">
-                    {COUNTRIES.find((c) => c.code === selectedCountry)?.flag} Top
-                    Listas{" "}
-                    {COUNTRIES.find((c) => c.code === selectedCountry)?.label}
-                  </span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-[#1ED760] shrink-0 transition-transform ${isCountryModalOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {isCountryModalOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-[40]"
-                      onClick={() => setIsCountryModalOpen(false)}
-                    ></div>
-                    <div className="absolute top-full left-0 mt-2 z-[50] w-full min-w-[220px] bg-[#18181A] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="max-h-[300px] overflow-y-auto p-1">
-                        {COUNTRIES.map((c) => (
-                          <button
-                            key={c.code}
-                            onClick={() => {
-                              setSelectedCountry(c.code);
-                              setIsCountryModalOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${selectedCountry === c.code ? "bg-[#1ED760]/10 text-[#1ED760] font-bold" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
-                          >
-                            <span className="text-xl">{c.flag}</span>
-                            <span className="text-xs">{c.label}</span>
-                            {selectedCountry === c.code && (
-                              <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#1ED760]" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {onForceRefresh && (
+        <div className="px-3 flex items-center justify-between">
+          {setSelectedCountry && selectedCountry && (
+            <div className="relative max-w-[200px] w-full">
               <button
-                onClick={handleForceRefresh}
-                disabled={isRefreshing}
-                className="flex items-center justify-center bg-[#111113] border border-white/10 hover:bg-white/[0.05] text-white rounded-full p-2.5 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 hover:border-[#1ED760]/50 shrink-0"
-                title="Forzar actualización de tendencias (ignorar caché)"
+                onClick={() => setIsCountryModalOpen(!isCountryModalOpen)}
+                className="w-full text-left bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer flex justify-between items-center"
               >
-                <RefreshCw
-                  className={`w-3.5 h-3.5 text-slate-400 hover:text-white transition-all ${isRefreshing ? "animate-spin text-[#1ED760]" : ""}`}
+                <span className="truncate">
+                  {COUNTRIES.find((c) => c.code === selectedCountry)?.flag} Top
+                  Listas{" "}
+                  {COUNTRIES.find((c) => c.code === selectedCountry)?.label}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#1ED760] shrink-0 transition-transform ${isCountryModalOpen ? "rotate-180" : ""}`}
                 />
               </button>
-            )}
-          </div>
+
+              {isCountryModalOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[40]"
+                    onClick={() => setIsCountryModalOpen(false)}
+                  ></div>
+                  <div className="absolute top-full left-0 mt-2 z-[50] w-full min-w-[220px] bg-[#18181A] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="max-h-[300px] overflow-y-auto p-1">
+                      {COUNTRIES.map((c) => (
+                        <button
+                          key={c.code}
+                          onClick={() => {
+                            setSelectedCountry(c.code);
+                            setIsCountryModalOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${selectedCountry === c.code ? "bg-[#1ED760]/10 text-[#1ED760] font-bold" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                        >
+                          <span className="text-xl">{c.flag}</span>
+                          <span className="text-xs">{c.label}</span>
+                          {selectedCountry === c.code && (
+                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#1ED760]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {isAdmin && (
             <div className="flex items-center gap-2">
