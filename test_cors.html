@@ -1,0 +1,5 @@
+<script>
+  fetch("https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=hola")
+    .then(r => console.log(r.ok))
+    .catch(e => console.error(e));
+</script>

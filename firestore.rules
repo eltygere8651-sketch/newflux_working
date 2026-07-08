@@ -129,5 +129,16 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // 8. Analytics Data
+    match /analytics_daily/{docId} {
+      allow read: if true;
+    }
+    match /analytics_songs/{docId} {
+      allow read: if true;
+    }
+    match /analytics_playlists/{docId} {
+      allow read: if true;
+    }
   }
 }

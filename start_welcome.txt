@@ -1,0 +1,185 @@
+  const handleStartWelcome = async () => {
+    // FORCE "SOFIA_DJ MEZCLA" genre immediately when starting radio
+    const targetGenre = "SOFIA_DJ MEZCLA";
+    setSelectedGenre(targetGenre);
+    localStorage.setItem("fai_selected_genre", targetGenre);
+    setGenreExploration(true);
+    localStorage.setItem("fai_genre_exploration", "true");
+    setGenreBuffer([]); // Clear previous genre buffer to ensure fresh Sofia Mix tracks
+
+    const myRequestId = ++welcomeRequestIdRef.current;
+    speechStartTimeRef.current = Date.now();
+    setWelcomeStep("speaking");
+    setSpeaking(true);
+    setIsSpeakingPaused(false);
+    setIsRadioActive(true);
+    setWelcomePosition(0);
+    setWelcomeDuration(0);
+
+    // Prefetch next track buffer if empty to eliminate delay when speech ends
+    setTimeout(async () => {
+       try {
+         const randomQuery = "los 40 principales españa 2024 hoy official audio";
+         const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+         if (resp.ok) {
+           const data = await resp.json();
+           if (data && data.length > 0) {
+             const playlists = data.filter((d: any) => d.isPlaylist);
+             if (playlists.length > 0) {
+               const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
+               if (plResp.ok) {
+                 const plData = await plResp.json();
+                 const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+                 if (tracksArray.length > 0) {
+                   const formatted = tracksArray.map((d: any) => ({
+                      id: d.id,
+                      title: extractCleanTitle(d.title),
+                      artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
+                      bpm: 120,
+                      url: `https://www.youtube.com/watch?v=${d.id}`,
+                      duration: d.duration || "N/A"
+                   })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
+                   if (formatted.length > 0) {
+                     setGenreBuffer(formatted.sort(() => Math.random() - 0.5));
+                   }
+                 }
+               }
+             }
+           }
+         }
+       } catch (e) {
+         console.log("Prefetch failed", e);
+       }
+    }, 100);
+
+    // Pause any background music currently playing
+    if (isPlaying) {
+      onTogglePlay();
+    }
+
+    if (welcomeAudioRef.current) {
+      welcomeAudioRef.current.pause();
+      welcomeAudioRef.current = null;
+    }
+
+
+    try {
+      let data = null;
+      if (prefetchPromiseRef.current) {
+        data = await prefetchPromiseRef.current;
+        prefetchPromiseRef.current = null;
+        prefetchWelcome(); // Start prefetching next
+      } else {
+        const res = await fetch("/api/radio/welcome");
+        if (res.ok) {
+          data = await res.json();
+        }
+      }
+
+      if (myRequestId !== welcomeRequestIdRef.current) {
+        return;
+      }
+      if (data) {
+        if (myRequestId !== welcomeRequestIdRef.current) {
+          return;
+        }
+        let currentText = welcomeText;
+        if (data.text) {
+          setWelcomeText(data.text);
+          currentText = data.text;
+        }
+        if (data.audio) {
+          const audioSrc = data.audio.startsWith("data:")
+            ? data.audio
+            : ("data:audio/wav;base64," + data.audio);
+          const audio = new Audio(audioSrc);
+          
+          if (myRequestId !== welcomeRequestIdRef.current) {
+            return;
+          }
+          welcomeAudioRef.current = audio;
+          audio.volume = volume / 100;
+          audio.onloadedmetadata = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              setWelcomeDuration(audio.duration || 0);
+            }
+          };
+          audio.ontimeupdate = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              setWelcomePosition(audio.currentTime || 0);
+            }
+          };
+          audio.onended = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              handleEndWelcome();
+            }
+          };
+          audio.onerror = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              speakFallback(currentText, myRequestId);
+            }
+          };
+          audio.play().catch((e) => {
+            console.error("Audio playback error, falling back", e);
+            if (myRequestId === welcomeRequestIdRef.current) {
+              speakFallback(currentText, myRequestId);
+            }
+          });
+        } else {
+          speakFallback(currentText, myRequestId);
+        }
+      } else {
+        speakFallback(undefined, myRequestId);
+      }
+    } catch (e) {
+      console.error("Welcome request failed, falling back", e);
+      if (myRequestId === welcomeRequestIdRef.current) {
+        speakFallback(undefined, myRequestId);
+      }
+    }
+  };
+
+  /* Auto-start removed */
+  
+  useEffect(() => {
+    // ACTIVE PLAYER LOCK: If Sofía is currently speaking, the background music MUST be paused.
+    // This resolves any race conditions where a track starts playing before Sofía finishes her intro.
+    if (isSpeaking && isPlaying) {
+      console.log("[Sync] Sofía is speaking. Pausing background music.");
+      onTogglePlay();
+    }
+  }, [isSpeaking, isPlaying, onTogglePlay]);
+
+  const speakFallback = (overrideText?: string, reqId?: number) => {
+    if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
+      return;
+    }
+    speechStartTimeRef.current = Date.now();
+    setWelcomeStep("speaking");
+    setSpeaking(true);
+    setIsSpeakingPaused(false);
+    const textToSpeak = overrideText || welcomeText;
+    
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      const playUtterance = () => {
+        if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = "es-ES";
+        const voices = window.speechSynthesis.getVoices();
+        const spanishVoices = voices.filter(v => v.lang.startsWith("es") || v.lang.startsWith("ES"));
+        
+        let femaleVoice = spanishVoices.find(v => {
+          const name = v.name.toLowerCase();
+          return name.includes("helena") || name.includes("monica") || name.includes("paulina") || name.includes("sonia") || name.includes("alba") || name.includes("google") || name.includes("natural") || name.includes("female") || name.includes("sofia");
+        });
+        
+        if (!femaleVoice) {
+          femaleVoice = spanishVoices.find(v => v.lang.startsWith("es")) || voices[0];
+        }
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }

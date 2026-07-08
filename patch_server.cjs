@@ -1,74 +1,32 @@
 const fs = require('fs');
-let code = fs.readFileSync('server.ts', 'utf-8');
+let code = fs.readFileSync('server.ts', 'utf8');
 
-const routes = `
-// Caches for Firestore data to minimize reads globally
-const communityCache = { data: null, timestamp: 0 };
-const COMMUNITY_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+const anchor = `    if (playlistResults.status === "fulfilled" && playlistResults.value) {`;
 
-app.get("/api/community/playlists", async (req, res) => {
-  try {
-    if (communityCache.data && Date.now() - communityCache.timestamp < COMMUNITY_CACHE_TTL) {
-      res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.json(communityCache.data);
-    }
-    const db = getFirestoreDb();
-    if (!db) return res.status(500).json({ error: "Firestore not initialized" });
+const newCode = `    try {
+      const musicResults = await yt.music.search(query, { type: 'song' }).catch(() => null);
+      if (musicResults && musicResults.contents) {
+        const shelf = musicResults.contents.find((c) => c.type === 'MusicShelf');
+        if (shelf && shelf.contents) {
+          const songs = shelf.contents.slice(0, 5).map((item) => {
+            if (item.type === 'MusicResponsiveListItem') {
+              return {
+                 type: 'Video',
+                 id: item.id,
+                 title: { text: item.title },
+                 author: { name: item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist' },
+                 duration: { text: item.duration?.text || '' },
+                 thumbnails: item.thumbnails
+              };
+            }
+            return item;
+          }).filter(x => x.id);
+          rawItems.unshift(...songs);
+        }
+      }
+    } catch (e) {}
     
-    const snapshot = await db.collectionGroup("playlists")
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
-      
-    const playlists = snapshot.docs.map(doc => ({
-      id: doc.id,
-      _data: doc.data(),
-      ref: { path: doc.ref.path }
-    }));
-    
-    communityCache.data = playlists;
-    communityCache.timestamp = Date.now();
-    
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    return res.json(playlists);
-  } catch (err) {
-    console.error("Error fetching community playlists in backend:", err);
-    res.status(500).json({ error: "Failed to fetch community playlists" });
-  }
-});
+    if (playlistResults.status === "fulfilled" && playlistResults.value) {`;
 
-const exploreCustomCache = { data: null, timestamp: 0 };
-const EXPLORE_CUSTOM_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
-
-app.get("/api/explore/custom-playlists", async (req, res) => {
-  try {
-    if (exploreCustomCache.data && Date.now() - exploreCustomCache.timestamp < EXPLORE_CUSTOM_CACHE_TTL) {
-      res.setHeader("Cache-Control", "public, max-age=43200");
-      return res.json(exploreCustomCache.data);
-    }
-    const db = getFirestoreDb();
-    if (!db) return res.status(500).json({ error: "Firestore not initialized" });
-    
-    const snapshot = await db.collection("explore_custom_playlists")
-      .orderBy("createdAt", "desc")
-      .get();
-      
-    const lists = snapshot.docs.map(doc => ({
-      ...doc.data(),
-      docId: doc.id
-    }));
-    
-    exploreCustomCache.data = lists;
-    exploreCustomCache.timestamp = Date.now();
-    
-    res.setHeader("Cache-Control", "public, max-age=43200");
-    return res.json(lists);
-  } catch (err) {
-    console.error("Error fetching custom explore playlists in backend:", err);
-    res.status(500).json({ error: "Failed to fetch custom explore playlists" });
-  }
-});
-`;
-
-code = code.replace('// YouTube Search Endpoint', routes + '\n// YouTube Search Endpoint');
+code = code.replace(anchor, newCode);
 fs.writeFileSync('server.ts', code);

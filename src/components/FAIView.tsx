@@ -157,6 +157,20 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const handleEndWelcomeRef = useRef<(() => void) | null>(null);
   const speechStartTimeRef = useRef<number>(0);
   const welcomeRequestIdRef = useRef<number>(0);
+  const prefetchPromiseRef = useRef<Promise<any> | null>(null);
+
+  const prefetchWelcome = () => {
+    const p = fetch("/api/radio/welcome")
+      .then(res => res.json())
+      .catch(() => null);
+    prefetchPromiseRef.current = p;
+    return p;
+  };
+
+  useEffect(() => {
+    prefetchWelcome();
+  }, []);
+
 
   const setSpeaking = (val: boolean) => {
     setIsSpeaking(val);
@@ -169,9 +183,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
       if (welcomeAudioRef.current) {
         welcomeAudioRef.current.pause();
         welcomeAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
       }
     };
   }, []);
@@ -438,9 +449,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
       welcomeAudioRef.current.pause();
       welcomeAudioRef.current = null;
     }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
 
     // If the welcome ended or errored in less than 500ms, it was blocked or errored out instantly.
     // In that case, DO NOT auto-start the background music! Stay in idle state so the user can click play to sintonize/listen.
@@ -500,8 +508,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
                  if (tracksArray.length > 0) {
                    const formatted = tracksArray.map((d: any) => ({
                       id: d.id,
-                      title: d.title,
-                      artist: "SOFIA_DJ MEZCLA",
+                      title: extractCleanTitle(d.title),
+                      artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
                       bpm: 120,
                       url: `https://www.youtube.com/watch?v=${d.id}`,
                       duration: d.duration || "N/A"
@@ -529,72 +537,73 @@ export const FAIView: React.FC<FAIViewProps> = ({
       welcomeAudioRef.current = null;
     }
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      // Unlock SpeechSynthesis context for subsequent asynchronous triggers
-      try {
-        const unlockUtterance = new SpeechSynthesisUtterance(" ");
-        unlockUtterance.volume = 0;
-        window.speechSynthesis.speak(unlockUtterance);
-      } catch (err) {}
-    }
 
     try {
-      const headers: Record<string, string> = {};
-      const localApiKey = localStorage.getItem("fai_elevenlabs_api_key") || "";
-      const localVoiceId = localStorage.getItem("fai_elevenlabs_voice_id") || "";
-      if (localApiKey.trim()) {
-        headers["x-elevenlabs-api-key"] = localApiKey.trim();
-      }
-      if (localVoiceId.trim()) {
-        headers["x-elevenlabs-voice-id"] = localVoiceId.trim();
+      let data = null;
+      if (prefetchPromiseRef.current) {
+        data = await prefetchPromiseRef.current;
+        prefetchPromiseRef.current = null;
+        prefetchWelcome(); // Start prefetching next
+      } else {
+        const res = await fetch("/api/radio/welcome");
+        if (res.ok) {
+          data = await res.json();
+        }
       }
 
-      const res = await fetch("/api/radio/welcome", { headers });
       if (myRequestId !== welcomeRequestIdRef.current) {
         return;
       }
-      if (res.ok) {
-        const data = await res.json();
+
+      if (data) {
         if (myRequestId !== welcomeRequestIdRef.current) {
           return;
         }
+
         let currentText = welcomeText;
         if (data.text) {
           setWelcomeText(data.text);
           currentText = data.text;
         }
+
         if (data.audio) {
           const audioSrc = data.audio.startsWith("data:")
             ? data.audio
-            : ("data:audio/wav;base64," + data.audio);
+            : ("data:audio/mp3;base64," + data.audio);
+          
           const audio = new Audio(audioSrc);
           
           if (myRequestId !== welcomeRequestIdRef.current) {
             return;
           }
+
           welcomeAudioRef.current = audio;
           audio.volume = volume / 100;
+
           audio.onloadedmetadata = () => {
             if (myRequestId === welcomeRequestIdRef.current) {
               setWelcomeDuration(audio.duration || 0);
             }
           };
+
           audio.ontimeupdate = () => {
             if (myRequestId === welcomeRequestIdRef.current) {
               setWelcomePosition(audio.currentTime || 0);
             }
           };
+
           audio.onended = () => {
             if (myRequestId === welcomeRequestIdRef.current) {
               handleEndWelcome();
             }
           };
+
           audio.onerror = () => {
             if (myRequestId === welcomeRequestIdRef.current) {
               speakFallback(currentText, myRequestId);
             }
           };
+
           audio.play().catch((e) => {
             console.error("Audio playback error, falling back", e);
             if (myRequestId === welcomeRequestIdRef.current) {
@@ -626,7 +635,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
     }
   }, [isSpeaking, isPlaying, onTogglePlay]);
 
-  const speakFallback = (overrideText?: string, reqId?: number) => {
+  const speakFallback = async (overrideText?: string, reqId?: number) => {
     if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
       return;
     }
@@ -636,66 +645,53 @@ export const FAIView: React.FC<FAIViewProps> = ({
     setIsSpeakingPaused(false);
     const textToSpeak = overrideText || welcomeText;
     
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      
-      const playUtterance = () => {
-        if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
+    try {
+      const res = await fetch(`/api/radio/tts?text=${encodeURIComponent(textToSpeak)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.audio) {
+          const audio = new Audio(data.audio);
+          welcomeAudioRef.current = audio;
+          audio.volume = volume / 100;
+
+          audio.onloadedmetadata = () => {
+            if (reqId === welcomeRequestIdRef.current) {
+              setWelcomeDuration(audio.duration || 0);
+            }
+          };
+
+          audio.ontimeupdate = () => {
+            if (reqId === welcomeRequestIdRef.current) {
+              setWelcomePosition(audio.currentTime || 0);
+            }
+          };
+
+          audio.onended = () => {
+            if (reqId === welcomeRequestIdRef.current) {
+              handleEndWelcome();
+            }
+          };
+
+          audio.onerror = () => {
+            if (reqId === welcomeRequestIdRef.current) {
+              setTimeout(() => handleEndWelcome(), 3000);
+            }
+          };
+
+          await audio.play();
           return;
         }
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.lang = "es-ES";
-        const voices = window.speechSynthesis.getVoices();
-        const spanishVoices = voices.filter(v => v.lang.startsWith("es") || v.lang.startsWith("ES"));
-        
-        let femaleVoice = spanishVoices.find(v => {
-          const name = v.name.toLowerCase();
-          return name.includes("helena") || name.includes("monica") || name.includes("paulina") || name.includes("sonia") || name.includes("alba") || name.includes("google") || name.includes("natural") || name.includes("female") || name.includes("sofia");
-        });
-        
-        if (!femaleVoice) {
-          femaleVoice = spanishVoices.find(v => v.lang.startsWith("es")) || voices[0];
-        }
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        }
-        utterance.rate = 1.3; // Fast and energetic!
-        utterance.pitch = 1.15; // Bright and youthful!
-        utterance.onend = () => {
-          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-            handleEndWelcome();
-          }
-        };
-        utterance.onerror = () => {
-          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-            handleEndWelcome();
-          }
-        };
-        window.speechSynthesis.speak(utterance);
-      };
-
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        playUtterance();
-      } else {
-        window.speechSynthesis.onvoiceschanged = () => {
-          playUtterance();
-          window.speechSynthesis.onvoiceschanged = null;
-        };
-        setTimeout(() => {
-          if (window.speechSynthesis.onvoiceschanged) {
-            playUtterance();
-            window.speechSynthesis.onvoiceschanged = null;
-          }
-        }, 150);
       }
-    } else {
-      setTimeout(() => {
-        if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-          handleEndWelcome();
-        }
-      }, 10000);
+    } catch (e) {
+      console.error("Fallback TTS fetch failed", e);
     }
+    
+    // If even the Google TTS proxy fails, just wait 3 seconds and continue
+    setTimeout(() => {
+      if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
+        handleEndWelcome();
+      }
+    }, 3000);
   };
 
   // Keep welcome audio volume in sync
@@ -778,15 +774,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
             setIsSpeakingPaused(false);
           } else {
             welcomeAudioRef.current.pause();
-            setIsSpeakingPaused(true);
-          }
-        } else {
-          // fallback tts pause/resume
-          if (isSpeakingPaused) {
-            window.speechSynthesis.resume();
-            setIsSpeakingPaused(false);
-          } else {
-            window.speechSynthesis.pause();
             setIsSpeakingPaused(true);
           }
         }
@@ -927,16 +914,24 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
         <div className="w-full flex flex-col shrink-0">
         {/* Track Metadata Section */}
-        <div className="w-full mb-6 sm:mb-8 mt-2">
-          <div className="flex items-center justify-center relative w-full">
+        <div className="w-full mb-6 sm:mb-8 mt-2 flex flex-col items-center">
+          <div className="flex flex-col items-center justify-center relative w-full overflow-hidden">
             <motion.h2 
-              key={isSpeaking ? "welcome" : currentTrack?.artist}
+              key={(isSpeaking ? "welcome" : currentTrack?.title) + "-title"}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-2xl sm:text-3xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 truncate px-4 text-center"
+              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/80 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Sofía DJ" : (currentTrack?.artist || "Sofía Mix")}
+              {isSpeaking ? "Sofía DJ" : (currentTrack?.title || "Radio en Vivo")}
             </motion.h2>
+            <motion.p
+              key={(isSpeaking ? "welcome" : currentTrack?.artist) + "-artist"}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
+            >
+              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Sofía Mix")}
+            </motion.p>
           </div>
         </div>
 

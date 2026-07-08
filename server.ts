@@ -431,6 +431,29 @@ app.get("/api/youtube/search", async (req, res) => {
       }
     }
 
+    try {
+      const musicResults = await yt.music.search(query, { type: 'song' }).catch(() => null);
+      if (musicResults && musicResults.contents) {
+        const shelf = musicResults.contents.find((c) => c.type === 'MusicShelf');
+        if (shelf && shelf.contents) {
+          const songs = shelf.contents.slice(0, 5).map((item) => {
+            if (item.type === 'MusicResponsiveListItem') {
+              return {
+                 type: 'Video',
+                 id: item.id,
+                 title: { text: item.title },
+                 author: { name: item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist' },
+                 duration: { text: item.duration?.text || '' },
+                 thumbnails: item.thumbnails
+              };
+            }
+            return item;
+          }).filter(x => x.id);
+          rawItems.unshift(...songs);
+        }
+      }
+    } catch (e) {}
+    
     if (playlistResults.status === "fulfilled" && playlistResults.value) {
       const resultsVal = playlistResults.value;
       const resAny: any = resultsVal.results;
@@ -2013,6 +2036,78 @@ app.post("/api/support/telegram-trial", async (req, res) => {
 });
 
 // System Health API (Admin Monitor)
+app.post("/api/analytics/sync", async (req, res) => {
+  try {
+    const { userId, events, songs, playlists } = req.body;
+    
+    if (!events && !songs && !playlists) {
+       return res.status(400).json({ error: 'No data provided' });
+    }
+    
+    const db = admin.firestore();
+    const today = new Date().toISOString().split('T')[0];
+    const globalRef = db.collection("analytics_daily").doc(today);
+    
+    const updates: Record<string, any> = {};
+    if (events) {
+      for (const [key, val] of Object.entries(events as Record<string, any>)) {
+        if (typeof val === 'number' && val > 0) {
+          updates[key] = admin.firestore.FieldValue.increment(val);
+        }
+      }
+    }
+    
+    if (userId && userId !== 'anonymous') {
+      updates.activeUsers = admin.firestore.FieldValue.arrayUnion(userId);
+    }
+    
+    if (Object.keys(updates).length > 0) {
+      await globalRef.set(updates, { merge: true });
+    }
+    
+    const batch = db.batch();
+    let batchCount = 0;
+    
+    if (songs) {
+      for (const [songId, data] of Object.entries(songs as Record<string, any>)) {
+        if (batchCount >= 400) break;
+        const docRef = db.collection("analytics_songs").doc(songId.replace(/\//g, '_'));
+        batch.set(docRef, {
+          title: data.title,
+          artist: data.artist || '',
+          count: admin.firestore.FieldValue.increment(data.count),
+          type: 'song',
+          lastPlayed: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        batchCount++;
+      }
+    }
+    
+    if (playlists) {
+      for (const [plId, data] of Object.entries(playlists as Record<string, any>)) {
+        if (batchCount >= 400) break;
+        const docRef = db.collection("analytics_playlists").doc(plId.replace(/\//g, '_'));
+        batch.set(docRef, {
+          title: data.title,
+          count: admin.firestore.FieldValue.increment(data.count),
+          type: 'playlist',
+          lastPlayed: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        batchCount++;
+      }
+    }
+    
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Analytics sync error", err);
+    res.status(500).json({ error: "Sync failed" });
+  }
+});
+
 app.get("/api/system/health", async (req, res) => {
   let mainLibraryStatus = "unknown";
   let planBStatus = "unknown";
@@ -2111,187 +2206,65 @@ const SOFIA_WELCOME_PHRASES = [
 
 const welcomeAudioCache: Record<string, string> = {};
 
-app.get("/api/radio/test-voice", async (req, res) => {
+app.get("/api/radio/tts", async (req, res) => {
+  const text = req.query.text;
+  if (!text) {
+    return res.status(400).json({ error: "No text provided" });
+  }
+  
   try {
-    const elApiKey = (req.headers["x-elevenlabs-api-key"] as string) || process.env.ELEVENLABS_API_KEY;
-    const elVoiceId = (req.headers["x-elevenlabs-voice-id"] as string) || process.env.ELEVENLABS_VOICE_ID || "jBpfuIE2acCO8zBIW8W7";
-
-    if (!elApiKey || !elApiKey.trim()) {
-      return res.status(400).json({ valid: false, error: "No se ha proporcionado la API Key de ElevenLabs." });
-    }
-
-    console.log(`[TTS] Testing ElevenLabs Voice ID ${elVoiceId}...`);
-    const response = await fetch(`https://api.elevenlabs.io/v1/voices/${elVoiceId}`, {
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(text as string)}`;
+    const fallbackRes = await fetch(url, {
       headers: {
-        "xi-api-key": elApiKey.trim(),
-        "accept": "application/json"
+        "User-Agent": "Mozilla/5.0"
       }
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      return res.json({ valid: true, name: data.name, category: data.category });
-    } else {
-      const errBody = await response.text();
-      let parsedErr = "Error de ElevenLabs";
-      try {
-        const parsed = JSON.parse(errBody);
-        parsedErr = parsed.detail?.message || parsed.message || errBody;
-      } catch (e) {
-        parsedErr = errBody || `Status ${response.status}`;
-      }
-      return res.status(response.status).json({ valid: false, error: parsedErr });
+    if (fallbackRes.ok) {
+      const arrayBuffer = await fallbackRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = "data:audio/mp3;base64," + buffer.toString("base64");
+      return res.json({ audio: base64 });
     }
-  } catch (err: any) {
-    console.error("[TTS] ElevenLabs test-voice exception:", err);
-    return res.status(500).json({ valid: false, error: err?.message || String(err) });
+  } catch (err) {
+    console.error("Google TTS failed", err);
   }
+  
+  res.json({ audio: null });
 });
 
 app.get("/api/radio/welcome", async (req, res) => {
-  try {
-    const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
-    const selectedText = SOFIA_WELCOME_PHRASES[index];
-
-    // Extract dynamic keys if sent from frontend
-    const elApiKey = (req.headers["x-elevenlabs-api-key"] as string) || process.env.ELEVENLABS_API_KEY;
-    const elVoiceId = (req.headers["x-elevenlabs-voice-id"] as string) || process.env.ELEVENLABS_VOICE_ID || "jBpfuIE2acCO8zBIW8W7";
-
-    const cacheKey = `${index}_${elVoiceId}`;
-
-    if (welcomeAudioCache[cacheKey]) {
-      return res.json({ text: selectedText, audio: welcomeAudioCache[cacheKey] });
-    }
-
-    // Attempt ElevenLabs if the API Key is defined
-    console.log(`[Diagnostic] ELEVENLABS_API_KEY present: ${!!process.env.ELEVENLABS_API_KEY}`);
-    console.log(`[Diagnostic] Request Header API Key present: ${!!req.headers["x-elevenlabs-api-key"]}`);
-
-    if (elApiKey) {
-      try {
-        console.log(`[TTS] Requesting ElevenLabs TTS for phrase index ${index} using voice ${elVoiceId}...`);
-        const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elVoiceId}`, {
-          method: "POST",
-          headers: {
-            "xi-api-key": elApiKey,
-            "Content-Type": "application/json",
-            "accept": "audio/mpeg"
-          },
-          body: JSON.stringify({
-            text: selectedText,
-            model_id: "eleven_multilingual_v2",
-            voice_settings: {
-              stability: 0.35,
-              similarity_boost: 0.85,
-              style: 0.45,
-              use_speaker_boost: true
-            }
-          })
-        });
-
-        if (elResponse.ok) {
-          const arrayBuffer = await elResponse.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const base64Audio = "data:audio/mpeg;base64," + buffer.toString("base64");
-          welcomeAudioCache[cacheKey] = base64Audio;
-          console.log(`[TTS] Successfully generated ElevenLabs audio for phrase index ${index} using voice ${elVoiceId}`);
-          return res.json({ text: selectedText, audio: base64Audio });
-        } else {
-          const errBody = await elResponse.text();
-          console.error(`[Diagnostic] ElevenLabs API failed with status ${elResponse.status}. Error body:`, errBody);
-        }
-      } catch (elErr: any) {
-        console.error("[Diagnostic] ElevenLabs fetch exception:", elErr?.message || elErr);
-      }
-    } else {
-      console.log("[Diagnostic] Skipping ElevenLabs: No API Key found in process.env or headers.");
-    }
-
-    // Fallback to Gemini 3.1 TTS if ElevenLabs key is not set or failed
-    console.log("[Diagnostic] Falling back to Gemini TTS because ElevenLabs failed or was skipped.");
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: { headers: { "User-Agent": "aistudio-build" } }
-    });
-
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash-8b",
-      contents: [{
-        parts: [{
-          text: `Please speak the following text with an extremely energetic, high-tempo, youthful, fast-paced (under 8 seconds), cool and exciting female music DJ voice ("cañera a tope"). Use a modern, enthusiastic, and fast tempo, with a bright, dynamic Gen-Z vibe. Absolutely natural inflection, zero robotism, like a professional FM radio DJ or club host. Speak in native Spanish (Spain) with maximum power, punchy delivery, and excitement: ${selectedText}`
-        }]
-      }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Kore" }
-          }
-        }
-      }
-    });
-
-    const rawBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-    let wavBase64: string | null = null;
-    if (rawBase64) {
-      const pcmBuffer = Buffer.from(rawBase64, "base64");
-      const sampleRate = 24000;
-      const numChannels = 1;
-      const wavBuffer = Buffer.alloc(44 + pcmBuffer.length);
-      wavBuffer.write('RIFF', 0);
-      wavBuffer.writeUInt32LE(36 + pcmBuffer.length, 4);
-      wavBuffer.write('WAVE', 8);
-      wavBuffer.write('fmt ', 12);
-      wavBuffer.writeUInt32LE(16, 16); 
-      wavBuffer.writeUInt16LE(1, 20); 
-      wavBuffer.writeUInt16LE(numChannels, 22);
-      wavBuffer.writeUInt32LE(sampleRate, 24);
-      wavBuffer.writeUInt32LE(sampleRate * numChannels * 2, 28); 
-      wavBuffer.writeUInt16LE(numChannels * 2, 32); 
-      wavBuffer.writeUInt16LE(16, 34); 
-      wavBuffer.write('data', 36);
-      wavBuffer.writeUInt32LE(pcmBuffer.length, 40);
-      pcmBuffer.copy(wavBuffer, 44);
-      
-      wavBase64 = "data:audio/wav;base64," + wavBuffer.toString("base64");
-      welcomeAudioCache[index.toString()] = wavBase64;
-    }
-
-    res.json({ text: selectedText, audio: wavBase64 || null });
-  } catch (err: any) {
-    const errStr = String(err?.message || err || "");
-    const isQuota = errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED") || err?.status === 429 || err?.statusCode === 429;
-    if (isQuota) {
-      console.log("[Info] Welcome audio Gemini TTS quota exceeded (rate limits apply to free tier). Attempting Google Translate fallback...");
-    } else {
-      console.log("[Info] Welcome audio Gemini TTS error, attempting Google Translate fallback... Message:", errStr.slice(0, 150));
-    }
-    try {
-      const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
-      const selectedText = SOFIA_WELCOME_PHRASES[index];
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-      });
-      if (response.ok) {
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64Audio = "data:audio/mpeg;base64," + buffer.toString("base64");
-        console.log("[Info] Successfully generated Google Translate fallback audio.");
-        return res.json({ text: selectedText, audio: base64Audio });
-      } else {
-        console.warn("Google Translate fallback status:", response.status);
-      }
-    } catch (fallbackErr: any) {
-      console.error("Google Translate fallback exception:", fallbackErr?.message || fallbackErr);
-    }
-    const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
-    res.json({ text: SOFIA_WELCOME_PHRASES[index], audio: null });
+  const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
+  const selectedText = SOFIA_WELCOME_PHRASES[index];
+  const cacheKey = `${index}`;
+  
+  if (welcomeAudioCache[cacheKey]) {
+    return res.json({ text: selectedText, audio: welcomeAudioCache[cacheKey] });
   }
+
+  try {
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
+    const fallbackRes = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+      }
+    });
+
+    if (fallbackRes.ok) {
+      const arrayBuffer = await fallbackRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = "data:audio/mp3;base64," + buffer.toString("base64");
+      welcomeAudioCache[cacheKey] = base64;
+      return res.json({ text: selectedText, audio: base64 });
+    }
+  } catch (err) {
+    console.error("Google TTS failed", err);
+  }
+  
+  res.json({ text: selectedText, audio: null });
 });
 
+export { app };
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -2312,4 +2285,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  startServer();
+}

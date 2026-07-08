@@ -1,0 +1,1 @@
+fetch("https://sponsor.ajay.app/api/skipSegments?videoID=IUxcbHPA8o4&categories=[\"sponsor\",\"intro\",\"outro\",\"interaction\",\"selfpromo\",\"music_offtopic\"]").then(r => r.text()).then(console.log).catch(console.log)

@@ -1,3 +1,4 @@
+import { initAnalytics, trackSearch, trackSongPlayed, trackPlaylistPlayed, trackExplorer, trackCommunity, trackSofiaDj, trackLogin, trackLogout, trackPlaylistDelete } from '../lib/analytics';
 import React, {
   useState,
   useEffect,
@@ -65,7 +66,7 @@ import { Play,
   Tv,
   GripVertical,
   Globe,
-Bot } from "lucide-react";
+Bot , BarChart2} from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { selectNextDJTrack, isReasonableTrack } from "../lib/djLogic";
@@ -1035,6 +1036,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   });
   const [isTracklistOpen, setIsTracklistOpen] = useState(true);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+
   const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] =
     useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -1705,6 +1707,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [trackListTab, setTrackListTab] = useState<
     "playlist" | "search" | "queue" | "entertainment" | "radio-fai"
   >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
+
+  useEffect(() => {
+    if (trackListTab === 'fai') {
+      trackSofiaDj();
+    } else if (trackListTab === 'explore') {
+      trackExplorer();
+    } else if (trackListTab === 'community') {
+      trackCommunity();
+    }
+  }, [trackListTab]);
+
   
   const [hasNewExplore, setHasNewExplore] = useState(false);
   const [hasNewCommunity, setHasNewCommunity] = useState(false);
@@ -3721,6 +3734,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         ? doc(db, pl.path)
         : doc(db, "users", targetOwnerId, "playlists", deletingId);
       await deleteDoc(docRef);
+      trackPlaylistDelete();
       window.dispatchEvent(new Event("refreshUserPlaylists"));
       window.dispatchEvent(new Event("refreshCommunity"));
 
@@ -4490,6 +4504,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   }, [searchQuery, trackListTab]);
 
   const handleYoutubeSearch = async (e?: React.FormEvent) => {
+    trackSearch();
+
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
@@ -5431,16 +5447,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   (seg) => played >= seg.start && played < seg.end,
                 );
                 if (activeSegment) {
-                  if (
-                    durationCurrent > 0 &&
-                    activeSegment.end >= durationCurrent - 3
-                  ) {
+                  // Only go to next track if the segment essentially ends the video
+                  if (durationCurrent > 0 && activeSegment.end >= durationCurrent - 10) {
                     handleNextRef.current();
                   } else {
-                    youtubePlayerRef.current.seekTo(
-                      activeSegment.end,
-                      "seconds",
-                    );
+                    youtubePlayerRef.current.seekTo(activeSegment.end, "seconds");
                   }
                 } else {
                   const maxSkipWindowSeconds =
@@ -5461,16 +5472,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         const actualSecs =
                           youtubePlayerRef.current.getCurrentTime() || 0;
                         if (actualSecs >= nextSegment.start - 2) {
-                          if (
-                            durationCurrent > 0 &&
-                            nextSegment.end >= durationCurrent - 3
-                          ) {
+                          if (durationCurrent > 0 && nextSegment.end >= durationCurrent - 10) {
                             handleNextRef.current();
                           } else {
-                            youtubePlayerRef.current.seekTo(
-                              nextSegment.end,
-                              "seconds",
-                            );
+                            youtubePlayerRef.current.seekTo(nextSegment.end, "seconds");
                           }
                         }
                       }
