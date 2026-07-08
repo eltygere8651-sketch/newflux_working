@@ -18,6 +18,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor">("users");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
+  
 
   // ElevenLabs Configuration
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState(() => localStorage.getItem("fai_elevenlabs_api_key") || "");
@@ -264,7 +265,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     fetchTelegramConfig();
     adjustYesterdayTrials();
     checkSystemHealth();
-  }, []);
+    }, []);
 
   const downloadPresentation = () => {
     try {
@@ -973,6 +974,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
             <span>Notificaciones</span>
           </button>
 
+          
+
           <button
             onClick={() => { setActiveTab("monitor"); checkSystemHealth(); }}
             className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
@@ -1530,10 +1533,259 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   </div>
                 )}
               </div>
-        </div>
-          )}
         
-        {/* Mobile Fixed Close Button */}
+          {activeTab === "analytics" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-black uppercase text-blue-400 tracking-wider flex items-center gap-2">
+                <Sparkles className="w-5 h-5" /> Panel Analítico Avanzado
+              </h3>
+              
+              {loadingAnalytics ? (
+                <div className="text-xs text-slate-500 animate-pulse">Cargando métricas globales...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Resumen Global */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Resumen de Actividad</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Activos (15m)</span>
+                        <span className="text-lg font-black text-white">{users.filter(u => u.lastActiveAt && (Date.now() - u.lastActiveAt < 15 * 60 * 1000)).length}</span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Nuevos (24h)</span>
+                        <span className="text-lg font-black text-white">{users.filter(u => u.createdAt && (Date.now() - u.createdAt < 24 * 60 * 60 * 1000)).length}</span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Hrs Reproducción</span>
+                        <span className="text-lg font-black text-emerald-400">
+                          {globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) / 3600).toFixed(1) : "0"}
+                        </span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Tiempo Total (Hrs)</span>
+                        <span className="text-lg font-black text-blue-400">
+                          {globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) / 3600).toFixed(1) : "0"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Uso de Funciones */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">DJ Sofía (Locuciones)</span>
+                        <span className="text-xs font-black text-purple-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.sofiaUses || 0), 0)}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
+                        <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">Modo Radio</span>
+                        <span className="text-xs font-black text-blue-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.radioUses || 0), 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Canciones */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Top 10 Canciones Más Reproducidas (Mes Actual)</h4>
+                    {globalAnalytics.length > 0 && globalAnalytics[0].topSongs ? (
+                      <div className="space-y-2">
+                        {Object.entries(globalAnalytics[0].topSongs)
+                          .sort(([, a]: any, [, b]: any) => b - a)
+                          .slice(0, 10)
+                          .map(([id, plays]: any, i) => (
+                          <div key={id} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                            <span className="text-[10px] font-black text-slate-300 truncate max-w-[80%]">
+                              {i + 1}. {globalAnalytics[0].songMeta?.[id] || "Canción Desconocida"}
+                            </span>
+                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{plays}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-slate-500">Sin datos suficientes este mes.</div>
+                    )}
+                  </div>
+                  
+                  {/* Top Searches & Genres */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Términos Más Buscados</h4>
+                      {globalAnalytics.length > 0 && globalAnalytics[0].topSearches ? (
+                        <div className="space-y-2">
+                          {Object.entries(globalAnalytics[0].topSearches)
+                            .sort(([, a]: any, [, b]: any) => b - a)
+                            .slice(0, 5)
+                            .map(([term, count]: any, i) => (
+                            <div key={term} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {term}</span>
+                              <span className="text-[9px] font-black text-blue-400">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] text-slate-500">No hay búsquedas.</div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Géneros Principales</h4>
+                      {globalAnalytics.length > 0 && globalAnalytics[0].topGenres ? (
+                        <div className="space-y-2">
+                          {Object.entries(globalAnalytics[0].topGenres)
+                            .sort(([, a]: any, [, b]: any) => b - a)
+                            .slice(0, 5)
+                            .map(([genre, count]: any, i) => (
+                            <div key={genre} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {genre}</span>
+                              <span className="text-[9px] font-black text-purple-400">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] text-slate-500">No hay géneros.</div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
+</div>
+
+          )}
+
+          {activeTab === "analytics" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-black uppercase text-blue-400 tracking-wider flex items-center gap-2">
+                <Sparkles className="w-5 h-5" /> Panel Analítico Avanzado
+              </h3>
+              
+              {loadingAnalytics ? (
+                <div className="text-xs text-slate-500 animate-pulse">Cargando métricas globales...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Resumen Global */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Resumen de Actividad</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Activos (15m)</span>
+                        <span className="text-lg font-black text-white">{users.filter(u => u.lastActiveAt && (Date.now() - u.lastActiveAt < 15 * 60 * 1000)).length}</span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Nuevos (24h)</span>
+                        <span className="text-lg font-black text-white">{users.filter(u => u.createdAt && (Date.now() - u.createdAt < 24 * 60 * 60 * 1000)).length}</span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Hrs Reproducción</span>
+                        <span className="text-lg font-black text-emerald-400">
+                          {globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) / 3600).toFixed(1) : "0"}
+                        </span>
+                      </div>
+                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Tiempo Total (Hrs)</span>
+                        <span className="text-lg font-black text-blue-400">
+                          {globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) / 3600).toFixed(1) : "0"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Uso de Funciones */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">DJ Sofía (Locuciones)</span>
+                        <span className="text-xs font-black text-purple-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.sofiaUses || 0), 0)}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
+                        <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-slate-300">Modo Radio</span>
+                        <span className="text-xs font-black text-blue-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.radioUses || 0), 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Canciones */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Top 10 Canciones Más Reproducidas</h4>
+                    {globalAnalytics.length > 0 && globalAnalytics[0].topSongs ? (
+                      <div className="space-y-2">
+                        {Object.entries(globalAnalytics[0].topSongs)
+                          .sort(([, a], [, b]) => (b) - (a))
+                          .slice(0, 10)
+                          .map(([id, plays], i) => (
+                          <div key={id} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                            <span className="text-[10px] font-black text-slate-300 truncate max-w-[80%]">
+                              {i + 1}. {globalAnalytics[0].songMeta?.[id] || "Canción Desconocida"}
+                            </span>
+                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{String(plays)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-slate-500">Sin datos suficientes.</div>
+                    )}
+                  </div>
+                  
+                  {/* Top Searches & Genres */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Términos Más Buscados</h4>
+                      {globalAnalytics.length > 0 && globalAnalytics[0].topSearches ? (
+                        <div className="space-y-2">
+                          {Object.entries(globalAnalytics[0].topSearches)
+                            .sort(([, a], [, b]) => (b) - (a))
+                            .slice(0, 5)
+                            .map(([term, count], i) => (
+                            <div key={term} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {term}</span>
+                              <span className="text-[9px] font-black text-blue-400">{String(count)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] text-slate-500">No hay búsquedas.</div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Géneros Principales</h4>
+                      {globalAnalytics.length > 0 && globalAnalytics[0].topGenres ? (
+                        <div className="space-y-2">
+                          {Object.entries(globalAnalytics[0].topGenres)
+                            .sort(([, a], [, b]) => (b) - (a))
+                            .slice(0, 5)
+                            .map(([genre, count], i) => (
+                            <div key={genre} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {genre}</span>
+                              <span className="text-[9px] font-black text-purple-400">{String(count)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] text-slate-500">No hay géneros.</div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
+
+{/* Mobile Fixed Close Button */}
         <div className="sm:hidden flex shrink-0 p-3 bg-[#0a0a0c] border-t border-white/5 mt-auto">
           <button 
             onClick={onClose}

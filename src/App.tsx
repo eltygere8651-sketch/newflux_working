@@ -34,6 +34,7 @@ import { NotificationsModal, COMPILED_UPDATES } from "./components/Notifications
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
+
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);

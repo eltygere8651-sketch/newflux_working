@@ -3331,6 +3331,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  useEffect(() => {
+  }, [currentTrack]);
+
   const handleNextRef = useRef(handleNext);
   useEffect(() => {
     handleNextRef.current = handleNext;
@@ -5487,7 +5490,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             setSearchQuery("");
             setYoutubeResults([]);
             setPreviewPlaylist(null);
-            setTrackListTab("search");
+    setTrackListTab("search");
             setIsTrackListExpanded(true);
             setShowLibrary(false);
             setIsSidebarExpanded(false);
@@ -5643,11 +5646,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 setSearchQuery("");
                 setYoutubeResults([]);
                 setPreviewPlaylist(null);
-                setTrackListTab("search");
+    setTrackListTab("search");
               } else {
                 setSearchQuery(pill.label);
                 setPreviewPlaylist(null);
-                setTrackListTab("search");
+    setTrackListTab("search");
                 setIsSearchingYT(true);
                 fetch(`/api/youtube/search?q=${encodeURIComponent(pill.query)}`)
                   .then((res) => res.json())
@@ -6812,7 +6815,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                             if (trackListTab === "playlist") {
                               setSelectedPlaylist(null);
                             }
-                            setTrackListTab("search");
+    setTrackListTab("search");
                             setSearchQuery("");
                             if (window.innerWidth < 768) {
                               setMobileView("playlists");
@@ -6838,7 +6841,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         <form
                           onSubmit={(e) => {
                             e.preventDefault();
-                            setTrackListTab("search");
+    setTrackListTab("search");
                             handleYoutubeSearch(e);
                           }}
                         >
@@ -6895,7 +6898,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                           <button
                             onClick={() => {
                               setSearchQuery("");
-                              setTrackListTab("search");
+    setTrackListTab("search");
                             }}
                             className="shrink-0 py-1.5 px-3 text-[10px] font-bold uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 h-full"
                             title="Buscar canciones para añadir"
@@ -8079,7 +8082,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 <button
                   onClick={() => {
                     setSelectedPlaylist(null);
-                    setTrackListTab("search");
+    setTrackListTab("search");
                     setIsTrackListExpanded(true);
                     setMobileView("player");
                     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -8191,7 +8194,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         <button
           onClick={() => {
             setSelectedPlaylist(null);
-            setTrackListTab("search");
+    setTrackListTab("search");
             setIsTrackListExpanded(true);
             setMobileView("player");
             setShowLibrary(false);
