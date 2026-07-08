@@ -21,14 +21,11 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true
+    "noEmit": true
   },
   "include": [
     "src/**/*",
     "server.ts",
-    "vite.config.ts",
-    "api/**/*"
+    "vite.config.ts"
   ]
 }

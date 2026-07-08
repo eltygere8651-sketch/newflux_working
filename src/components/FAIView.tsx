@@ -8,14 +8,22 @@ import {
   SkipBack,
   Settings2, 
   Heart,
+  Plus,
+  Share2,
   Volume2,
+  RotateCcw,
   Radio,
+  Users,
   Music,
+  Tv,
   Sparkles,
-  X
+  MoreHorizontal,
+  X,
+  Compass,
+  ChevronRight
 } from "lucide-react";
 import { MusicTrack } from "../types";
-import { selectNextDJTrack, DJ_GENRES, isReasonableTrack } from "../lib/djLogic";
+import { selectNextDJTrack, FLUX_PAYOLA, DJ_GENRES, isReasonableTrack } from "../lib/djLogic";
 
 interface FAIViewProps {
   favorites: MusicTrack[];
@@ -70,7 +78,7 @@ const extractCleanTitle = (title: string) => {
   return cleaned.trim() || title;
 };
 
-const cachedWelcomeText = "¡Qué pasa chavales! 🔥 Aquí Radio Mix al mando de los platos. Os traigo un set que es puro fuego, ¡así que subid el volumen al máximo y que empiece el desmadre! ⚡️";
+const cachedWelcomeText = "¡Qué pasa chavales! 🔥 Aquí Sofía DJ al mando de los platos. Os traigo un set que es puro fuego, ¡así que subid el volumen al máximo y que empiece el desmadre! ⚡️";
 
 
 export const FAIView: React.FC<FAIViewProps> = ({
@@ -122,6 +130,17 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const [genreBuffer, setGenreBuffer] = useState<MusicTrack[]>([]);
   const [triggerPlay, setTriggerPlay] = useState(false);
 
+  // Auto-start welcome on mount if not yet played in session - DISABLED as per user request to play only on Play click
+  /*
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!welcomePlayed && !isRadioActive) {
+        handleStartWelcome();
+      }
+    }, 500); 
+    return () => clearTimeout(timer);
+  }, [welcomePlayed, isRadioActive]);
+  */
   const [welcomePlayed, setWelcomePlayed] = useState(false);
 
   const [welcomeStep, setWelcomeStep] = useState<"idle" | "loading" | "speaking">("idle");
@@ -138,20 +157,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const handleEndWelcomeRef = useRef<(() => void) | null>(null);
   const speechStartTimeRef = useRef<number>(0);
   const welcomeRequestIdRef = useRef<number>(0);
-  const prefetchPromiseRef = useRef<Promise<any> | null>(null);
-
-  const prefetchWelcome = () => {
-    const p = fetch("/api/radio/welcome")
-      .then(res => res.json())
-      .catch(() => null);
-    prefetchPromiseRef.current = p;
-    return p;
-  };
-
-  useEffect(() => {
-    prefetchWelcome();
-  }, []);
-
 
   const setSpeaking = (val: boolean) => {
     setIsSpeaking(val);
@@ -164,6 +169,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
       if (welcomeAudioRef.current) {
         welcomeAudioRef.current.pause();
         welcomeAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
     };
   }, []);
@@ -430,6 +438,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
       welcomeAudioRef.current.pause();
       welcomeAudioRef.current = null;
     }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
 
     // If the welcome ended or errored in less than 500ms, it was blocked or errored out instantly.
     // In that case, DO NOT auto-start the background music! Stay in idle state so the user can click play to sintonize/listen.
@@ -465,54 +476,226 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
     const myRequestId = ++welcomeRequestIdRef.current;
     speechStartTimeRef.current = Date.now();
-    setWelcomeStep("idle");
-    setSpeaking(false);
+    setWelcomeStep("speaking");
+    setSpeaking(true);
     setIsSpeakingPaused(false);
     setIsRadioActive(true);
     setWelcomePosition(0);
     setWelcomeDuration(0);
-    setWelcomePlayed(true);
-    sessionStorage.setItem("flux_radio_welcome_played_session", "true");
 
-    // Start fetching tracks for the radio and play them directly
+    // Prefetch next track buffer if empty to eliminate delay when speech ends
+    setTimeout(async () => {
+       try {
+         const randomQuery = "los 40 principales españa 2024 hoy official audio";
+         const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+         if (resp.ok) {
+           const data = await resp.json();
+           if (data && data.length > 0) {
+             const playlists = data.filter((d: any) => d.isPlaylist);
+             if (playlists.length > 0) {
+               const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
+               if (plResp.ok) {
+                 const plData = await plResp.json();
+                 const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+                 if (tracksArray.length > 0) {
+                   const formatted = tracksArray.map((d: any) => ({
+                      id: d.id,
+                      title: extractCleanTitle(d.title),
+                      artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
+                      bpm: 120,
+                      url: `https://www.youtube.com/watch?v=${d.id}`,
+                      duration: d.duration || "N/A"
+                   })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
+                   if (formatted.length > 0) {
+                     setGenreBuffer(formatted.sort(() => Math.random() - 0.5));
+                   }
+                 }
+               }
+             }
+           }
+         }
+       } catch (e) {
+         console.log("Prefetch failed", e);
+       }
+    }, 100);
+
+    // Pause any background music currently playing
+    if (isPlaying) {
+      onTogglePlay();
+    }
+
+    if (welcomeAudioRef.current) {
+      welcomeAudioRef.current.pause();
+      welcomeAudioRef.current = null;
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      // Unlock SpeechSynthesis context for subsequent asynchronous triggers
+      try {
+        const unlockUtterance = new SpeechSynthesisUtterance(" ");
+        unlockUtterance.volume = 0;
+        window.speechSynthesis.speak(unlockUtterance);
+      } catch (err) {}
+    }
+
     try {
-      const randomQuery = "los 40 principales españa 2024 hoy official audio";
-      const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && data.length > 0) {
-          const playlists = data.filter((d: any) => d.isPlaylist);
-          if (playlists.length > 0) {
-            const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
-            if (plResp.ok) {
-              const plData = await plResp.json();
-              const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
-              if (tracksArray.length > 0) {
-                const formatted = tracksArray.map((d: any) => ({
-                   id: d.id,
-                   title: extractCleanTitle(d.title),
-                   artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
-                   bpm: 120,
-                   url: `https://www.youtube.com/watch?v=${d.id}`,
-                   duration: d.duration || "N/A"
-                })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
-                if (formatted.length > 0) {
-                  const shuffled = formatted.sort(() => Math.random() - 0.5);
-                  setGenreBuffer(shuffled);
-                  onPlayTrack(shuffled[0]);
-                }
-              }
-            }
-          }
+      const headers: Record<string, string> = {};
+      const localApiKey = localStorage.getItem("fai_elevenlabs_api_key") || "";
+      const localVoiceId = localStorage.getItem("fai_elevenlabs_voice_id") || "";
+      if (localApiKey.trim()) {
+        headers["x-elevenlabs-api-key"] = localApiKey.trim();
+      }
+      if (localVoiceId.trim()) {
+        headers["x-elevenlabs-voice-id"] = localVoiceId.trim();
+      }
+
+      const res = await fetch("/api/radio/welcome", { headers });
+      if (myRequestId !== welcomeRequestIdRef.current) {
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (myRequestId !== welcomeRequestIdRef.current) {
+          return;
         }
+        let currentText = welcomeText;
+        if (data.text) {
+          setWelcomeText(data.text);
+          currentText = data.text;
+        }
+        if (data.audio) {
+          const audioSrc = data.audio.startsWith("data:")
+            ? data.audio
+            : ("data:audio/wav;base64," + data.audio);
+          const audio = new Audio(audioSrc);
+          
+          if (myRequestId !== welcomeRequestIdRef.current) {
+            return;
+          }
+          welcomeAudioRef.current = audio;
+          audio.volume = volume / 100;
+          audio.onloadedmetadata = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              setWelcomeDuration(audio.duration || 0);
+            }
+          };
+          audio.ontimeupdate = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              setWelcomePosition(audio.currentTime || 0);
+            }
+          };
+          audio.onended = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              handleEndWelcome();
+            }
+          };
+          audio.onerror = () => {
+            if (myRequestId === welcomeRequestIdRef.current) {
+              speakFallback(currentText, myRequestId);
+            }
+          };
+          audio.play().catch((e) => {
+            console.error("Audio playback error, falling back", e);
+            if (myRequestId === welcomeRequestIdRef.current) {
+              speakFallback(currentText, myRequestId);
+            }
+          });
+        } else {
+          speakFallback(currentText, myRequestId);
+        }
+      } else {
+        speakFallback(undefined, myRequestId);
       }
     } catch (e) {
-      console.error("FAI handleNextTrack prefetch failed", e);
+      console.error("Welcome request failed, falling back", e);
+      if (myRequestId === welcomeRequestIdRef.current) {
+        speakFallback(undefined, myRequestId);
+      }
     }
   };
 
-  const speakFallback = async (overrideText?: string, reqId?: number) => {
-    // Completely deactivated as per user request to avoid any TTS/speech
+  /* Auto-start removed */
+  
+  useEffect(() => {
+    // ACTIVE PLAYER LOCK: If Sofía is currently speaking, the background music MUST be paused.
+    // This resolves any race conditions where a track starts playing before Sofía finishes her intro.
+    if (isSpeaking && isPlaying) {
+      console.log("[Sync] Sofía is speaking. Pausing background music.");
+      onTogglePlay();
+    }
+  }, [isSpeaking, isPlaying, onTogglePlay]);
+
+  const speakFallback = (overrideText?: string, reqId?: number) => {
+    if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
+      return;
+    }
+    speechStartTimeRef.current = Date.now();
+    setWelcomeStep("speaking");
+    setSpeaking(true);
+    setIsSpeakingPaused(false);
+    const textToSpeak = overrideText || welcomeText;
+    
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      const playUtterance = () => {
+        if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = "es-ES";
+        const voices = window.speechSynthesis.getVoices();
+        const spanishVoices = voices.filter(v => v.lang.startsWith("es") || v.lang.startsWith("ES"));
+        
+        let femaleVoice = spanishVoices.find(v => {
+          const name = v.name.toLowerCase();
+          return name.includes("helena") || name.includes("monica") || name.includes("paulina") || name.includes("sonia") || name.includes("alba") || name.includes("google") || name.includes("natural") || name.includes("female") || name.includes("sofia");
+        });
+        
+        if (!femaleVoice) {
+          femaleVoice = spanishVoices.find(v => v.lang.startsWith("es")) || voices[0];
+        }
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }
+        utterance.rate = 1.3; // Fast and energetic!
+        utterance.pitch = 1.15; // Bright and youthful!
+        utterance.onend = () => {
+          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
+            handleEndWelcome();
+          }
+        };
+        utterance.onerror = () => {
+          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
+            handleEndWelcome();
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        playUtterance();
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          playUtterance();
+          window.speechSynthesis.onvoiceschanged = null;
+        };
+        setTimeout(() => {
+          if (window.speechSynthesis.onvoiceschanged) {
+            playUtterance();
+            window.speechSynthesis.onvoiceschanged = null;
+          }
+        }, 150);
+      }
+    } else {
+      setTimeout(() => {
+        if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
+          handleEndWelcome();
+        }
+      }, 10000);
+    }
   };
 
   // Keep welcome audio volume in sync
@@ -595,6 +778,15 @@ export const FAIView: React.FC<FAIViewProps> = ({
             setIsSpeakingPaused(false);
           } else {
             welcomeAudioRef.current.pause();
+            setIsSpeakingPaused(true);
+          }
+        } else {
+          // fallback tts pause/resume
+          if (isSpeakingPaused) {
+            window.speechSynthesis.resume();
+            setIsSpeakingPaused(false);
+          } else {
+            window.speechSynthesis.pause();
             setIsSpeakingPaused(true);
           }
         }
@@ -699,7 +891,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               </div>
 
               <span className="text-[10px] font-black text-[#17d1a5] tracking-widest uppercase mb-1 text-center select-none">
-                Radio Mix Activa 🎙️
+                Sofía en el aire 🎙️
               </span>
 
               {/* Dynamic Equalizer Visualizer */}
@@ -743,7 +935,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               animate={{ opacity: 1, y: 0 }}
               className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/80 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Radio Mix" : (currentTrack?.title || "Radio en Vivo")}
+              {isSpeaking ? "Sofía DJ" : (currentTrack?.title || "Radio en Vivo")}
             </motion.h2>
             <motion.p
               key={(isSpeaking ? "welcome" : currentTrack?.artist) + "-artist"}
@@ -751,7 +943,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               animate={{ opacity: 1, y: 0 }}
               className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Radio Mix")}
+              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Sofía Mix")}
             </motion.p>
           </div>
         </div>

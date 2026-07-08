@@ -247,55 +247,10 @@ const INVIDIOUS_INSTANCES = [
   "https://vid.puffyan.us",
 ];
 const PIPED_INSTANCES = [
-  "https://api.piped.private.coffee",
-  "https://pipedapi.kavin.rocks",
-  "https://piped-api.garudalinux.org",
-  "https://piped-api.privacydev.net",
-  "https://api.piped.yt",
+  "https://api.piped.projectsegfau.lt",
+  "https://pipedapi.in.projectsegfau.lt",
   "https://pipedapi.lunar.icu",
 ];
-
-let activePipedInstances: string[] = [];
-
-// Dynamic health check to filter and rotate active Piped instances at startup
-async function checkPipedHealth() {
-  console.log("[HEALTH CHECK] Starting Piped instances health check...");
-  const verified: string[] = [];
-  for (const instance of PIPED_INSTANCES) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-      const res = await fetch(`${instance}/healthcheck`, {
-        signal: controller.signal,
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        verified.push(instance);
-        console.log(`[HEALTH CHECK] Instance ${instance} is active.`);
-      } else {
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 3500);
-        const res2 = await fetch(`${instance}/trending?region=US`, {
-          signal: controller2.signal,
-          headers: { "User-Agent": "Mozilla/5.0" },
-        });
-        clearTimeout(timeoutId2);
-        if (res2.ok) {
-          verified.push(instance);
-          console.log(`[HEALTH CHECK] Instance ${instance} is active (via trending fallback).`);
-        } else {
-          console.warn(`[HEALTH CHECK] Instance ${instance} is down (HTTP ${res.status}).`);
-        }
-      }
-    } catch (err) {
-      console.warn(`[HEALTH CHECK] Instance ${instance} failed check:`, err instanceof Error ? err.message : err);
-    }
-  }
-
-  activePipedInstances = verified;
-  console.log("[HEALTH CHECK] Active Piped instances list updated:", activePipedInstances);
-}
 
 // YouTube Search Cache (Eco-Friendly)
 const searchCache = new Map<string, { data: any; timestamp: number }>();
@@ -424,19 +379,16 @@ app.get("/api/user/playlists", async (req, res) => {
 // YouTube Search Endpoint
 app.get("/api/youtube/search", async (req, res) => {
   const query = req.query.q as string;
-  if (!query) {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    return res.status(400).json({ error: "Missing query" });
-  }
+  if (!query) return res.status(400).json({ error: "Missing query" });
+
+  res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
 
   const normalizedQuery = query.toLowerCase().trim();
-  const bypassCache = req.query.refresh === "true" || req.query.bypass === "true";
 
   // Check cache
   const cached = searchCache.get(normalizedQuery);
-  if (!bypassCache && cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log("Serving YouTube search from cache (ECO):", normalizedQuery);
-    res.setHeader("Cache-Control", "public, max-age=86400");
     return res.json(cached.data);
   }
 
@@ -444,7 +396,6 @@ app.get("/api/youtube/search", async (req, res) => {
     try {
       yt = await Innertube.create({ generate_session_locally: true });
     } catch (e) {
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       return res.status(503).json({ error: "YouTube service unavailable" });
     }
   }
@@ -732,7 +683,6 @@ app.get("/api/youtube/search", async (req, res) => {
       });
     }
 
-    res.setHeader("Cache-Control", "public, max-age=86400");
     res.json(combined);
   } catch (error) {
     console.warn(
@@ -742,8 +692,7 @@ app.get("/api/youtube/search", async (req, res) => {
 
     // Ant-block fallback: Piped API
     try {
-      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
-      for (const instance of instancesToTry) {
+      for (const instance of PIPED_INSTANCES) {
         try {
           const pRes = await fetch(
             `${instance}/search?q=${encodeURIComponent(query)}&filter=all`,
@@ -791,7 +740,6 @@ app.get("/api/youtube/search", async (req, res) => {
                 data: combined,
                 timestamp: Date.now(),
               }); // Cache fallback results
-              res.setHeader("Cache-Control", "public, max-age=86400");
               return res.json(combined);
             }
           }
@@ -803,7 +751,6 @@ app.get("/api/youtube/search", async (req, res) => {
       console.error("All fallbacks failed.");
     }
 
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res
       .status(500)
       .json({ error: "Internal YouTube search error (and fallbacks failed)" });
@@ -817,6 +764,7 @@ const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 const ytClients = new Map<string, any>();
 
 app.get("/api/youtube/explore", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
   const country = ((req.query.country as string) || "ES").toUpperCase();
   const countryMap: Record<string, string> = {
     GLOBAL: "Global",
@@ -837,7 +785,6 @@ app.get("/api/youtube/explore", async (req, res) => {
 
   const cached = exploreCache.get(country);
   if (cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
-    res.setHeader("Cache-Control", "public, max-age=86400");
     return res.json(cached.data);
   }
 
@@ -848,12 +795,11 @@ app.get("/api/youtube/explore", async (req, res) => {
       yt = await Innertube.create({ gl: country === 'GLOBAL' ? 'US' : country, hl: 'es' });
       ytClients.set(country, yt);
     } catch (e) {
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
       return res.status(503).json({ error: "YouTube unavailable for region" });
     }
   }
 
-  const parseInnertubeItem = (p: any): any => {
+    const parseInnertubeItem = (p: any): any => {
     try {
       if (!p) return null;
       let id =
@@ -1045,7 +991,6 @@ app.get("/api/youtube/explore", async (req, res) => {
 
 
     exploreCache.set(country, { data, timestamp: Date.now() });
-    res.setHeader("Cache-Control", "public, max-age=86400");
     res.json(data);
   } catch (error) {
     console.warn(
@@ -1054,8 +999,7 @@ app.get("/api/youtube/explore", async (req, res) => {
     );
 
     try {
-      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
-      for (const instance of instancesToTry) {
+      for (const instance of PIPED_INSTANCES) {
         try {
           const pRes = await fetch(`${instance}/trending?region=${country}`);
           if (pRes.ok) {
@@ -1097,7 +1041,6 @@ app.get("/api/youtube/explore", async (req, res) => {
                 party: [],
               };
               exploreCache.set(country, { data, timestamp: Date.now() });
-              res.setHeader("Cache-Control", "public, max-age=86400");
               return res.json(data);
             }
           }
@@ -1109,7 +1052,6 @@ app.get("/api/youtube/explore", async (req, res) => {
       console.error("Explore fallback failed.");
     }
 
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.status(500).json({ error: "Internal error (and fallbacks failed)" });
   }
 });
@@ -1154,8 +1096,7 @@ app.get("/api/youtube/video-info", async (req, res) => {
       }
     }
 
-    const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
-    for (const instance of instancesToTry) {
+    for (const instance of PIPED_INSTANCES) {
       try {
         const pRes = await fetch(`${instance}/streams/${videoId}`);
         if (pRes.ok) {
@@ -1255,8 +1196,7 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
       }
     }
 
-    const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
-    for (const instance of instancesToTry) {
+    for (const instance of PIPED_INSTANCES) {
       try {
         const pRes = await fetch(`${instance}/playlists/${playlistId}`);
         if (pRes.ok) {
@@ -1517,8 +1457,7 @@ app.get("/api/youtube/playlist", async (req, res) => {
     );
 
     try {
-      const instancesToTry = activePipedInstances.length > 0 ? activePipedInstances : PIPED_INSTANCES;
-      for (const instance of instancesToTry) {
+      for (const instance of PIPED_INSTANCES) {
         try {
           const pRes = await fetch(`${instance}/playlists/${playlistId}`);
           if (pRes.ok) {
@@ -2097,78 +2036,6 @@ app.post("/api/support/telegram-trial", async (req, res) => {
 });
 
 // System Health API (Admin Monitor)
-app.post("/api/analytics/sync", async (req, res) => {
-  try {
-    const { userId, events, songs, playlists } = req.body;
-    
-    if (!events && !songs && !playlists) {
-       return res.status(400).json({ error: 'No data provided' });
-    }
-    
-    const db = admin.firestore();
-    const today = new Date().toISOString().split('T')[0];
-    const globalRef = db.collection("analytics_daily").doc(today);
-    
-    const updates: Record<string, any> = {};
-    if (events) {
-      for (const [key, val] of Object.entries(events as Record<string, any>)) {
-        if (typeof val === 'number' && val > 0) {
-          updates[key] = admin.firestore.FieldValue.increment(val);
-        }
-      }
-    }
-    
-    if (userId && userId !== 'anonymous') {
-      updates.activeUsers = admin.firestore.FieldValue.arrayUnion(userId);
-    }
-    
-    if (Object.keys(updates).length > 0) {
-      await globalRef.set(updates, { merge: true });
-    }
-    
-    const batch = db.batch();
-    let batchCount = 0;
-    
-    if (songs) {
-      for (const [songId, data] of Object.entries(songs as Record<string, any>)) {
-        if (batchCount >= 400) break;
-        const docRef = db.collection("analytics_songs").doc(songId.replace(/\//g, '_'));
-        batch.set(docRef, {
-          title: data.title,
-          artist: data.artist || '',
-          count: admin.firestore.FieldValue.increment(data.count),
-          type: 'song',
-          lastPlayed: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        batchCount++;
-      }
-    }
-    
-    if (playlists) {
-      for (const [plId, data] of Object.entries(playlists as Record<string, any>)) {
-        if (batchCount >= 400) break;
-        const docRef = db.collection("analytics_playlists").doc(plId.replace(/\//g, '_'));
-        batch.set(docRef, {
-          title: data.title,
-          count: admin.firestore.FieldValue.increment(data.count),
-          type: 'playlist',
-          lastPlayed: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        batchCount++;
-      }
-    }
-    
-    if (batchCount > 0) {
-      await batch.commit();
-    }
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Analytics sync error", err);
-    res.status(500).json({ error: "Sync failed" });
-  }
-});
-
 app.get("/api/system/health", async (req, res) => {
   let mainLibraryStatus = "unknown";
   let planBStatus = "unknown";
@@ -2265,94 +2132,189 @@ const SOFIA_WELCOME_PHRASES = [
   "¡Ey! ⚡️ Olvídate del algoritmo y sintoniza a la verdadera jefa. ¡Sofía DJ en directo! 🔊"
 ];
 
-const welcomeAudioBufferCache: Record<string, Buffer> = {};
+const welcomeAudioCache: Record<string, string> = {};
 
-// Direct proxy streaming endpoints for the browser's native Audio player.
-// This completely resolves CORS, referrer, and sandboxed iframe issues!
-app.get("/api/radio/tts/stream", async (req, res) => {
-  const text = req.query.text;
-  if (!text) {
-    return res.status(400).send("No text provided");
-  }
-
-  const directTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(text as string)}`;
-
+app.get("/api/radio/test-voice", async (req, res) => {
   try {
-    const fallbackRes = await fetch(directTtsUrl, {
+    const elApiKey = (req.headers["x-elevenlabs-api-key"] as string) || process.env.ELEVENLABS_API_KEY;
+    const elVoiceId = (req.headers["x-elevenlabs-voice-id"] as string) || process.env.ELEVENLABS_VOICE_ID || "jBpfuIE2acCO8zBIW8W7";
+
+    if (!elApiKey || !elApiKey.trim()) {
+      return res.status(400).json({ valid: false, error: "No se ha proporcionado la API Key de ElevenLabs." });
+    }
+
+    console.log(`[TTS] Testing ElevenLabs Voice ID ${elVoiceId}...`);
+    const response = await fetch(`https://api.elevenlabs.io/v1/voices/${elVoiceId}`, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "xi-api-key": elApiKey.trim(),
+        "accept": "application/json"
       }
     });
 
-    if (fallbackRes.ok) {
-      const arrayBuffer = await fallbackRes.arrayBuffer();
-      res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Cache-Control", "public, max-age=31536000");
-      return res.send(Buffer.from(arrayBuffer));
-    }
-  } catch (err) {
-    console.error("Google TTS streaming failed", err);
-  }
-
-  return res.status(500).send("Failed to stream TTS");
-});
-
-app.get("/api/radio/welcome/stream", async (req, res) => {
-  const indexStr = req.query.index;
-  let index = indexStr ? parseInt(indexStr as string, 10) : 0;
-  if (isNaN(index) || index < 0 || index >= SOFIA_WELCOME_PHRASES.length) {
-    index = 0;
-  }
-
-  const cacheKey = `${index}`;
-  if (welcomeAudioBufferCache[cacheKey]) {
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Cache-Control", "public, max-age=31536000");
-    return res.send(welcomeAudioBufferCache[cacheKey]);
-  }
-
-  const selectedText = SOFIA_WELCOME_PHRASES[index];
-  const directTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
-
-  try {
-    const fallbackRes = await fetch(directTtsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    if (response.ok) {
+      const data = await response.json();
+      return res.json({ valid: true, name: data.name, category: data.category });
+    } else {
+      const errBody = await response.text();
+      let parsedErr = "Error de ElevenLabs";
+      try {
+        const parsed = JSON.parse(errBody);
+        parsedErr = parsed.detail?.message || parsed.message || errBody;
+      } catch (e) {
+        parsedErr = errBody || `Status ${response.status}`;
       }
-    });
-
-    if (fallbackRes.ok) {
-      const arrayBuffer = await fallbackRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      welcomeAudioBufferCache[cacheKey] = buffer;
-      res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Cache-Control", "public, max-age=31536000");
-      return res.send(buffer);
+      return res.status(response.status).json({ valid: false, error: parsedErr });
     }
-  } catch (err) {
-    console.error("Google TTS welcome streaming failed", err);
+  } catch (err: any) {
+    console.error("[TTS] ElevenLabs test-voice exception:", err);
+    return res.status(500).json({ valid: false, error: err?.message || String(err) });
   }
-
-  return res.status(500).send("Failed to stream welcome audio");
-});
-
-app.get("/api/radio/tts", async (req, res) => {
-  const text = req.query.text;
-  if (!text) {
-    return res.status(400).json({ error: "No text provided" });
-  }
-  const streamUrl = `/api/radio/tts/stream?text=${encodeURIComponent(text as string)}`;
-  return res.json({ audioUrl: streamUrl, audio: null });
 });
 
 app.get("/api/radio/welcome", async (req, res) => {
-  const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
-  const selectedText = SOFIA_WELCOME_PHRASES[index];
-  const streamUrl = `/api/radio/welcome/stream?index=${index}`;
-  return res.json({ text: selectedText, audioUrl: streamUrl, audio: null });
+  try {
+    const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
+    const selectedText = SOFIA_WELCOME_PHRASES[index];
+
+    // Extract dynamic keys if sent from frontend
+    const elApiKey = (req.headers["x-elevenlabs-api-key"] as string) || process.env.ELEVENLABS_API_KEY;
+    const elVoiceId = (req.headers["x-elevenlabs-voice-id"] as string) || process.env.ELEVENLABS_VOICE_ID || "jBpfuIE2acCO8zBIW8W7";
+
+    const cacheKey = `${index}_${elVoiceId}`;
+
+    if (welcomeAudioCache[cacheKey]) {
+      return res.json({ text: selectedText, audio: welcomeAudioCache[cacheKey] });
+    }
+
+    // Attempt ElevenLabs if the API Key is defined
+    console.log(`[Diagnostic] ELEVENLABS_API_KEY present: ${!!process.env.ELEVENLABS_API_KEY}`);
+    console.log(`[Diagnostic] Request Header API Key present: ${!!req.headers["x-elevenlabs-api-key"]}`);
+
+    if (elApiKey) {
+      try {
+        console.log(`[TTS] Requesting ElevenLabs TTS for phrase index ${index} using voice ${elVoiceId}...`);
+        const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elVoiceId}`, {
+          method: "POST",
+          headers: {
+            "xi-api-key": elApiKey,
+            "Content-Type": "application/json",
+            "accept": "audio/mpeg"
+          },
+          body: JSON.stringify({
+            text: selectedText,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.35,
+              similarity_boost: 0.85,
+              style: 0.45,
+              use_speaker_boost: true
+            }
+          })
+        });
+
+        if (elResponse.ok) {
+          const arrayBuffer = await elResponse.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const base64Audio = "data:audio/mpeg;base64," + buffer.toString("base64");
+          welcomeAudioCache[cacheKey] = base64Audio;
+          console.log(`[TTS] Successfully generated ElevenLabs audio for phrase index ${index} using voice ${elVoiceId}`);
+          return res.json({ text: selectedText, audio: base64Audio });
+        } else {
+          const errBody = await elResponse.text();
+          console.error(`[Diagnostic] ElevenLabs API failed with status ${elResponse.status}. Error body:`, errBody);
+        }
+      } catch (elErr: any) {
+        console.error("[Diagnostic] ElevenLabs fetch exception:", elErr?.message || elErr);
+      }
+    } else {
+      console.log("[Diagnostic] Skipping ElevenLabs: No API Key found in process.env or headers.");
+    }
+
+    // Fallback to Gemini 3.1 TTS if ElevenLabs key is not set or failed
+    console.log("[Diagnostic] Falling back to Gemini TTS because ElevenLabs failed or was skipped.");
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { "User-Agent": "aistudio-build" } }
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{
+        parts: [{
+          text: `Please speak the following text with an extremely energetic, high-tempo, youthful, fast-paced (under 8 seconds), cool and exciting female music DJ voice ("cañera a tope"). Use a modern, enthusiastic, and fast tempo, with a bright, dynamic Gen-Z vibe. Absolutely natural inflection, zero robotism, like a professional FM radio DJ or club host. Speak in native Spanish (Spain) with maximum power, punchy delivery, and excitement: ${selectedText}`
+        }]
+      }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: "Kore" }
+          }
+        }
+      }
+    });
+
+    const rawBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+    let wavBase64: string | null = null;
+    if (rawBase64) {
+      const pcmBuffer = Buffer.from(rawBase64, "base64");
+      const sampleRate = 24000;
+      const numChannels = 1;
+      const wavBuffer = Buffer.alloc(44 + pcmBuffer.length);
+      wavBuffer.write('RIFF', 0);
+      wavBuffer.writeUInt32LE(36 + pcmBuffer.length, 4);
+      wavBuffer.write('WAVE', 8);
+      wavBuffer.write('fmt ', 12);
+      wavBuffer.writeUInt32LE(16, 16); 
+      wavBuffer.writeUInt16LE(1, 20); 
+      wavBuffer.writeUInt16LE(numChannels, 22);
+      wavBuffer.writeUInt32LE(sampleRate, 24);
+      wavBuffer.writeUInt32LE(sampleRate * numChannels * 2, 28); 
+      wavBuffer.writeUInt16LE(numChannels * 2, 32); 
+      wavBuffer.writeUInt16LE(16, 34); 
+      wavBuffer.write('data', 36);
+      wavBuffer.writeUInt32LE(pcmBuffer.length, 40);
+      pcmBuffer.copy(wavBuffer, 44);
+      
+      wavBase64 = "data:audio/wav;base64," + wavBuffer.toString("base64");
+      welcomeAudioCache[index.toString()] = wavBase64;
+    }
+
+    res.json({ text: selectedText, audio: wavBase64 || null });
+  } catch (err: any) {
+    const errStr = String(err?.message || err || "");
+    const isQuota = errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED") || err?.status === 429 || err?.statusCode === 429;
+    if (isQuota) {
+      console.log("[Info] Welcome audio Gemini TTS quota exceeded (rate limits apply to free tier). Attempting Google Translate fallback...");
+    } else {
+      console.log("[Info] Welcome audio Gemini TTS error, attempting Google Translate fallback... Message:", errStr.slice(0, 150));
+    }
+    try {
+      const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
+      const selectedText = SOFIA_WELCOME_PHRASES[index];
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64Audio = "data:audio/mpeg;base64," + buffer.toString("base64");
+        console.log("[Info] Successfully generated Google Translate fallback audio.");
+        return res.json({ text: selectedText, audio: base64Audio });
+      } else {
+        console.warn("Google Translate fallback status:", response.status);
+      }
+    } catch (fallbackErr: any) {
+      console.error("Google Translate fallback exception:", fallbackErr?.message || fallbackErr);
+    }
+    const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
+    res.json({ text: SOFIA_WELCOME_PHRASES[index], audio: null });
+  }
 });
 
-export { app };
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -2370,15 +2332,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
-    // Run Piped active health checking on startup and keep list refreshed
-    checkPipedHealth().then(() => {
-      setInterval(checkPipedHealth, 1000 * 60 * 15); // Refresh every 15 minutes
-    }).catch(err => {
-      console.error("[HEALTH CHECK] Initial health check failed to start:", err);
-    });
   });
 }
 
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  startServer();
-}
+startServer();

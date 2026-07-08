@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, onSnapshot, query, orderBy, where, addDoc } from "firebase/firestore";
-import AnalyticsAdmin from "./AnalyticsAdmin";
-import { BarChart2 } from "lucide-react";
 import { db } from "../lib/firebase";
 import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug } from "lucide-react";
 import { jsPDF } from "jspdf";
@@ -18,15 +16,60 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor" | "analytics">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor">("users");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
 
+  // ElevenLabs Configuration
+  const [elevenLabsApiKey, setElevenLabsApiKey] = useState(() => localStorage.getItem("fai_elevenlabs_api_key") || "");
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => localStorage.getItem("fai_elevenlabs_voice_id") || "");
+  const [elevenLabsStatus, setElevenLabsStatus] = useState<"idle" | "checking" | "valid" | "error">("idle");
+  const [elevenLabsVoiceName, setElevenLabsVoiceName] = useState<string>("");
+  const [elevenLabsErrorMsg, setElevenLabsErrorMsg] = useState<string>("");
 
+  const checkElevenLabsVoice = async (apiKeyToTest: string, voiceIdToTest: string) => {
+    const key = apiKeyToTest.trim();
+    const voice = voiceIdToTest.trim() || "jBpfuIE2acCO8zBIW8W7";
 
+    if (!key) {
+      setElevenLabsStatus("idle");
+      setElevenLabsVoiceName("");
+      setElevenLabsErrorMsg("");
+      return;
+    }
 
+    setElevenLabsStatus("checking");
+    try {
+      const headers: Record<string, string> = {
+        "x-elevenlabs-api-key": key,
+        "x-elevenlabs-voice-id": voice,
+      };
 
+      const res = await fetch("/api/radio/test-voice", { headers });
+      const data = await res.json();
+
+      if (res.ok && data.valid) {
+        setElevenLabsStatus("valid");
+        setElevenLabsVoiceName(data.name || "Voz Personalizada");
+        setElevenLabsErrorMsg("");
+        // Persist only if valid
+        localStorage.setItem("fai_elevenlabs_api_key", key);
+        localStorage.setItem("fai_elevenlabs_voice_id", voice);
+      } else {
+        setElevenLabsStatus("error");
+        setElevenLabsVoiceName("");
+        setElevenLabsErrorMsg(data.error || "No se pudo validar la voz");
+      }
+    } catch (err: any) {
+      setElevenLabsStatus("error");
+      setElevenLabsVoiceName("");
+      setElevenLabsErrorMsg(err?.message || "Error al conectar con el servidor");
+    }
+  };
 
   useEffect(() => {
+    if (elevenLabsApiKey && elevenLabsVoiceId) {
+      checkElevenLabsVoice(elevenLabsApiKey, elevenLabsVoiceId);
+    }
   }, []);
 
   // Support chat state variables
@@ -946,17 +989,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
-              activeTab === "analytics"
-                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
-            }`}
-          >
-            <BarChart2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Analytics</span>
-          </button>
         </div>
 
         <div className="overflow-y-auto p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
@@ -1348,13 +1380,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           </>
           )}
 
-          
-          {activeTab === "analytics" && (
-            <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 h-[calc(100vh-200px)] overflow-y-auto">
-              <AnalyticsAdmin />
-            </div>
-          )}
-
           {activeTab === "monitor" && (
             <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-6 text-left">
               <div className="flex items-center justify-between">
@@ -1411,10 +1436,115 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   Información no disponible. Pulsa Verificar Ahora.
                 </div>
               )}
-            </div>
-          )}
+
+              {/* ElevenLabs Configuration Section */}
+              <div className="mt-6 border-t border-white/10 pt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    Voz de Sofía Personalizada (ElevenLabs)
+                  </h4>
+                  {elevenLabsApiKey && (
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem("fai_elevenlabs_api_key");
+                        localStorage.removeItem("fai_elevenlabs_voice_id");
+                        setElevenLabsApiKey("");
+                        setElevenLabsVoiceId("");
+                        setElevenLabsStatus("idle");
+                      }}
+                      className="text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-tighter"
+                    >
+                      Restablecer Voz por Defecto
+                    </button>
+                  )}
+                </div>
+                
+                <p className="text-[11px] text-slate-400 leading-relaxed font-medium italic">
+                  Prueba y configura una API Key de ElevenLabs propia para evitar límites de cuota compartidos. Estas credenciales se guardan localmente para este dispositivo.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider">ElevenLabs API Key</label>
+                    <input
+                      type="password"
+                      placeholder="Tu API Key de ElevenLabs..."
+                      value={elevenLabsApiKey}
+                      onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider">ElevenLabs Voice ID</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="ID de la voz"
+                        value={elevenLabsVoiceId}
+                        onChange={(e) => setElevenLabsVoiceId(e.target.value)}
+                        className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/50 transition-all"
+                      />
+                      <button 
+                        onClick={() => checkElevenLabsVoice(elevenLabsApiKey, elevenLabsVoiceId)}
+                        disabled={elevenLabsStatus === "checking"}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                      >
+                        Probar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ElevenLabs Status Feedback */}
+                {elevenLabsStatus !== "idle" && (
+                  <div className="mt-2">
+                    {elevenLabsStatus === "checking" && (
+                      <div className="flex items-center gap-2.5 text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span className="text-[10px] font-bold uppercase">Verificando en ElevenLabs...</span>
+                      </div>
+                    )}
+                    {elevenLabsStatus === "valid" && (
+                      <div className="flex flex-col gap-1 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl">
+                        <div className="flex items-center gap-2 text-emerald-400 font-black uppercase tracking-wider text-[10px]">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          ¡Conexión Exitosa!
+                        </div>
+                        <p className="text-[11px] text-emerald-100/80">
+                          Voz activa: <strong className="text-emerald-400">{elevenLabsVoiceName}</strong>. Las locuciones de Sofía DJ usarán esta configuración.
+                        </p>
+                      </div>
+                    )}
+                    {elevenLabsStatus === "error" && (
+                      <div className="flex flex-col gap-1.5 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
+                        <div className="flex items-center gap-2 text-red-400 font-black uppercase tracking-wider text-[10px]">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Error de Validación
+                        </div>
+                        <p className="text-[11px] text-red-300 font-medium">
+                          {elevenLabsErrorMsg}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
         </div>
+          )}
+        
+        {/* Mobile Fixed Close Button */}
+        <div className="sm:hidden flex shrink-0 p-3 bg-[#0a0a0c] border-t border-white/5 mt-auto">
+          <button 
+            onClick={onClose}
+            className="w-full py-2.5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 text-slate-300 hover:text-white font-black uppercase tracking-[0.15em] text-[10px] rounded-lg border border-white/5 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+          >
+            <X className="w-4 h-4 text-purple-400" />
+            Cerrar Panel
+          </button>
+        </div>
+      </div>
       </div>
     </div>
   );
-}
+};
