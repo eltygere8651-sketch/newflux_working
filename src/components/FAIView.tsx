@@ -566,11 +566,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
           currentText = data.text;
         }
 
-        if (data.audio) {
-          const audioSrc = data.audio.startsWith("data:")
-            ? data.audio
-            : ("data:audio/mp3;base64," + data.audio);
-          
+        const audioSrc = data.audioUrl || (data.audio ? (data.audio.startsWith("data:") ? data.audio : "data:audio/mp3;base64," + data.audio) : "");
+        if (audioSrc) {
           const audio = new Audio(audioSrc);
           
           if (myRequestId !== welcomeRequestIdRef.current) {
@@ -649,8 +646,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
       const res = await fetch(`/api/radio/tts?text=${encodeURIComponent(textToSpeak)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.audio) {
-          const audio = new Audio(data.audio);
+        const audioSrc = data.audioUrl || (data.audio ? (data.audio.startsWith("data:") ? data.audio : "data:audio/mp3;base64," + data.audio) : "");
+        if (data && audioSrc) {
+          const audio = new Audio(audioSrc);
           welcomeAudioRef.current = audio;
           audio.volume = volume / 100;
 

@@ -2204,47 +2204,57 @@ const SOFIA_WELCOME_PHRASES = [
   "¡Ey! ⚡️ Olvídate del algoritmo y sintoniza a la verdadera jefa. ¡Sofía DJ en directo! 🔊"
 ];
 
-const welcomeAudioCache: Record<string, string> = {};
+const welcomeAudioBufferCache: Record<string, Buffer> = {};
 
-app.get("/api/radio/tts", async (req, res) => {
+// Direct proxy streaming endpoints for the browser's native Audio player.
+// This completely resolves CORS, referrer, and sandboxed iframe issues!
+app.get("/api/radio/tts/stream", async (req, res) => {
   const text = req.query.text;
   if (!text) {
-    return res.status(400).json({ error: "No text provided" });
+    return res.status(400).send("No text provided");
   }
-  
+
+  const directTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(text as string)}`;
+
   try {
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(text as string)}`;
-    const fallbackRes = await fetch(url, {
+    const fallbackRes = await fetch(directTtsUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       }
     });
 
     if (fallbackRes.ok) {
       const arrayBuffer = await fallbackRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const base64 = "data:audio/mp3;base64," + buffer.toString("base64");
-      return res.json({ audio: base64 });
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
-    console.error("Google TTS failed", err);
+    console.error("Google TTS streaming failed", err);
   }
-  
-  res.json({ audio: null });
+
+  return res.status(500).send("Failed to stream TTS");
 });
 
-app.get("/api/radio/welcome", async (req, res) => {
-  const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
-  const selectedText = SOFIA_WELCOME_PHRASES[index];
-  const cacheKey = `${index}`;
-  
-  if (welcomeAudioCache[cacheKey]) {
-    return res.json({ text: selectedText, audio: welcomeAudioCache[cacheKey] });
+app.get("/api/radio/welcome/stream", async (req, res) => {
+  const indexStr = req.query.index;
+  let index = indexStr ? parseInt(indexStr as string, 10) : 0;
+  if (isNaN(index) || index < 0 || index >= SOFIA_WELCOME_PHRASES.length) {
+    index = 0;
   }
 
+  const cacheKey = `${index}`;
+  if (welcomeAudioBufferCache[cacheKey]) {
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    return res.send(welcomeAudioBufferCache[cacheKey]);
+  }
+
+  const selectedText = SOFIA_WELCOME_PHRASES[index];
+  const directTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
+
   try {
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(selectedText)}`;
-    const fallbackRes = await fetch(url, {
+    const fallbackRes = await fetch(directTtsUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       }
@@ -2253,15 +2263,32 @@ app.get("/api/radio/welcome", async (req, res) => {
     if (fallbackRes.ok) {
       const arrayBuffer = await fallbackRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const base64 = "data:audio/mp3;base64," + buffer.toString("base64");
-      welcomeAudioCache[cacheKey] = base64;
-      return res.json({ text: selectedText, audio: base64 });
+      welcomeAudioBufferCache[cacheKey] = buffer;
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      return res.send(buffer);
     }
   } catch (err) {
-    console.error("Google TTS failed", err);
+    console.error("Google TTS welcome streaming failed", err);
   }
-  
-  res.json({ text: selectedText, audio: null });
+
+  return res.status(500).send("Failed to stream welcome audio");
+});
+
+app.get("/api/radio/tts", async (req, res) => {
+  const text = req.query.text;
+  if (!text) {
+    return res.status(400).json({ error: "No text provided" });
+  }
+  const streamUrl = `/api/radio/tts/stream?text=${encodeURIComponent(text as string)}`;
+  return res.json({ audioUrl: streamUrl, audio: null });
+});
+
+app.get("/api/radio/welcome", async (req, res) => {
+  const index = Math.floor(Math.random() * SOFIA_WELCOME_PHRASES.length);
+  const selectedText = SOFIA_WELCOME_PHRASES[index];
+  const streamUrl = `/api/radio/welcome/stream?index=${index}`;
+  return res.json({ text: selectedText, audioUrl: streamUrl, audio: null });
 });
 
 export { app };
