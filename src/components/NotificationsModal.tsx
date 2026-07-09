@@ -18,6 +18,22 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.8.2",
+    title: "✨ Actualización Flux v1.8.2 - Nueva Radio, Comunidad y Persistencia",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Rebrand y Rediseño de Radio: Nueva estética inmersiva en la pestaña de radio eliminando etiquetas técnicas excesivas.\n• Experiencia de Radio Directa: Eliminamos las alocuciones forzadas de Sofía para priorizar la reproducción musical.\n• Mix de Sofía Libre: 'La mezcla de Sofia' ahora está disponible para todos los usuarios.\n• Memoria Inteligente: La app ahora guarda tu último género y canción escuchada en la radio para que retomes justo donde lo dejaste.\n• Visibilidad en Comunidad: Ahora los nombres de los creadores de playlists son claramente visibles incluso en pantallas de teléfonos móviles.\n• Correcciones generales: Mejoras de estabilidad, transiciones y rendimiento en toda la plataforma."
+  },
+
+  {
+    id: "update-v1.8.1",
+    title: "✨ Actualización Flux v1.8.1 - Nueva Radio Flux, Retorno de Sofia y Estado Persistente",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Rebrand de la Radio: Mejoramos la estética del reproductor de la radio eliminando la etiqueta de 'FLUX AI ENGINE' para una vista más inmersiva e limpia.\n• Alocuciones Simplificadas: Removidas las interrupciones forzadas y alocuciones obligatorias de bienvenida para dar paso a una experiencia musical más directa.\n• La mezcla de Sofia para todos: El exclusivo mix de Sofia se ha habilitado para que todos los usuarios puedan seleccionarlo.\n• Estado de Radio Persistente: Ahora la aplicación recuerda automáticamente la última canción y el último género que estabas escuchando, retomándolo inmediatamente cuando vuelvas.\n• Correcciones Menores y UI: Numerosas mejoras de estabilidad, manejo de colas y consistencia visual en la pestaña de radio."
+  },
+
+  {
     id: "update-v1.8.0",
     title: "✨ Actualización Flux v1.8.0 - Sofía de Flux Radio y Frecuencia DJ",
     category: "actualizacion",

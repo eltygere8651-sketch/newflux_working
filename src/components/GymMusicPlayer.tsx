@@ -1683,6 +1683,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>(() => {
     if (typeof window !== "undefined") {
       try {
+        const lastTab = localStorage.getItem("gym_music_last_tab");
+
         const saved = localStorage.getItem("gym_music_track_queue");
         if (saved) return JSON.parse(saved);
       } catch (e) {}
@@ -1747,6 +1749,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [overrideCurrentTrack, setOverrideCurrentTrack] = useState<MusicTrack | null>(() => {
     if (typeof window !== "undefined") {
       try {
+        const lastTab = localStorage.getItem("gym_music_last_tab");
+
         const saved = localStorage.getItem("gym_music_override_current_track");
         if (saved) return JSON.parse(saved);
       } catch (e) {}
@@ -2831,7 +2835,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           const realNames = [
             "Elena Rossi",
             "Marc Volkov",
-            "Sofia Chen",
+            "Mia Chen",
             "Lucas Mendez",
             "Aria Jensen",
             "Oliver Wright",
@@ -5534,7 +5538,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          Sofia DJ
+          <span className="flex items-center gap-1.5">
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">FLUX</span>
+            <Radio className="w-3.5 h-3.5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)] animate-pulse" />
+          </span>
           {Date.now() < new Date("2026-07-06T17:16:26Z").getTime() && (
             <span className="absolute -top-1.5 -right-2 px-1 py-[1px] bg-red-500 text-white text-[7px] font-black uppercase tracking-widest rounded shadow-[0_0_10px_rgba(239,68,68,0.6)] rotate-[8deg] animate-pulse">
               Novedad
@@ -8500,8 +8507,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 </p>
                               )}
                               {pl.ownerName && (
-                                <p className="text-[9.5px] text-slate-400 font-semibold tracking-wide truncate mt-1">
-                                  Publicada por:{" "}
+                                <p className="text-[9.5px] text-slate-400 font-semibold tracking-wide mt-1 line-clamp-2 leading-tight">
+                                  <span className="hidden sm:inline">Publicada por: </span><span className="sm:hidden">Por: </span>
                                   <span
                                     className={
                                       pl.isAdminContent

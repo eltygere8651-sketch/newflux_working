@@ -61,7 +61,7 @@ const extractArtist = (title: string, defaultArtist: string, d?: any) => {
   if (parts.length > 1) return parts[0].trim();
 
   // If we can't extract, we'll try to just return the clean title so at least they see something.
-  return defaultArtist === "Variado" || defaultArtist === "SOFIA_DJ MEZCLA" ? extractCleanTitle(title) : defaultArtist;
+  return defaultArtist === "Variado" || defaultArtist === "La mezcla de Sofia" ? extractCleanTitle(title) : defaultArtist;
 };
 
 const extractCleanTitle = (title: string) => {
@@ -119,7 +119,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
     return saved === null ? true : saved === "true";
   });
   const [selectedGenre, setSelectedGenre] = useState<string>(() => {
-    return localStorage.getItem("fai_selected_genre") || "SOFIA_DJ MEZCLA";
+    return localStorage.getItem("fai_selected_genre") || "La mezcla de Sofia";
   });
   const [customGenre, setCustomGenre] = useState("");
 
@@ -141,7 +141,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
     return () => clearTimeout(timer);
   }, [welcomePlayed, isRadioActive]);
   */
-  const [welcomePlayed, setWelcomePlayed] = useState(false);
+  const [welcomePlayed, setWelcomePlayed] = useState(() => {
+    return sessionStorage.getItem("flux_radio_welcome_played_session") === "true";
+  });
 
   const [welcomeStep, setWelcomeStep] = useState<"idle" | "loading" | "speaking">("idle");
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -153,7 +155,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const isSpeakingRef = useRef(false);
   const isSearchingRef = useRef(false);
   const welcomeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const handleNextTrackRef = useRef<((isManualParam?: boolean) => Promise<void>) | null>(null);
+  const handleNextTrackRef = useRef<((isManualParam?: boolean, forceGenre?: string) => Promise<void>) | null>(null);
   const handleEndWelcomeRef = useRef<(() => void) | null>(null);
   const speechStartTimeRef = useRef<number>(0);
   const welcomeRequestIdRef = useRef<number>(0);
@@ -230,7 +232,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
     setTriggerPlay(true);
   };
 
-  const handleNextTrack = useCallback(async (isManualParam = false) => {
+  const handleNextTrack = useCallback(async (isManualParam = false, forceGenre?: string) => {
     if (isSpeakingRef.current || isSearchingRef.current) {
       if (isSpeakingRef.current) handleEndWelcomeRef.current?.();
       return;
@@ -240,18 +242,24 @@ export const FAIView: React.FC<FAIViewProps> = ({
     let next: MusicTrack | null = null;
 
     try {
-      if (genreExploration && selectedGenre !== "Variado Mix" && selectedGenre !== "SOFIA_DJ MEZCLA") {
+      const activeGenre = forceGenre || selectedGenre;
+      if (genreExploration && activeGenre !== "Variado Mix" && activeGenre !== "La mezcla de Sofia") {
       if (genreBuffer.length > 0) {
         next = genreBuffer[0];
         setGenreBuffer(prev => prev.slice(1));
       } else {
         // Fetch new buffer from YouTube Search for the genre to ensure real variety
         try {
-          const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(selectedGenre + " playlist")}`);
+          
+          // Add random freshness modifier to make the genre query infinite and varied
+          const freshnessModifiers = ["2024 playlist", "novedades", "exitos mix", "actual", "top hits", "tendencia", "mejores", "mix oficial"];
+          const randomModifier = freshnessModifiers[Math.floor(Math.random() * freshnessModifiers.length)];
+          const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(activeGenre + " " + randomModifier)}`);
+
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.length > 0) {
-              const playlists = data.filter((d: any) => d.isPlaylist);
+              const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
               let foundTracks: MusicTrack[] = [];
               
               if (playlists.length > 0) {
@@ -266,7 +274,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                       foundTracks = tracksArray.map((d: any) => ({
                         id: d.id,
                         title: extractCleanTitle(d.title),
-                        artist: extractArtist(d.title, selectedGenre, d),
+                        artist: extractArtist(d.title, activeGenre, d),
                         url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                         thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                         duration: d.duration || "N/A"
@@ -284,7 +292,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                    foundTracks = validData.map((d: any) => ({
                     id: d.id,
                     title: extractCleanTitle(d.title),
-                    artist: extractArtist(d.title, selectedGenre, d),
+                    artist: extractArtist(d.title, activeGenre, d),
                     url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
                     thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
                     duration: d.duration || "N/A"
@@ -306,7 +314,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
           console.error("FAI Genre search failed", e);
         }
       }
-    } else if (selectedGenre === "Variado Mix" || selectedGenre === "SOFIA_DJ MEZCLA") {
+    } else if (activeGenre === "Variado Mix" || activeGenre === "La mezcla de Sofia") {
       if (genreBuffer.length > 0) {
           next = genreBuffer[0];
           setGenreBuffer(prev => prev.slice(1));
@@ -329,7 +337,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.length > 0) {
-              const playlists = data.filter((d: any) => d.isPlaylist);
+              const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
               let foundTracks: MusicTrack[] = [];
 
               if (playlists.length > 0) {
@@ -429,281 +437,30 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
 
 
-  const handleEndWelcome = () => {
-    const elapsed = Date.now() - speechStartTimeRef.current;
-    
+  
+    const handleStartWelcome = async () => {
+    setGenreExploration(true);
+    localStorage.setItem("fai_genre_exploration", "true");
+    setGenreBuffer([]);
+
     setSpeaking(false);
     setIsSpeakingPaused(false);
-    if (welcomeAudioRef.current) {
-      welcomeAudioRef.current.pause();
-      welcomeAudioRef.current = null;
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-
-    // If the welcome ended or errored in less than 500ms, it was blocked or errored out instantly.
-    // In that case, DO NOT auto-start the background music! Stay in idle state so the user can click play to sintonize/listen.
-    if (elapsed < 500) {
-      console.warn("Welcome speaking failed or was blocked instantly (elapsed:", elapsed, "ms). Keeping in idle state.");
-      setWelcomePlayed(false);
-      setIsRadioActive(false);
-      return;
-    }
-
+    setIsRadioActive(true);
     setWelcomePlayed(true);
     sessionStorage.setItem("flux_radio_welcome_played_session", "true");
     
-    // Auto start the radio playback correctly!
-    // We always trigger a new track selection from the DJ logic after the intro
-    // to ensure the user enters the "Radio" experience even if they had a previous track.
-    handleNextTrackRef.current?.(false);
-    setIsRadioActive(true);
-  };
-
-  useEffect(() => {
-    handleEndWelcomeRef.current = handleEndWelcome;
-  }, [currentTrack, isPlaying, onTogglePlay]);
-
-  const handleStartWelcome = async () => {
-    // FORCE "SOFIA_DJ MEZCLA" genre immediately when starting radio
-    const targetGenre = "SOFIA_DJ MEZCLA";
-    setSelectedGenre(targetGenre);
-    localStorage.setItem("fai_selected_genre", targetGenre);
-    setGenreExploration(true);
-    localStorage.setItem("fai_genre_exploration", "true");
-    setGenreBuffer([]); // Clear previous genre buffer to ensure fresh Sofia Mix tracks
-
-    const myRequestId = ++welcomeRequestIdRef.current;
-    speechStartTimeRef.current = Date.now();
-    setWelcomeStep("speaking");
-    setSpeaking(true);
-    setIsSpeakingPaused(false);
-    setIsRadioActive(true);
-    setWelcomePosition(0);
-    setWelcomeDuration(0);
-
-    // Prefetch next track buffer if empty to eliminate delay when speech ends
-    setTimeout(async () => {
-       try {
-         const randomQuery = "los 40 principales españa 2024 hoy official audio";
-         const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
-         if (resp.ok) {
-           const data = await resp.json();
-           if (data && data.length > 0) {
-             const playlists = data.filter((d: any) => d.isPlaylist);
-             if (playlists.length > 0) {
-               const plResp = await fetch(`/api/youtube/playlist?id=${playlists[0].id}`);
-               if (plResp.ok) {
-                 const plData = await plResp.json();
-                 const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
-                 if (tracksArray.length > 0) {
-                   const formatted = tracksArray.map((d: any) => ({
-                      id: d.id,
-                      title: extractCleanTitle(d.title),
-                      artist: extractArtist(d.title, "SOFIA_DJ MEZCLA", d),
-                      bpm: 120,
-                      url: `https://www.youtube.com/watch?v=${d.id}`,
-                      duration: d.duration || "N/A"
-                   })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
-                   if (formatted.length > 0) {
-                     setGenreBuffer(formatted.sort(() => Math.random() - 0.5));
-                   }
-                 }
-               }
-             }
-           }
-         }
-       } catch (e) {
-         console.log("Prefetch failed", e);
-       }
-    }, 100);
-
-    // Pause any background music currently playing
-    if (isPlaying) {
-      onTogglePlay();
-    }
-
-    if (welcomeAudioRef.current) {
-      welcomeAudioRef.current.pause();
-      welcomeAudioRef.current = null;
-    }
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      // Unlock SpeechSynthesis context for subsequent asynchronous triggers
-      try {
-        const unlockUtterance = new SpeechSynthesisUtterance(" ");
-        unlockUtterance.volume = 0;
-        window.speechSynthesis.speak(unlockUtterance);
-      } catch (err) {}
-    }
-
-    try {
-      const headers: Record<string, string> = {};
-      const localApiKey = localStorage.getItem("fai_elevenlabs_api_key") || "";
-      const localVoiceId = localStorage.getItem("fai_elevenlabs_voice_id") || "";
-      if (localApiKey.trim()) {
-        headers["x-elevenlabs-api-key"] = localApiKey.trim();
-      }
-      if (localVoiceId.trim()) {
-        headers["x-elevenlabs-voice-id"] = localVoiceId.trim();
-      }
-
-      const res = await fetch("/api/radio/welcome", { headers });
-      if (myRequestId !== welcomeRequestIdRef.current) {
-        return;
-      }
-      if (res.ok) {
-        const data = await res.json();
-        if (myRequestId !== welcomeRequestIdRef.current) {
-          return;
-        }
-        let currentText = welcomeText;
-        if (data.text) {
-          setWelcomeText(data.text);
-          currentText = data.text;
-        }
-        if (data.audio) {
-          const audioSrc = data.audio.startsWith("data:")
-            ? data.audio
-            : ("data:audio/wav;base64," + data.audio);
-          const audio = new Audio(audioSrc);
-          
-          if (myRequestId !== welcomeRequestIdRef.current) {
-            return;
-          }
-          welcomeAudioRef.current = audio;
-          audio.volume = volume / 100;
-          audio.onloadedmetadata = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              setWelcomeDuration(audio.duration || 0);
-            }
-          };
-          audio.ontimeupdate = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              setWelcomePosition(audio.currentTime || 0);
-            }
-          };
-          audio.onended = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              handleEndWelcome();
-            }
-          };
-          audio.onerror = () => {
-            if (myRequestId === welcomeRequestIdRef.current) {
-              speakFallback(currentText, myRequestId);
-            }
-          };
-          audio.play().catch((e) => {
-            console.error("Audio playback error, falling back", e);
-            if (myRequestId === welcomeRequestIdRef.current) {
-              speakFallback(currentText, myRequestId);
-            }
-          });
-        } else {
-          speakFallback(currentText, myRequestId);
-        }
+    if (handleNextTrackRef.current) {
+      if (!currentTrack) {
+        handleNextTrackRef.current(false, selectedGenre);
       } else {
-        speakFallback(undefined, myRequestId);
-      }
-    } catch (e) {
-      console.error("Welcome request failed, falling back", e);
-      if (myRequestId === welcomeRequestIdRef.current) {
-        speakFallback(undefined, myRequestId);
+        if (!isPlaying) onTogglePlay();
       }
     }
   };
 
   /* Auto-start removed */
   
-  useEffect(() => {
-    // ACTIVE PLAYER LOCK: If Sofía is currently speaking, the background music MUST be paused.
-    // This resolves any race conditions where a track starts playing before Sofía finishes her intro.
-    if (isSpeaking && isPlaying) {
-      console.log("[Sync] Sofía is speaking. Pausing background music.");
-      onTogglePlay();
-    }
-  }, [isSpeaking, isPlaying, onTogglePlay]);
-
-  const speakFallback = (overrideText?: string, reqId?: number) => {
-    if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
-      return;
-    }
-    speechStartTimeRef.current = Date.now();
-    setWelcomeStep("speaking");
-    setSpeaking(true);
-    setIsSpeakingPaused(false);
-    const textToSpeak = overrideText || welcomeText;
-    
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      
-      const playUtterance = () => {
-        if (reqId !== undefined && reqId !== welcomeRequestIdRef.current) {
-          return;
-        }
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.lang = "es-ES";
-        const voices = window.speechSynthesis.getVoices();
-        const spanishVoices = voices.filter(v => v.lang.startsWith("es") || v.lang.startsWith("ES"));
-        
-        let femaleVoice = spanishVoices.find(v => {
-          const name = v.name.toLowerCase();
-          return name.includes("helena") || name.includes("monica") || name.includes("paulina") || name.includes("sonia") || name.includes("alba") || name.includes("google") || name.includes("natural") || name.includes("female") || name.includes("sofia");
-        });
-        
-        if (!femaleVoice) {
-          femaleVoice = spanishVoices.find(v => v.lang.startsWith("es")) || voices[0];
-        }
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        }
-        utterance.rate = 1.3; // Fast and energetic!
-        utterance.pitch = 1.15; // Bright and youthful!
-        utterance.onend = () => {
-          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-            handleEndWelcome();
-          }
-        };
-        utterance.onerror = () => {
-          if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-            handleEndWelcome();
-          }
-        };
-        window.speechSynthesis.speak(utterance);
-      };
-
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        playUtterance();
-      } else {
-        window.speechSynthesis.onvoiceschanged = () => {
-          playUtterance();
-          window.speechSynthesis.onvoiceschanged = null;
-        };
-        setTimeout(() => {
-          if (window.speechSynthesis.onvoiceschanged) {
-            playUtterance();
-            window.speechSynthesis.onvoiceschanged = null;
-          }
-        }, 150);
-      }
-    } else {
-      setTimeout(() => {
-        if (reqId === undefined || reqId === welcomeRequestIdRef.current) {
-          handleEndWelcome();
-        }
-      }, 10000);
-    }
-  };
-
-  // Keep welcome audio volume in sync
-  useEffect(() => {
-    if (welcomeAudioRef.current) {
-      welcomeAudioRef.current.volume = volume / 100;
-    }
-  }, [volume]);
+  
 
   const handleRatioChange = (type: 'top' | 'fav' | 'disc', value: number) => {
     const target = Math.max(0, Math.min(100, value));
@@ -837,10 +594,10 @@ export const FAIView: React.FC<FAIViewProps> = ({
     container.addEventListener("pointerup", handlePointerUp);
   };
 
-  const displayPosition = isSpeaking ? welcomePosition : (position || 0);
-  const displayDuration = isSpeaking ? welcomeDuration : (duration || 0);
+  const displayPosition = position || 0;
+  const displayDuration = duration || 0;
   const actualProgress = displayDuration > 0 ? (displayPosition / displayDuration) * 100 : 0;
-  const showPauseIcon = isSpeaking ? !isSpeakingPaused : (isPlaying && isRadioActive);
+  const showPauseIcon = isPlaying && isRadioActive;
   
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return "0:00";
@@ -876,52 +633,20 @@ export const FAIView: React.FC<FAIViewProps> = ({
           >
           <div className="absolute inset-0 bg-blue-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
           
-          {isSpeaking ? (
-            <div className="w-full h-full rounded-[1.2rem] sm:rounded-[1.5rem] bg-[#11131a] border border-white/10 relative z-10 flex flex-col items-center justify-center p-4 overflow-hidden">
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center">
-                <motion.div 
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#17d1a5] to-blue-500 opacity-20 blur-xl pointer-events-none"
-                  animate={{ scale: isSpeakingPaused ? 1 : [1, 1.25, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                />
-                <div className={`absolute inset-2 rounded-full border border-[#17d1a5]/30 ${isSpeakingPaused ? "" : "animate-ping opacity-30 pointer-events-none"}`} />
-                <div className="absolute inset-4 rounded-full bg-slate-950 border border-[#17d1a5]/20 overflow-hidden flex items-center justify-center">
-                  <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-[#17d1a5]" />
-                </div>
-              </div>
-
-              <span className="text-[10px] font-black text-[#17d1a5] tracking-widest uppercase mb-1 text-center select-none">
-                Sofía en el aire 🎙️
-              </span>
-
-              {/* Dynamic Equalizer Visualizer */}
-              <div className="flex items-end justify-center gap-1 h-6 my-1">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((bar) => (
-                  <motion.div
-                    key={bar}
-                    className="w-1 bg-[#17d1a5] rounded-full"
-                    animate={{
-                      height: (isSpeaking && !isSpeakingPaused) ? ["20%", "100%", "20%"] : "15%"
-                    }}
-                    transition={{
-                      duration: 0.4 + bar * 0.05,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  />
-                ))}
-              </div>
+          
+            <div className="relative w-full h-full group">
+              <motion.img
+                key={currentTrack?.id || "empty"}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                src={albumArt}
+                className="w-full h-full object-cover rounded-[1.2rem] sm:rounded-[1.5rem] shadow-2xl border border-[#17d1a5]/20 relative z-10"
+                alt="Now Playing"
+              />
+              <div className="absolute inset-0 rounded-[1.2rem] sm:rounded-[1.5rem] bg-gradient-to-t from-[#070b1a]/90 via-[#070b1a]/20 to-transparent z-10 pointer-events-none" />
+              
             </div>
-          ) : (
-            <motion.img
-              key={currentTrack?.id || "empty"}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              src={albumArt}
-              className="w-full h-full object-cover rounded-[1.2rem] sm:rounded-[1.5rem] shadow-2xl border border-white/10 relative z-10"
-              alt="Now Playing"
-            />
-          )}
+
           </motion.div>
         </div>
 
@@ -930,20 +655,20 @@ export const FAIView: React.FC<FAIViewProps> = ({
         <div className="w-full mb-6 sm:mb-8 mt-2 flex flex-col items-center">
           <div className="flex flex-col items-center justify-center relative w-full overflow-hidden">
             <motion.h2 
-              key={(isSpeaking ? "welcome" : currentTrack?.title) + "-title"}
+              key={(currentTrack?.title) + "-title"}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-white/80 truncate px-4 text-center w-full"
+              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 truncate px-4 text-center w-full drop-shadow-md"
             >
-              {isSpeaking ? "Sofía DJ" : (currentTrack?.title || "Radio en Vivo")}
+              {currentTrack?.title || "Cargando..."}
             </motion.h2>
             <motion.p
-              key={(isSpeaking ? "welcome" : currentTrack?.artist) + "-artist"}
+              key={(currentTrack?.artist) + "-artist"}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
             >
-              {isSpeaking ? "Transmisión en directo" : (currentTrack?.artist || "Sofía Mix")}
+              {currentTrack?.artist || "GENERATING MIX..."}
             </motion.p>
           </div>
         </div>
@@ -971,11 +696,11 @@ export const FAIView: React.FC<FAIViewProps> = ({
           <div className="flex justify-start items-center gap-1 sm:gap-3 w-full pl-1 sm:pl-2">
             <button 
               onClick={(e) => {
-                if (currentTrack && onToggleFavorite && !isSpeaking) {
+                if (currentTrack && onToggleFavorite ) {
                   onToggleFavorite(currentTrack, e);
                 }
               }}
-              className={`p-1 sm:p-2 transition-all transform active:scale-90 flex-shrink-0 ${isSpeaking ? 'opacity-0 pointer-events-none' : ''} ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760] hover:text-[#17b54e]' : 'text-white/40 hover:text-white'}`}
+              className={`p-1 sm:p-2 transition-all transform active:scale-90 flex-shrink-0  ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760] hover:text-[#17b54e]' : 'text-white/40 hover:text-white'}`}
             >
               <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'fill-current' : ''}`} />
             </button>
@@ -986,7 +711,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
             <button 
               onClick={() => {}}
               className="p-1 sm:p-2 text-white/40 hover:text-white transition-all transform active:scale-90 flex-shrink-0"
-              disabled={isSpeaking}
+              
             >
               <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
             </button>
@@ -1194,7 +919,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                        )}
                      </div>
                      <div className="flex-1 flex flex-col gap-2 pb-4">
-                       {DJ_GENRES.filter(g => isAdmin || g !== "SOFIA_DJ MEZCLA").map((genre) => (
+                       {DJ_GENRES.map((genre) => (
                          <button
                            key={genre}
                            onClick={() => {

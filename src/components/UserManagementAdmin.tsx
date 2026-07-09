@@ -7,6 +7,8 @@ import { FluxLogoMini } from "./FluxLogo";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
+  const [globalAnalytics, setGlobalAnalytics] = useState<any[]>([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -1575,10 +1577,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">DJ Sofía (Locuciones)</span>
-                        <span className="text-xs font-black text-purple-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.sofiaUses || 0), 0)}</span>
-                      </div>
+                      
                       <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
                         <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
                         <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>
@@ -1702,10 +1701,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">DJ Sofía (Locuciones)</span>
-                        <span className="text-xs font-black text-purple-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.sofiaUses || 0), 0)}</span>
-                      </div>
+                      
                       <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
                         <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
                         <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>

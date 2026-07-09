@@ -112,7 +112,7 @@ export const FLUX_PAYOLA = [
 ];
 
 export const DJ_GENRES = [
-  "SOFIA_DJ MEZCLA",
+  "La mezcla de Sofia",
   "Variado Mix",
   "Reggaeton",
   "Phonk",
