@@ -306,7 +306,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "INTERWORLD",
     bpm: 135,
     duration: "2:23",
-    url: "https://www.youtube.com/watch?v=H5b0pZ79XgQ",
+    url: "https://www.youtube.com/watch?v=v2Gk2_CvdN0",
   },
   {
     id: "phonk2",
@@ -314,7 +314,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "M83",
     bpm: 105,
     duration: "4:03",
-    url: "https://www.youtube.com/watch?v=dX3kSGcoD6M",
+    url: "https://www.youtube.com/watch?v=9aZQFq6hQ0M",
   },
   {
     id: "gym1",
@@ -322,7 +322,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Tiësto",
     bpm: 120,
     duration: "2:44",
-    url: "https://www.youtube.com/watch?v=nCg3upGToOk",
+    url: "https://www.youtube.com/watch?v=f2jXz93eJv4",
   },
   {
     id: "gym2",
@@ -330,7 +330,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Avicii",
     bpm: 126,
     duration: "3:20",
-    url: "https://www.youtube.com/watch?v=_ovdm2y5tZg",
+    url: "https://www.youtube.com/watch?v=8AebxEMgR6o",
   },
   {
     id: "gym3",
@@ -338,7 +338,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Martin Garrix",
     bpm: 128,
     duration: "5:04",
-    url: "https://www.youtube.com/watch?v=gCYcHz2k5OI",
+    url: "https://www.youtube.com/watch?v=qOsg5rS76sM",
   },
   {
     id: "gym4",
@@ -354,7 +354,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "The Weeknd",
     bpm: 171,
     duration: "3:20",
-    url: "https://www.youtube.com/watch?v=4NRXx6U8ABQ",
+    url: "https://www.youtube.com/watch?v=J7p4bzqtlQA",
   },
   {
     id: "gym6",

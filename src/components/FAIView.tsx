@@ -99,11 +99,11 @@ export const FAIView: React.FC<FAIViewProps> = ({
 }) => {
   const [topRatio, setTopRatio] = useState(() => {
     const saved = localStorage.getItem("fai_top_ratio");
-    return saved !== null ? parseInt(saved, 10) : 30;
+    return saved !== null ? parseInt(saved, 10) : 32;
   });
   const [favRatio, setFavRatio] = useState(() => {
     const saved = localStorage.getItem("fai_fav_ratio");
-    return saved !== null ? parseInt(saved, 10) : 20;
+    return saved !== null ? parseInt(saved, 10) : 18;
   });
   const [discRatio, setDiscRatio] = useState(() => {
     const saved = localStorage.getItem("fai_disc_ratio");
@@ -395,13 +395,89 @@ export const FAIView: React.FC<FAIViewProps> = ({
     }
 
     if (!next) {
-      next = selectNextDJTrack(topTracks, favorites, allTracks, { 
-        discoveryLevel,
-        genreMode: false, // Managed externally now if active
-        topRatio,
-        favRatio,
-        discRatio
-      });
+      const total = topRatio + favRatio + discRatio;
+      const wDisc = total > 0 ? discRatio / total : 0.50;
+      const rand = Math.random();
+
+      if (rand < wDisc) {
+        if (genreBuffer.length > 0) {
+          next = genreBuffer[0];
+          setGenreBuffer(prev => prev.slice(1));
+        } else {
+          const TOP_HITS_QUERIES = [
+            "novedades musicales 2024",
+            "exitos actuales 2024 oficial",
+            "top canciones mundiales tendencia 2024",
+            "musica nueva top hits 2024",
+            "los 40 principales españa 2024 novedades",
+            "mejores exitos pop urbana 2024 oficial"
+          ];
+          const randomQuery = TOP_HITS_QUERIES[Math.floor(Math.random() * TOP_HITS_QUERIES.length)];
+          try {
+            const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.length > 0) {
+                const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
+                let foundTracks: MusicTrack[] = [];
+                if (playlists.length > 0) {
+                  for (let i = 0; i < Math.min(3, playlists.length); i++) {
+                    const pl = playlists[i];
+                    const plResp = await fetch(`/api/youtube/playlist?id=${pl.id}`);
+                    if (plResp.ok) {
+                      const plData = await plResp.json();
+                      const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+                      if (tracksArray && tracksArray.length > 0) {
+                        const plTracks = tracksArray.map((d: any) => ({
+                          id: d.id,
+                          title: extractCleanTitle(d.title),
+                          artist: extractArtist(d.title, "Novedades", d),
+                          url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
+                          thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
+                          duration: d.duration || "N/A"
+                        })).filter((t: any) => isReasonableTrack(t.duration, t.title));
+                        foundTracks = [...foundTracks, ...plTracks];
+                      }
+                    }
+                  }
+                }
+                if (foundTracks.length === 0) {
+                  const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
+                  if (validData.length > 0) {
+                    foundTracks = validData.map((d: any) => ({
+                      id: d.id,
+                      title: extractCleanTitle(d.title),
+                      artist: extractArtist(d.title, "Novedades", d),
+                      url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
+                      thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
+                      duration: d.duration || "N/A"
+                    }));
+                  }
+                }
+                if (foundTracks.length > 0) {
+                  const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
+                  const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
+                  const shuffled = pool.sort(() => Math.random() - 0.5);
+                  next = shuffled[0];
+                  setGenreBuffer(shuffled.slice(1));
+                }
+              }
+            }
+          } catch (e) {
+            console.error("FAI Algoritmo Discovery search failed", e);
+          }
+        }
+      }
+
+      if (!next) {
+        next = selectNextDJTrack(topTracks, favorites, allTracks, { 
+          discoveryLevel,
+          genreMode: false,
+          topRatio,
+          favRatio,
+          discRatio: 0 
+        });
+      }
     }
     
     if (next) {
@@ -609,7 +685,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#0a0a0b] text-white relative overflow-hidden font-sans w-full max-w-full overflow-x-hidden">
       {/* Background Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-gradient-to-b from-fuchsia-600/10 via-cyan-600/5 to-transparent blur-[120px] rounded-full pointer-events-none" />
       
       {/* Main Viewport */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 pb-4 sm:pt-6 sm:pb-6 z-10 max-w-lg mx-auto w-full overflow-y-auto overflow-x-hidden premium-scrollbar relative">
@@ -618,10 +694,14 @@ export const FAIView: React.FC<FAIViewProps> = ({
         <div className="w-full flex justify-end shrink-0 relative z-20 mb-4 px-2">
           <button
             onClick={() => setShowConfig(true)}
-            className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/5 rounded-full backdrop-blur-md transition-all shadow-xl hover:shadow-[#17d1a5]/20 text-white/40 hover:text-white"
+            className="group relative overflow-hidden h-10 sm:h-12 px-5 sm:px-6 rounded-full flex items-center gap-2 sm:gap-3 transition-all hover:scale-[1.02] active:scale-95 bg-black/40 backdrop-blur-xl border border-white/10 hover:border-fuchsia-500/50 shadow-[0_0_20px_rgba(0,0,0,0.5)] hover:shadow-[0_0_25px_rgba(232,121,249,0.2)]"
             title="Configuración de Mezcla"
           >
-            <Settings2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-fuchsia-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <Settings2 className="w-4 h-4 sm:w-5 sm:h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)] group-hover:animate-spin-slow relative z-10" />
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm relative z-10">
+              Ajustes
+            </span>
           </button>
         </div>
 
@@ -631,7 +711,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
           <motion.div 
             className="relative w-[180px] sm:w-[240px] shrink-0 aspect-square group z-10"
           >
-          <div className="absolute inset-0 bg-blue-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
+          <div className="absolute inset-0 bg-fuchsia-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
           
           
             <div className="relative w-full h-full group">

@@ -42,8 +42,8 @@ export function selectNextDJTrack(
   }
 
   // Determine user parameters with strict fallback to default (30, 20, 50)
-  let topRatio = 30;
-  let favRatio = 20;
+  let topRatio = 32;
+  let favRatio = 18;
   let discRatio = 50;
 
   // Retrieve from localStorage if available in browser
@@ -67,8 +67,8 @@ export function selectNextDJTrack(
 
   // Normalize so that the ratios are converted to probabilities summing to 1.0
   const total = topRatio + favRatio + discRatio;
-  const wTop = total > 0 ? topRatio / total : 0.30;
-  const wFav = total > 0 ? favRatio / total : 0.20;
+  const wTop = total > 0 ? topRatio / total : 0.32;
+  const wFav = total > 0 ? favRatio / total : 0.18;
   const wDisc = total > 0 ? discRatio / total : 0.50;
 
   const rand = Math.random();
