@@ -65,7 +65,7 @@ import { Play,
   Tv,
   GripVertical,
   Globe,
-Bot } from "lucide-react";
+Mic, Bot } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { selectNextDJTrack, isReasonableTrack } from "../lib/djLogic";
@@ -122,6 +122,7 @@ const LazyExploreView = React.lazy(() =>
 const LazyPodcastView = React.lazy(() =>
   import("./PodcastView").then((m) => ({ default: m.PodcastView })),
 );
+const LazyFluxKaraoke = React.lazy(() => import("./FluxKaraoke"));
 const LazyUserManagementAdmin = React.lazy(() =>
   import("./UserManagementAdmin").then((m) => ({
     default: m.UserManagementAdmin,
@@ -1423,6 +1424,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
+  const [artistDetails, setArtistDetails] = useState<any>(null);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
   const [exploreData, setExploreData] = useState<{
     trending?: any[];
@@ -1705,7 +1707,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
   }, [trackQueue]);
   const [trackListTab, setTrackListTab] = useState<
-    "playlist" | "search" | "queue" | "entertainment" | "radio-fai"
+    "playlist" | "search" | "queue" | "entertainment" | "radio-fai" | "karaoke" | "artist"
   >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
   
   const [hasNewExplore, setHasNewExplore] = useState(false);
@@ -2524,7 +2526,25 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     if (trackQueueRef.current.length > 0) {
       nextTrackTarget = trackQueueRef.current[0];
       setOverrideCurrentTrack(nextTrackTarget);
-      setTrackQueue(trackQueueRef.current.slice(1));
+      
+      const newQueue = trackQueueRef.current.slice(1);
+      setTrackQueue(newQueue);
+      trackQueueRef.current = newQueue;
+
+      // Infinite radio logic: if queue is empty and we are playing a youtube track, fetch more related tracks
+      if (newQueue.length === 0 && nextTrackTarget.id.startsWith('yt_temp_')) {
+          const ytId = nextTrackTarget.id.replace('yt_temp_', '');
+          fetch(`/api/youtube/upnext?id=${ytId}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.length > 0) {
+                const radioQueue = data.filter((t: any) => t.id !== nextTrackTarget.id);
+                setTrackQueue(radioQueue);
+                trackQueueRef.current = radioQueue;
+              }
+            }).catch(() => {});
+      }
+
       showNotification(`Siguiente en cola: ${nextTrackTarget.title}`);
       pendingSeekPosRef.current = null;
       setPosition(0);
@@ -5508,11 +5528,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-white text-black border-white shadow-md"
+              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          Explorar
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Explorar</span>
           {hasNewExplore && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
         </button>
         <button
@@ -5553,6 +5573,34 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             setSearchQuery("");
             setYoutubeResults([]);
             setPreviewPlaylist(null);
+            
+            setTrackListTab("karaoke");
+            setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
+          }}
+          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+            trackListTab === "karaoke" &&
+            !showLibrary &&
+            !isSidebarExpanded &&
+            (window.innerWidth >= 768 || mobileView === "player")
+              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Flux Karaoke</span>
+            <Mic className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          </span>
+        </button>
+        <button
+          onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
             setTrackListTab("entertainment");
             setIsTrackListExpanded(true);
             setShowLibrary(false);
@@ -5566,11 +5614,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-purple-500 text-white border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          Podcasts
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Podcasts</span>
         </button>
         <button
           onClick={() => {
@@ -5592,12 +5640,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             (window.innerWidth < 768 &&
               mobileView === "playlists" &&
               !showLibrary)
-              ? "bg-[#1ED760] text-black border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.2)]"
+              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          <Library className="w-3.5 h-3.5" />
-          Mi Biblioteca
+          <Library className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Mi Biblioteca</span>
         </button>
         <button
           onClick={() => {
@@ -5614,11 +5662,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }}
           className={`relative hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
             showLibrary
-              ? "bg-[#1ED760] text-black border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.2)]"
+              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
-          Comunidad
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Comunidad</span>
           {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
         </button>
         {[
@@ -5727,11 +5775,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   <Globe className="w-3.5 h-3.5" />
                 </div>
               </div>
-              <h4 className="text-xs font-black text-slate-200 uppercase tracking-wider mb-1.5 group-hover:text-emerald-400 transition-colors">
+              <h4 className="text-xs font-black text-slate-200 uppercase tracking-wider mb-1.5 group-hover:text-blue-400 transition-colors">
                 Descubre Música
               </h4>
               <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                Únete a la comunidad para explorar playlists increíbles de otros usuarios. <strong className="text-emerald-400 font-bold">Descubre tu próximo track favorito.</strong>
+                Únete a la comunidad para explorar playlists increíbles de otros usuarios. <strong className="text-blue-400 font-bold">Descubre tu próximo track favorito.</strong>
               </p>
             </button>
 
@@ -6250,7 +6298,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         >
           {/* PLAYER BAR */}
           <div
-            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "radio-fai" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
           >
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -6302,7 +6350,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         <button
                           onClick={handlePrev}
                           title="Anterior"
-                          className="p-1 text-white hover:text-emerald-400 transition-all transform active:scale-90"
+                          className="p-1 text-white hover:text-blue-400 transition-all transform active:scale-90"
                         >
                           <SkipBack className="fill-current w-7 h-7" />
                         </button>
@@ -6323,7 +6371,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         <button
                           onClick={handleNext}
                           title="Siguiente"
-                          className="p-1 text-white hover:text-emerald-400 transition-all transform active:scale-90"
+                          className="p-1 text-white hover:text-blue-400 transition-all transform active:scale-90"
                         >
                           <SkipForward className="fill-current w-7 h-7" />
                         </button>
@@ -6744,7 +6792,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                           <button
                             onClick={handlePrev}
                             title="Anterior"
-                            className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
+                            className="p-1 sm:p-2 text-white hover:text-blue-400 transition-all transform active:scale-90 flex-shrink-0"
                           >
                             <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
                           </button>
@@ -6765,7 +6813,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                           <button
                             onClick={handleNext}
                             title="Siguiente"
-                            className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
+                            className="p-1 sm:p-2 text-white hover:text-blue-400 transition-all transform active:scale-90 flex-shrink-0"
                           >
                             <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
                           </button>
@@ -6806,11 +6854,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           {selectedPlaylist ||
           trackListTab === "search" ||
           trackListTab === "entertainment" ||
+          trackListTab === "karaoke" ||
           trackListTab === "radio-fai" ? (
             <div
               className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" ? "hidden" : "flex"}`}
             >
-              {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && (
+              {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                 <div className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40">
                   <div className="flex flex-col w-full">
                     {/* Search Bar matching Tab */}
@@ -6923,9 +6972,19 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
                 <div
-                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "radio-fai" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
+                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
                 >
-                  {trackListTab === "entertainment" ? (
+                  {trackListTab === "karaoke" ? (
+                    <React.Suspense
+                      fallback={
+                        <div className="p-12 text-center text-slate-500">
+                          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
+                        </div>
+                      }
+                    >
+                      <LazyFluxKaraoke />
+                    </React.Suspense>
+                  ) : trackListTab === "entertainment" ? (
                     <React.Suspense
                       fallback={
                         <div className="p-12 text-center text-slate-500">
@@ -7124,6 +7183,34 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       )}
 
                       {youtubeResults.map((ytTrack, idx) => {
+                        if (ytTrack.type === 'ArtistProfile') {
+                           return (
+                             <div key={ytTrack.id} className="relative group/yt flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5 cursor-pointer mb-2" onClick={() => {
+                               fetch(`/api/youtube/artist?id=${ytTrack.id}`).then(r => r.json()).then(data => {
+                                 setArtistDetails(data);
+                               });
+                               setTrackListTab("artist");
+                             }}>
+                                <img src={ytTrack.thumbnails[0]?.url} className="w-16 h-16 rounded-full object-cover" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">ARTISTA</span>
+                                  <h4 className="text-[13px] font-bold text-white truncate leading-tight transition-colors uppercase tracking-tight mt-1">{ytTrack.title}</h4>
+                                  <p className="text-[10px] text-white/50 truncate uppercase tracking-wider">{ytTrack.subtitle}</p>
+                                </div>
+                                <button className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onClick={(e) => {
+                                  e.stopPropagation();
+                                  loadPlaylistAndPlay({
+                                    id: ytTrack.radioId,
+                                    title: `Radio de ${ytTrack.title}`,
+                                    isPlaylist: true,
+                                    subType: "mix"
+                                  });
+                                }}>
+                                  <Play className="w-5 h-5 text-black fill-black ml-1" />
+                                </button>
+                             </div>
+                           );
+                        }
                         const isExpanded = expandedPlaylistId === ytTrack.id;
 
                         const renderBadge = () => {
@@ -7187,46 +7274,49 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       return;
                                     }
 
-                                    // Logic for continuous playback from search results
-                                    const allTracksOnly = youtubeResults
-                                      .filter((t) => !t.isPlaylist)
-                                      .map((t) => ({
-                                        id: `yt_temp_${t.id}`,
-                                        title: t.title,
-                                        artist: t.artist || "Flux",
-                                        url: t.url,
-                                        duration: t.duration || "N/A",
-                                        bpm: 120,
-                                      }));
+                                    const selectedTrackObj = {
+                                      id: `yt_temp_${ytTrack.id}`,
+                                      title: ytTrack.title,
+                                      artist: ytTrack.artist || "Flux",
+                                      url: ytTrack.url,
+                                      duration: ytTrack.duration || "N/A",
+                                      bpm: 120,
+                                    };
+                                    setOverrideCurrentTrack(selectedTrackObj);
+                                    pendingSeekPosRef.current = null;
+                                    setPosition(0);
+                                    setDuration(0);
+                                    setIsPlaying(true);
+                                    showNotification(`Reproduciendo: ${ytTrack.title}`);
 
-                                    const currentIdx = allTracksOnly.findIndex(
-                                      (t) => t.id === trackId,
-                                    );
+                                    fetch(`/api/youtube/upnext?id=${ytTrack.id}`)
+                                      .then(r => r.json())
+                                      .then(data => {
+                                        if (data && data.length > 0) {
+                                          const radioQueue = data.filter((t: any) => t.id !== `yt_temp_${ytTrack.id}`);
+                                          setTrackQueue(radioQueue);
+                                          trackQueueRef.current = radioQueue;
+                                          showNotification(`${radioQueue.length} canciones relacionadas añadidas a la cola`);
+                                        } else {
+                                          const allTracksOnly = youtubeResults
+                                            .filter((t) => !t.isPlaylist)
+                                            .map((t) => ({
+                                              id: `yt_temp_${t.id}`,
+                                              title: t.title,
+                                              artist: t.artist || "Flux",
+                                              url: t.url,
+                                              duration: t.duration || "N/A",
+                                              bpm: 120,
+                                            }));
+                                          const currentIdx = allTracksOnly.findIndex((t) => t.id === trackId);
+                                          if (currentIdx !== -1 && allTracksOnly.length > currentIdx + 1) {
+                                            const nextInSearch = allTracksOnly.slice(currentIdx + 1);
+                                            setTrackQueue(nextInSearch);
+                                            trackQueueRef.current = nextInSearch;
+                                          }
+                                        }
+                                      }).catch(() => {});
 
-                                    if (currentIdx !== -1) {
-                                      setOverrideCurrentTrack(
-                                        allTracksOnly[currentIdx],
-                                      );
-                                      pendingSeekPosRef.current = null;
-                                      setPosition(0);
-                                      setDuration(0);
-                                      setIsPlaying(true);
-
-                                      // Queue the rest of search results
-                                      if (
-                                        allTracksOnly.length >
-                                        currentIdx + 1
-                                      ) {
-                                        const nextInSearch =
-                                          allTracksOnly.slice(currentIdx + 1);
-                                        setTrackQueue(nextInSearch);
-                                        trackQueueRef.current = nextInSearch;
-                                      }
-
-                                      showNotification(
-                                        `Reproduciendo: ${ytTrack.title}`,
-                                      );
-                                    }
                                   }
                                 }}
                               >
@@ -7629,6 +7719,78 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       })}
                       <div className="pt-4 border-t border-white/5 mt-4" />
                     </div>
+                  ) : trackListTab === "artist" ? (
+                    <div className="space-y-4 px-1 pb-20">
+                      {artistDetails ? (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                          <div className="flex items-center gap-4 mb-6">
+                            <button onClick={() => setTrackListTab("search")} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
+                              <ChevronRight className="w-5 h-5 text-white transform rotate-180" />
+                            </button>
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tight">{artistDetails.header}</h2>
+                          </div>
+                          {artistDetails.sections.map((section: any, sIdx: number) => (
+                            <div key={sIdx} className="mb-6">
+                              <h3 className="text-[14px] font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-emerald-400" />
+                                {section.title}
+                              </h3>
+                              <div className="flex overflow-x-auto pb-4 gap-3 snap-x scrollbar-hide">
+                                {section.items.map((item: any, iIdx: number) => (
+                                  <div key={iIdx} className="shrink-0 w-[140px] snap-start group/item cursor-pointer" onClick={() => {
+                                      if (item.isPlaylist) {
+                                        loadPlaylistAndPlay(item);
+                                      } else {
+                                        const tempTrack = {
+                                          id: 'yt_temp_' + item.id,
+                                          title: item.title,
+                                          artist: item.artist || artistDetails.header,
+                                          duration: item.duration || "",
+                                          url: item.url,
+                                          bpm: 120
+                                        };
+                                        setOverrideCurrentTrack(tempTrack);
+                                        pendingSeekPosRef.current = null;
+                                        setPosition(0);
+                                        setDuration(0);
+                                        setIsPlaying(true);
+                                        showNotification(`Reproduciendo: ${item.title}`);
+
+                                        fetch(`/api/youtube/upnext?id=${item.id}`)
+                                          .then(r => r.json())
+                                          .then(data => {
+                                            if (data && data.length > 0) {
+                                              const radioQueue = data.filter((t: any) => t.id !== tempTrack.id);
+                                              setTrackQueue(radioQueue);
+                                              trackQueueRef.current = radioQueue;
+                                              showNotification(`${radioQueue.length} canciones relacionadas añadidas a la cola`);
+                                            }
+                                          }).catch(() => {});
+                                      }
+                                  }}>
+                                    <div className="relative aspect-square rounded-xl overflow-hidden mb-2 shadow-lg group-hover/item:shadow-emerald-500/20 transition-all duration-300">
+                                      <img src={item.thumbnail} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
+                                      <div className="absolute inset-0 bg-black/20 group-hover/item:bg-black/40 transition-colors flex items-center justify-center">
+                                        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all transform scale-75 group-hover/item:scale-100 shadow-xl">
+                                          <Play className="w-5 h-5 text-black fill-black ml-1" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <h4 className="text-[11px] font-bold text-white line-clamp-2 leading-tight uppercase">{item.title}</h4>
+                                    <p className="text-[9px] text-white/50 truncate uppercase tracking-widest mt-1">{item.subType}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-white/50">
+                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
+                          <p className="text-[10px] uppercase tracking-widest">Cargando artista...</p>
+                        </div>
+                      )}
+                    </div>
                   ) : trackListTab === "queue" ? (
                     (() => {
                       const lowerQuery = searchQuery.toLowerCase().trim();
@@ -8012,7 +8174,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
                               <button
                                 onClick={(e) => handleAddToQueue(track, e)}
-                                className="p-1.5 sm:p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer"
+                                className="p-1.5 sm:p-1 text-slate-400 hover:text-blue-400 rounded-md hover:bg-emerald-500/10 cursor-pointer"
                                 title="Añadir a la cola"
                               >
                                 <ListPlus className="w-3.5 h-3.5" />
@@ -8053,7 +8215,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   )}
                 </div>
 
-                {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && (
+                {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                   <div className="bg-[#050505] border-t border-white/5 flex flex-col shrink-0">
                     <div className="flex justify-center py-2 border-b border-white/[0.03]">
                       <button
@@ -8108,7 +8270,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       {currentTrack &&
         isTrackListExpanded &&
         trackListTab !== "entertainment" &&
-        trackListTab !== "radio-fai" && (
+        trackListTab !== "radio-fai" &&
+        trackListTab !== "karaoke" && (
           <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">
             <div
               onClick={() => {
@@ -8197,11 +8360,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
       {/* Mobile Bottom Navigation Bar */}
       <div className="md:hidden flex h-[58px] bg-[#0c0c0d]/95  border-t border-white/5 shrink-0 justify-around items-center px-1 pb-1 pt-1 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+        
         {/* Explorar */}
         <button
           onClick={() => {
             setSelectedPlaylist(null);
-    setTrackListTab("search");
+            setTrackListTab("search");
             setIsTrackListExpanded(true);
             setMobileView("player");
             setShowLibrary(false);
@@ -8212,18 +8376,21 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             trackListTab === "search" &&
             !selectedPlaylist &&
             !showLibrary
-              ? "text-emerald-400 font-bold"
-              : "text-slate-500 hover:text-emerald-400"
+              ? "text-blue-400 font-bold"
+              : "text-slate-500 hover:text-blue-400"
           }`}
         >
           <div className="relative">
             <Compass className="w-5 h-5" />
             {hasNewExplore && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
           </div>
-          <span className="text-[8px] font-black uppercase tracking-widest">
+          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
             Explorar
           </span>
         </button>
+
+        
+
 
         {/* Comunidad (Second Position) */}
         <button
@@ -8239,15 +8406,15 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }}
           className={`relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
             showLibrary
-              ? "text-emerald-400 font-bold"
-              : "text-slate-500 hover:text-emerald-400"
+              ? "text-blue-400 font-bold"
+              : "text-slate-500 hover:text-blue-400"
           }`}
         >
           <div className="relative">
             <Users className="w-5 h-5" />
             {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
           </div>
-          <span className="text-[8px] font-black uppercase tracking-widest">
+          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
             Comunidad
           </span>
         </button>
@@ -8271,7 +8438,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }`}
         >
           <Library className="w-5 h-5" />
-          <span className="text-[8px] font-black uppercase tracking-widest">
+          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
             Biblioteca
           </span>
         </button>
@@ -8293,8 +8460,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             (currentTrack || isPlaying || overrideCurrentTrack) &&
             !isTrackListExpanded &&
             !showLibrary
-              ? "text-emerald-400 font-bold"
-              : "text-slate-500 hover:text-emerald-400"
+              ? "text-blue-400 font-bold"
+              : "text-slate-500 hover:text-blue-400"
           }`}
         >
           {isPlaying &&
@@ -8312,10 +8479,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           onClick={() => {
             window.dispatchEvent(new Event("open-support"));
           }}
-          className="relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all text-slate-500 hover:text-emerald-400 active:scale-95 cursor-pointer"
+          className="relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all text-slate-500 hover:text-blue-400 active:scale-95 cursor-pointer"
         >
           <MessageSquare className="w-5 h-5" />
-          <span className="text-[8px] font-black uppercase tracking-widest">
+          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
             Soporte
           </span>
           {unreadRepliesCount > 0 && (
@@ -8594,7 +8761,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                     e.stopPropagation();
                                     startEditing(pl);
                                   }}
-                                  className="w-7 h-7 flex items-center justify-center bg-black/95  rounded-lg text-slate-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
+                                  className="w-7 h-7 flex items-center justify-center bg-black/95  rounded-lg text-slate-400 hover:text-blue-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
                                   title="Editar"
                                 >
                                   <Edit2 className="w-3 h-3" />
@@ -9261,7 +9428,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               <div className="space-y-6 relative z-10 text-left">
                 <p className="text-xs sm:text-sm text-slate-300 font-medium px-2 leading-relaxed">
                   ¿Estás seguro de que deseas eliminar la canción{" "}
-                  <span className="text-emerald-400 font-bold">
+                  <span className="text-blue-400 font-bold">
                     "{trackToDeleteConfirm.title}"
                   </span>{" "}
                   de la playlist{" "}
@@ -9988,7 +10155,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
                 <div className="flex flex-col gap-3 w-full">
                   {isCheckingTrialRequest ? (
-                    <div className="flex items-center justify-center p-3 text-emerald-400 font-bold text-xs gap-2">
+                    <div className="flex items-center justify-center p-3 text-blue-400 font-bold text-xs gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Procesando...</span>
                     </div>
@@ -10016,6 +10183,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           </div>
         </div>
       )}
+      
       
     </div>
   );

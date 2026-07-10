@@ -18,6 +18,21 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.9.0",
+    title: "✨ Gran Actualización Flux v1.9.0 - Karaoke Beta y Nueva Exploración",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Modo Karaoke Beta: Disfruta de la nueva integración del karaoke en modo beta, con letras dinámicas y vista a pantalla completa.\n• Explorador Reimaginado: Hemos rediseñado por completo el funcionamiento del explorador para que descubrir nueva música sea más rápido, inteligente y visual.\n• Rediseño de Pestañas: Hemos pulido y modernizado el diseño de las pestañas en toda la app (como la pestaña de Artistas) ofreciendo una navegación más fluida e intuitiva.\n• Estabilidad y Errores: Mejoras internas masivas de rendimiento (ECO), correcciones de múltiples errores de sincronización y mejor manejo de la radio infinita inteligente estilo Spotify."
+  },
+  {
+    id: "update-v1.8.6",
+    title: "✨ Actualización Flux v1.8.6 - Modo Karaoke ECO",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Nueva Experiencia Inmersiva: Se ha añadido el nuevo 'Modo Karaoke ECO' al reproductor. Disfruta de una vista de pantalla completa con animaciones suaves, letras dinámicas y soporte nativo para efectos de eco de micrófono en tiempo real.\n• Arquitectura Desacoplada & ECO-Friendly: El karaoke funciona completamente aislado utilizando la Web Audio API del navegador de forma nativa sin consumir recursos de Firebase o servidores, garantizando un impacto cero en tu batería y rendimiento."
+  },
+
+  {
     id: "update-v1.8.4",
     title: "✨ Actualización Flux v1.8.4 - Rediseño del Botón de Ajustes",
     category: "actualizacion",

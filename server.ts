@@ -377,6 +377,34 @@ app.get("/api/user/playlists", async (req, res) => {
 });
 
 // YouTube Search Endpoint
+
+app.get("/api/lyrics/search", async (req, res) => {
+  try {
+    const query = req.query.q as string;
+    if (!query) {
+      return res.status(400).json({ error: "Missing query" });
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      console.error("Lrclib API error:", response.status, await response.text());
+      throw new Error("Lrclib API error");
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Lyrics proxy error:", error);
+    res.status(500).json({ error: "Failed to fetch lyrics" });
+  }
+});
+
 app.get("/api/youtube/search", async (req, res) => {
   const query = req.query.q as string;
   if (!query) return res.status(400).json({ error: "Missing query" });
@@ -432,24 +460,49 @@ app.get("/api/youtube/search", async (req, res) => {
     }
 
     try {
-      const musicResults = await yt.music.search(query, { type: 'song' }).catch(() => null);
-      if (musicResults && musicResults.contents) {
-        const shelf = musicResults.contents.find((c) => c.type === 'MusicShelf');
+      const [musicGeneral, musicSongs] = await Promise.allSettled([
+        yt.music.search(query).catch(() => null),
+        yt.music.search(query, { type: 'song' }).catch(() => null)
+      ]);
+
+      if (musicGeneral.status === "fulfilled" && musicGeneral.value?.contents) {
+        const card = musicGeneral.value.contents.find((c: any) => c.type === 'MusicCardShelf');
+        if (card && card.title?.endpoint?.payload?.browseId) {
+          const browseId = card.title.endpoint.payload.browseId;
+          const radioId = card.buttons?.[0]?.endpoint?.payload?.playlistId || "";
+          rawItems.unshift({
+            type: 'ArtistProfile',
+            id: browseId,
+            title: card.title.text || "",
+            subtitle: card.subtitle?.text || "",
+            thumbnails: card.thumbnail?.contents || [],
+            radioId: radioId
+          });
+        }
+      }
+
+      if (musicSongs.status === "fulfilled" && musicSongs.value?.contents) {
+        const shelf = musicSongs.value.contents.find((c: any) => c.type === 'MusicShelf');
         if (shelf && shelf.contents) {
-          const songs = shelf.contents.slice(0, 5).map((item) => {
+          const songs = shelf.contents.slice(0, 5).map((item: any) => {
             if (item.type === 'MusicResponsiveListItem') {
-              return {
+              return { 
                  type: 'Video',
                  id: item.id,
                  title: { text: item.title },
-                 author: { name: item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist' },
+                 author: { name: item.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist' },
                  duration: { text: item.duration?.text || '' },
                  thumbnails: item.thumbnails
               };
             }
             return item;
-          }).filter(x => x.id);
-          rawItems.unshift(...songs);
+          }).filter((x: any) => x.id);
+          const artistProfileIdx = rawItems.findIndex((i: any) => i.type === 'ArtistProfile');
+          if (artistProfileIdx !== -1) {
+             rawItems.splice(artistProfileIdx + 1, 0, ...songs);
+          } else {
+             rawItems.unshift(...songs);
+          }
         }
       }
     } catch (e) {}
@@ -1062,6 +1115,176 @@ const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 // Playlist Info Cache
 const playlistInfoCache = new Map<string, { data: any; timestamp: number }>();
+
+
+app.get("/api/youtube/artist", async (req, res) => {
+  const browseId = req.query.id as string;
+  if (!browseId) return res.status(400).json({ error: "Missing browseId" });
+
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  const cacheKey = `artist_${browseId}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return res.json(cached.data);
+  }
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create({ generate_session_locally: true });
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  try {
+    const artist = await yt.music.getArtist(browseId);
+    const sections = artist.sections?.map(s => {
+      return {
+        title: s.header?.title?.text || s.title?.text || "",
+        items: s.contents?.map(c => {
+          const typeLower = c.type.toLowerCase();
+          const isPlaylistType = c.endpoint?.payload?.playlistId || c.endpoint?.payload?.browseId?.startsWith('VL');
+          
+          let thumbnail = "";
+          if (c.thumbnails && c.thumbnails.length > 0) {
+             thumbnail = c.thumbnails[c.thumbnails.length - 1].url;
+          }
+
+          let videoCountStr = "";
+          let author = "";
+          if (c.subtitle && c.subtitle.runs) {
+             author = c.subtitle.runs.map((r: any) => r.text).join("");
+          }
+
+          return {
+            id: c.id || c.endpoint?.payload?.browseId || c.endpoint?.payload?.playlistId,
+            title: c.title?.text || c.name?.text || "",
+            type: c.type,
+            isPlaylist: !!isPlaylistType,
+            thumbnail: thumbnail,
+            artist: author,
+            duration: "",
+            subType: isPlaylistType ? "playlist" : "cancion",
+            url: `https://www.youtube.com/watch?v=${c.id}`
+          }
+        }).slice(0, 15) // take up to 15 items per section
+      }
+    }).filter(s => s.title && s.items && s.items.length > 0);
+    
+    const result = {
+      header: artist.header?.title?.text,
+      sections: sections
+    };
+
+    searchCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch artist details" });
+  }
+});
+
+
+app.get("/api/youtube/upnext", async (req, res) => {
+  const videoId = req.query.id as string;
+  if (!videoId) return res.status(400).json({ error: "Missing videoId" });
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create({ generate_session_locally: true });
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  try {
+    const upNext = await yt.music.getUpNext(videoId);
+    if (!upNext || !upNext.contents) {
+      return res.json([]);
+    }
+    
+    const items = upNext.contents.filter((c: any) => c.video_id).map((c: any) => {
+       const durationSec = c.duration?.seconds || 0;
+       const min = Math.floor(durationSec / 60);
+       const sec = durationSec % 60;
+       const durationStr = `${min}:${sec.toString().padStart(2, '0')}`;
+       
+       let thumbnail = "";
+       if (c.thumbnail && c.thumbnail.length > 0) {
+          thumbnail = c.thumbnail[c.thumbnail.length - 1].url;
+       }
+
+       return {
+          id: c.video_id,
+          title: c.title?.text || "",
+          artist: c.author || c.artists?.map((a: any) => a.name).join(", ") || "",
+          duration: durationStr,
+          thumbnail: thumbnail,
+          url: `https://www.youtube.com/watch?v=${c.video_id}`,
+          isPlaylist: false,
+          subType: "cancion",
+          bpm: 120
+       };
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error("UpNext error:", error);
+    res.status(500).json({ error: "Failed to fetch up next" });
+  }
+});
+
+
+app.get("/api/youtube/upnext", async (req, res) => {
+  const videoId = req.query.id as string;
+  if (!videoId) return res.status(400).json({ error: "Missing videoId" });
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create({ generate_session_locally: true });
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  try {
+    const upNext = await yt.music.getUpNext(videoId);
+    if (!upNext || !upNext.contents) {
+      return res.json([]);
+    }
+    
+    const items = upNext.contents.filter((c: any) => c.video_id).map((c: any) => {
+       let durationStr = c.duration?.text || "";
+       if (!durationStr && c.duration?.seconds) {
+          const min = Math.floor(c.duration.seconds / 60);
+          const sec = c.duration.seconds % 60;
+          durationStr = `${min}:${sec.toString().padStart(2, '0')}`;
+       }
+       
+       let thumbnail = "";
+       if (c.thumbnail && c.thumbnail.length > 0) {
+          thumbnail = c.thumbnail[c.thumbnail.length - 1].url;
+       }
+
+       return {
+          id: 'yt_temp_' + c.video_id,
+          title: c.title?.text || "",
+          artist: c.author || c.artists?.map((a: any) => a.name).join(", ") || "",
+          duration: durationStr,
+          thumbnail: thumbnail,
+          url: `https://www.youtube.com/watch?v=${c.video_id}`,
+          isPlaylist: false,
+          subType: "cancion",
+          bpm: 120
+       };
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error("UpNext error:", error);
+    res.status(500).json({ error: "Failed to fetch up next" });
+  }
+});
 
 app.get("/api/youtube/video-info", async (req, res) => {
   const videoId = req.query.id as string;

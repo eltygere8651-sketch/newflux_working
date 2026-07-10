@@ -1719,7 +1719,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     {globalAnalytics.length > 0 && globalAnalytics[0].topSongs ? (
                       <div className="space-y-2">
                         {Object.entries(globalAnalytics[0].topSongs)
-                          .sort(([, a], [, b]) => (b) - (a))
+                          .sort(([, a], [, b]) => Number(b) - Number(a))
                           .slice(0, 10)
                           .map(([id, plays], i) => (
                           <div key={id} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
@@ -1742,7 +1742,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                       {globalAnalytics.length > 0 && globalAnalytics[0].topSearches ? (
                         <div className="space-y-2">
                           {Object.entries(globalAnalytics[0].topSearches)
-                            .sort(([, a], [, b]) => (b) - (a))
+                            .sort(([, a], [, b]) => Number(b) - Number(a))
                             .slice(0, 5)
                             .map(([term, count], i) => (
                             <div key={term} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
@@ -1761,7 +1761,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                       {globalAnalytics.length > 0 && globalAnalytics[0].topGenres ? (
                         <div className="space-y-2">
                           {Object.entries(globalAnalytics[0].topGenres)
-                            .sort(([, a], [, b]) => (b) - (a))
+                            .sort(([, a], [, b]) => Number(b) - Number(a))
                             .slice(0, 5)
                             .map(([genre, count], i) => (
                             <div key={genre} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
