@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, increment } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 export interface UserAccessData {
@@ -123,8 +123,68 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         };
 
         fetchUserData();
-        const pollInterval = setInterval(fetchUserData, 5 * 60 * 1000);
-        unsubscribeFirestore = () => clearInterval(pollInterval);
+
+        // High precision & low-resource session time tracking
+        const lastSyncTimeRef = { current: Date.now() };
+        const lastActiveTimeRef = { current: Date.now() };
+
+        const syncUsageAndActivity = async (isClosing = false) => {
+          if (!auth.currentUser) return;
+          const now = Date.now();
+          const diffSeconds = Math.floor((now - lastSyncTimeRef.current) / 1000);
+          
+          // Only update if at least 15 seconds have passed, or we are explicitly closing/refreshing
+          if (diffSeconds >= 15 || isClosing) {
+            lastSyncTimeRef.current = now;
+            lastActiveTimeRef.current = now;
+            
+            try {
+              const userRef = doc(db, "users", auth.currentUser.uid);
+              // Update both the online status timestamp and the accumulated usage time safely in 1 single light update
+              await setDoc(userRef, {
+                lastActiveAt: now,
+                totalUsageTime: increment(diffSeconds)
+              }, { merge: true });
+            } catch (err) {
+              console.warn("Could not sync user usage stats:", err);
+            }
+          }
+        };
+
+        const pollInterval = setInterval(() => {
+          // Fetch access state & also sync general app usage stats every 5 minutes (incredibly cost efficient!)
+          fetchUserData();
+          if (document.visibilityState === "visible") {
+            syncUsageAndActivity();
+          }
+        }, 5 * 60 * 1000);
+
+        // User activity detector (clicks/keys) to keep status fresh, with a 3 minute debounce limit to avoid excessive writes
+        const handleUserInteraction = () => {
+          const now = Date.now();
+          if (now - lastActiveTimeRef.current > 3 * 60 * 1000 && document.visibilityState === "visible") {
+            syncUsageAndActivity();
+          }
+        };
+
+        window.addEventListener("click", handleUserInteraction);
+        window.addEventListener("keydown", handleUserInteraction);
+        
+        // Unload hook to sync any pending usage before tab closes
+        const handleBeforeUnload = () => {
+          // Use synchronous-like sync profile if possible
+          syncUsageAndActivity(true);
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        unsubscribeFirestore = () => {
+          clearInterval(pollInterval);
+          window.removeEventListener("click", handleUserInteraction);
+          window.removeEventListener("keydown", handleUserInteraction);
+          window.removeEventListener("beforeunload", handleBeforeUnload);
+          // Sync final remaining usage when auth state changes or provider unmounts
+          syncUsageAndActivity(true);
+        };
 
         const syncProfile = async (retryCount = 0) => {
           try {
@@ -138,14 +198,20 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 email: u.email || "anonymous",
                 displayName: u.displayName || "Usuario",
                 photoURL: defaultAvatar,
+                createdAt: serverTimestamp(),
                 lastLogin: serverTimestamp(),
+                lastActiveAt: Date.now(),
+                totalUsageTime: 0,
                 trialStart: null,
                 plan: "none",
                 maxUsers: 1
               });
             } else {
-              // Update last login
-              await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+              // Update last login & active
+              await setDoc(userRef, { 
+                lastLogin: serverTimestamp(),
+                lastActiveAt: Date.now()
+              }, { merge: true });
             }
           } catch (e) {
             console.error("Profile sync attempt failed", e);

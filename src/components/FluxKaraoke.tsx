@@ -548,17 +548,17 @@ export const FluxKaraoke = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden relative">
         
         {/* Left/Player Container Placeholder */}
-        {/* On mobile: full flex height if playing; hidden if not playing (discover view takes over sidebar area) */}
-        <div className={`w-full md:flex-1 flex-col border-b md:border-b-0 md:border-r border-white/5 relative ${!currentTrack ? "hidden md:flex" : "flex flex-1 h-full bg-[#050505]"}`}>
+        {/* On mobile/tablets: full flex height if playing; hidden if not playing (discover view takes over sidebar area) */}
+        <div className={`w-full lg:flex-1 flex-col border-b lg:border-b-0 lg:border-r border-white/5 relative ${!currentTrack ? "hidden lg:flex" : "flex flex-1 h-full bg-[#050505]"}`}>
           {/* Covered by the absolute overlay player */}
         </div>
 
-        {/* Right Side / Sidebar: Unified Navigation for Mobile & Desktop */}
-        {/* On mobile: displayed if no song is active. Integrates Discover/Explore, Search and Queue */}
-        <div className={`w-full md:w-[380px] bg-black flex flex-col min-h-0 overflow-hidden shrink-0 ${currentTrack ? 'hidden md:flex' : 'flex flex-1 h-full'}`}>
+        {/* Right Side / Sidebar: Unified Navigation for Mobile, Tablet & Desktop */}
+        {/* On mobile/tablets: displayed if no song is active. Integrates Discover/Explore, Search and Queue */}
+        <div className={`w-full lg:w-[380px] bg-black flex flex-col min-h-0 overflow-hidden shrink-0 ${currentTrack ? 'hidden lg:flex' : 'flex flex-1 h-full'}`}>
           
           {/* Top Segment Control / Tab Bar */}
           <div className="flex border-b border-white/5 bg-black/60 backdrop-blur-md sticky top-0 z-15 w-full overflow-x-auto custom-scrollbar no-scrollbar">
@@ -1076,7 +1076,7 @@ export const FluxKaraoke = () => {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="absolute top-20 right-4 md:right-[396px] z-50 w-72 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl"
+            className="absolute top-20 right-4 lg:right-[396px] z-50 w-72 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl"
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
@@ -1121,7 +1121,7 @@ export const FluxKaraoke = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="absolute inset-y-0 left-0 right-0 md:right-[380px] z-30 flex flex-col overflow-hidden bg-black" 
+            className="absolute inset-y-0 left-0 right-0 lg:right-[380px] z-30 flex flex-col overflow-hidden bg-black" 
             onClick={handlePlayerScreenTouch}
           >
             {/* CSS custom floating keyframes */}
@@ -1181,31 +1181,42 @@ export const FluxKaraoke = () => {
               
               {/* Background player (Visible if lyrics not found, invisible otherwise) */}
               <div className={`absolute inset-0 z-0 overflow-hidden bg-black transition-opacity duration-1000 ${lyricsState === 'not_found' ? 'opacity-100' : 'opacity-[0.01] pointer-events-none'}`}>
-                <ReactPlayer
-                  url={`https://www.youtube.com/watch?v=${currentTrack.id}`}
-                  playing={isPlaying}
-                  onProgress={(p) => setCurrentTime(p.playedSeconds)}
-                  onEnded={handlePlayNextInQueue}
-                  onReady={() => { setIsPlayerReady(true); setIsBuffering(false); }}
-                  onBuffer={() => setIsBuffering(true)}
-                  onBufferEnd={() => setIsBuffering(false)}
-                  controls={false}
-                  width="100%"
-                  height="100%"
-                  style={{ pointerEvents: 'none' }}
-                  config={{
-                    youtube: {
-                      playerVars: { 
-                        modestbranding: 1, 
-                        rel: 0, 
-                        showinfo: 0, 
-                        iv_load_policy: 3, 
-                        fs: 0,
-                        cc_load_policy: 1
+                {/* Oversized wrapper to crop the iframe borders (pushing YouTube's logo and title card outside the visible area) */}
+                <div className="absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none">
+                  <ReactPlayer
+                    url={`https://www.youtube.com/watch?v=${currentTrack.id}`}
+                    playing={isPlaying}
+                    onProgress={(p) => setCurrentTime(p.playedSeconds)}
+                    onEnded={handlePlayNextInQueue}
+                    onReady={() => { setIsPlayerReady(true); setIsBuffering(false); }}
+                    onBuffer={() => setIsBuffering(true)}
+                    onBufferEnd={() => setIsBuffering(false)}
+                    controls={false}
+                    width="100%"
+                    height="100%"
+                    style={{ pointerEvents: 'none' }}
+                    config={{
+                      youtube: {
+                        playerVars: { 
+                          modestbranding: 1, 
+                          rel: 0, 
+                          showinfo: 0, 
+                          iv_load_policy: 3, 
+                          fs: 0,
+                          cc_load_policy: 0,
+                          controls: 0,
+                          disablekb: 1,
+                          autohide: 1,
+                          playsinline: 1
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                </div>
+                
+                {/* Top and Bottom solid black gradient masks to completely block any remaining watermark or overlays */}
+                <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/95 to-transparent z-10 pointer-events-none" />
               </div>
 
               {/* Unified Premium Sincronización / Loading Glass Screen */}

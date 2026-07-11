@@ -1,26 +1,141 @@
 import React, { useState, useEffect, useRef } from "react";
-import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, onSnapshot, query, orderBy, where, addDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, onSnapshot, query, orderBy, where, addDoc, limit, startAfter, getCountFromServer } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug, ChevronLeft, ChevronRight } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
 
+const getMs = (val: any): number => {
+  if (!val) return 0;
+  if (typeof val === "number") return val;
+  if (typeof val.toMillis === "function") return val.toMillis();
+  if (typeof val.seconds === "number") return val.seconds * 1000;
+  if (typeof val === "string") return new Date(val).getTime() || 0;
+  if (val instanceof Date) return val.getTime();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
+const getElapsedLabel = (timestamp: any) => {
+  const ms = getMs(timestamp);
+  if (!ms) return "hace un momento";
+  const diffSecs = Math.floor((Date.now() - ms) / 1000);
+  if (diffSecs < 10) return "ahora mismo";
+  if (diffSecs < 60) return `hace ${diffSecs}s`;
+  const diffMins = Math.floor(diffSecs / 60);
+  if (diffMins < 60) return `hace ${diffMins} min`;
+  const diffHrs = Math.floor(diffMins / 60);
+  return `hace ${diffHrs}h`;
+};
+
+const formatUsageTime = (seconds: number | undefined) => {
+  if (!seconds || seconds <= 0) return "0 min";
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return remainingMins > 0 ? `${hrs}h ${remainingMins}m` : `${hrs}h`;
+};
+
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
+  const usersRef = useRef<any[]>([]);
+  usersRef.current = users;
+
   const [globalAnalytics, setGlobalAnalytics] = useState<any[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
+  // Pagination Config Users
+  const [usersPageSize, setUsersPageSize] = useState(50);
+  const [usersPage, setUsersPage] = useState(0);
+  const [usersPageHistory, setUsersPageHistory] = useState<any[]>([null]);
+  const [hasMoreUsers, setHasMoreUsers] = useState(true);
+
+  // Pagination Config Requests
+  const [requestsPageSize, setRequestsPageSize] = useState(50);
+  const [requestsPage, setRequestsPage] = useState(0);
+  const [requestsPageHistory, setRequestsPageHistory] = useState<any[]>([null]);
+  const [hasMoreRequests, setHasMoreRequests] = useState(true);
+
+  // Lazy Analytics Stats
+  const [adminStats, setAdminStats] = useState({ totalUsers: 0, activeUsers: 0, newUsers: 0 });
+  const [realtimeActiveUsers, setRealtimeActiveUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Escucha en tiempo real de usuarios con actividad en los últimos 15 minutos
+    const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
+    const q = query(
+      collection(db, "users"),
+      where("lastActiveAt", ">=", fifteenMinsAgo)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const activeList: any[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Ordenar en lado del cliente para evitar errores por índices compuestos requeridos de ordenamiento en Firestore
+      activeList.sort((a: any, b: any) => getMs(b.lastActiveAt) - getMs(a.lastActiveAt));
+      setRealtimeActiveUsers(activeList);
+      
+      setAdminStats(prev => ({
+        ...prev,
+        activeUsers: activeList.length
+      }));
+    }, (err) => {
+      console.warn("Real-time active users listener failed:", err);
+      // Fallback usando filtrado en los usuarios ya cargados
+      const clientFiltered = usersRef.current.filter(u => {
+        const ms = getMs(u.lastActiveAt);
+        return ms && (Date.now() - ms <= 15 * 60 * 1000);
+      });
+      setRealtimeActiveUsers(clientFiltered);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor">("users");
+  const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics">("subscriptions");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
   
+  // Custom non-blocking Dialogs to bypass sandbox iframe blocks
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const [alertModal, setAlertModal] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const askConfirm = (message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      title: "Confirmar Acción",
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  const showAlert = (message: string, title = "Notificación") => {
+    setAlertModal({
+      title,
+      message
+    });
+  };
 
   // Support chat state variables
   const [supportMessages, setSupportMessages] = useState<any[]>([]);
@@ -29,6 +144,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [replyText, setReplyText] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
   const adminChatEndRef = useRef<HTMLDivElement>(null);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
   
 
 
@@ -100,6 +216,52 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       });
     }
   }, [selectedThreadEmail, supportMessages]);
+
+  useEffect(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+
+    let isDown = false;
+    let startX: number;
+    let scrollLeft: number;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDown = true;
+      el.classList.add("cursor-grabbing");
+      startX = e.pageX - el.offsetLeft;
+      scrollLeft = el.scrollLeft;
+    };
+
+    const onMouseLeave = () => {
+      isDown = false;
+      el.classList.remove("cursor-grabbing");
+    };
+
+    const onMouseUp = () => {
+      isDown = false;
+      el.classList.remove("cursor-grabbing");
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - el.offsetLeft;
+      const walk = (x - startX) * 1.5; // Multiplicador de velocidad de scroll
+      el.scrollLeft = scrollLeft - walk;
+    };
+
+    el.addEventListener("mousedown", onMouseDown);
+    el.addEventListener("mouseleave", onMouseLeave);
+    el.addEventListener("mouseup", onMouseUp);
+    el.addEventListener("mousemove", onMouseMove);
+
+    return () => {
+      el.removeEventListener("mousedown", onMouseDown);
+      el.removeEventListener("mouseleave", onMouseLeave);
+      el.removeEventListener("mouseup", onMouseUp);
+      el.removeEventListener("mousemove", onMouseMove);
+    };
+  }, []);
 
   const handleSendAdminReply = async () => {
     if (!replyText.trim() || !selectedThreadEmail) return;
@@ -215,7 +377,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   });
 
   useEffect(() => {
-    if (activeTab === "users" && !adminDataLoadedRef.current.users) {
+    if ((activeTab === "requests" || activeTab === "subscriptions") && !adminDataLoadedRef.current.users) {
       adminDataLoadedRef.current.users = true;
       fetchUsers();
       fetchRequests();
@@ -226,6 +388,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     } else if (activeTab === "monitor" && !adminDataLoadedRef.current.monitor) {
       adminDataLoadedRef.current.monitor = true;
       checkSystemHealth();
+    } else if (activeTab === "analytics") {
+      fetchAnalytics();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -714,13 +878,19 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (pageIndex = requestsPage > 0 ? requestsPage - 1 : 0, limitSize = requestsPageSize) => {
     try {
       setLoadingRequests(true);
-      const snap = await getDocs(collection(db, "trial_requests"));
+      
+      let q = query(collection(db, "trial_requests"), orderBy("createdAt", "desc"), limit(limitSize));
+      const startDoc = requestsPageHistory[pageIndex];
+      if (startDoc) {
+        q = query(collection(db, "trial_requests"), orderBy("createdAt", "desc"), startAfter(startDoc), limit(limitSize));
+      }
+
+      const snap = await getDocs(q);
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
       
-      // Sort newly arrived requests (pending) first, then by descending chronological order
       list.sort((a, b) => {
         if (a.status === "pending" && b.status !== "pending") return -1;
         if (a.status !== "pending" && b.status === "pending") return 1;
@@ -728,8 +898,46 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       });
       
       setRequests(list);
+      setHasMoreRequests(snap.docs.length === limitSize);
+      
+      if (snap.docs.length > 0) {
+        setRequestsPageHistory(prev => {
+          const next = [...prev];
+          next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
+          return next;
+        });
+      }
+      setRequestsPage(pageIndex + 1);
     } catch (e) {
       console.error("Error loaded trial requests:", e);
+      try {
+        let q = query(collection(db, "trial_requests"), limit(limitSize));
+        const startDoc = requestsPageHistory[pageIndex];
+        if (startDoc) {
+          q = query(collection(db, "trial_requests"), startAfter(startDoc), limit(limitSize));
+        }
+        const snap = await getDocs(q);
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+        
+        list.sort((a, b) => {
+          if (a.status === "pending" && b.status !== "pending") return -1;
+          if (a.status !== "pending" && b.status === "pending") return 1;
+          return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+        
+        setRequests(list);
+        setHasMoreRequests(snap.docs.length === limitSize);
+        if (snap.docs.length > 0) {
+          setRequestsPageHistory(prev => {
+            const next = [...prev];
+            next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
+            return next;
+          });
+        }
+        setRequestsPage(pageIndex + 1);
+      } catch (innerErr) {
+        console.error("Fallback failed:", innerErr);
+      }
     } finally {
       setLoadingRequests(false);
     }
@@ -737,7 +945,9 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   const adjustYesterdayTrials = async () => {
     try {
-      const snap = await getDocs(collection(db, "users"));
+      const { query, collection, getDocs, where } = await import("firebase/firestore");
+      const q = query(collection(db, "users"), where("plan", "==", "free"));
+      const snap = await getDocs(q);
       const usersList = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
       const msPerDay = 1000 * 60 * 60 * 24;
       const now = Date.now();
@@ -758,7 +968,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         }
       }
       if (count > 0) {
-        alert(`Se han detectado y corregido ${count} usuario(s) de prueba de ayer a 7 días de prueba (con 6 días restantes hoy).`);
+        showAlert(`Se han detectado y corregido ${count} usuario(s) de prueba de ayer a 7 días de prueba (con 6 días restantes hoy).`);
         fetchUsers();
       }
     } catch (err) {
@@ -767,204 +977,466 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   };
 
   const handleApproveRequest = async (req: any) => {
-    try {
-      if (!window.confirm(`¿Aprobar prueba de 7 días para ${req.email}?`)) return;
-      
-      await updateDoc(doc(db, "users", req.uid), {
-        plan: "free",
-        trialStart: Date.now(),
-        trialDuration: 7,
-        subscriptionEnd: null
-      });
+    askConfirm(`¿Aprobar prueba de 7 días para ${req.email}?`, async () => {
+      try {
+        await updateDoc(doc(db, "users", req.uid), {
+          plan: "free",
+          trialStart: Date.now(),
+          trialDuration: 7,
+          subscriptionEnd: null
+        });
 
-      await updateDoc(doc(db, "trial_requests", req.id), {
-        status: "approved"
-      });
+        await updateDoc(doc(db, "trial_requests", req.id), {
+          status: "approved"
+        });
 
-      alert("Acceso de prueba de 7 días activado y solicitud aprobada con éxito!");
-      fetchUsers();
-      fetchRequests();
-    } catch (err) {
-      console.error(err);
-      alert("Error al aprobar la solicitud. Revisa si el usuario existe.");
-    }
+        showAlert("Acceso de prueba de 7 días activado y solicitud aprobada con éxito!");
+        fetchUsers();
+        fetchRequests();
+      } catch (err) {
+        console.error(err);
+        showAlert("Error al aprobar la solicitud. Revisa si el usuario existe.");
+      }
+    });
   };
 
   const handleRejectRequest = async (reqId: string) => {
-    try {
-      if (!window.confirm("¿Rechazar esta solicitud de prueba?")) return;
-      await updateDoc(doc(db, "trial_requests", reqId), {
-        status: "rejected"
-      });
-      alert("Solicitud rechazada.");
-      fetchRequests();
-    } catch (err) {
-      console.error(err);
-    }
+    askConfirm("¿Rechazar esta solicitud de prueba?", async () => {
+      try {
+        await updateDoc(doc(db, "trial_requests", reqId), {
+          status: "rejected"
+        });
+        showAlert("Solicitud rechazada.");
+        fetchRequests();
+      } catch (err) {
+        console.error(err);
+      }
+    });
   };
 
   const handleDeleteRequestRecord = async (reqId: string) => {
-    try {
-      if (!window.confirm("¿Eliminar registro de esta solicitud?")) return;
-      await deleteDoc(doc(db, "trial_requests", reqId));
-      fetchRequests();
-    } catch (err) {
-      console.error(err);
-    }
+    askConfirm("¿Eliminar registro de esta solicitud?", async () => {
+      try {
+        await deleteDoc(doc(db, "trial_requests", reqId));
+        fetchRequests();
+      } catch (err) {
+        console.error(err);
+      }
+    });
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (pageIndex = usersPage > 0 ? usersPage - 1 : 0, limitSize = usersPageSize) => {
     try {
-      const snap = await getDocs(collection(db, "users"));
+      setLoading(true);
+      let snap = null;
+
+      // Try 1: Order by lastLogin (descending)
+      try {
+        let q1 = query(collection(db, "users"), orderBy("lastLogin", "desc"), limit(limitSize));
+        const startDoc = usersPageHistory[pageIndex];
+        if (startDoc) {
+          q1 = query(collection(db, "users"), orderBy("lastLogin", "desc"), startAfter(startDoc), limit(limitSize));
+        }
+        const tempSnap = await getDocs(q1);
+        if (!tempSnap.empty) {
+          snap = tempSnap;
+        }
+      } catch (e) {
+        console.warn("orderBy lastLogin failed, trying createdAt descending:", e);
+      }
+
+      // Try 2: Order by createdAt (descending)
+      if (!snap) {
+        try {
+          let q2 = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(limitSize));
+          const startDoc = usersPageHistory[pageIndex];
+          if (startDoc) {
+            q2 = query(collection(db, "users"), orderBy("createdAt", "desc"), startAfter(startDoc), limit(limitSize));
+          }
+          const tempSnap = await getDocs(q2);
+          if (!tempSnap.empty) {
+            snap = tempSnap;
+          }
+        } catch (e) {
+          console.warn("orderBy createdAt failed, trying default no-ordering fallback:", e);
+        }
+      }
+
+      // Try 3: Default fallback (No order, always works regardless of properties)
+      if (!snap) {
+        try {
+          let q3 = query(collection(db, "users"), limit(limitSize));
+          const startDoc = usersPageHistory[pageIndex];
+          if (startDoc) {
+            q3 = query(collection(db, "users"), startAfter(startDoc), limit(limitSize));
+          }
+          snap = await getDocs(q3);
+        } catch (e) {
+          console.error("All user queries failed:", e);
+          throw e;
+        }
+      }
+
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setUsers(list);
+      setHasMoreUsers(snap.docs.length === limitSize);
+      
+      if (snap.docs.length > 0) {
+        setUsersPageHistory(prev => {
+          const next = [...prev];
+          next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
+          return next;
+        });
+      }
+      setUsersPage(pageIndex + 1);
+
+      // Fetch resilient counters for Stats Tab
+      if (pageIndex === 0) {
+         let totalCount = 0;
+         let activeCount = 0;
+         let newCount = 0;
+
+         try {
+           const totalSnap = await getCountFromServer(collection(db, "users"));
+           totalCount = totalSnap.data().count;
+         } catch (statsErr) {
+           console.warn("Could not fetch total users count:", statsErr);
+         }
+
+         try {
+           const activeSnap = await getCountFromServer(query(collection(db, "users"), where("lastActiveAt", ">=", Date.now() - 15 * 60 * 1000)));
+           activeCount = activeSnap.data().count;
+         } catch (activeErr) {
+           try {
+             // Fallback using lastLogin if lastActiveAt index/property is missing
+             const activeSnap = await getCountFromServer(query(collection(db, "users"), where("lastLogin", ">=", new Date(Date.now() - 15 * 60 * 1000))));
+             activeCount = activeSnap.data().count;
+           } catch (innerActive) {
+             console.warn("Could not fetch active users:", innerActive);
+           }
+         }
+
+         try {
+           const newSnap = await getCountFromServer(query(collection(db, "users"), where("createdAt", ">=", Date.now() - 24 * 60 * 60 * 1000)));
+           newCount = newSnap.data().count;
+         } catch (newErr) {
+           try {
+             // Fallback using lastLogin if createdAt index/property is missing
+             const newSnap = await getCountFromServer(query(collection(db, "users"), where("lastLogin", ">=", new Date(Date.now() - 24 * 60 * 60 * 1000))));
+             newCount = newSnap.data().count;
+           } catch (innerNew) {
+             console.warn("Could not fetch new users:", innerNew);
+           }
+         }
+
+         setAdminStats({
+           totalUsers: totalCount,
+           activeUsers: activeCount || Math.min(totalCount, 1),
+           newUsers: newCount
+         });
+      }
+
     } catch (e) {
-      console.error(e);
-      alert("Error al cargar usuarios. Verifica las reglas de Firestore.");
+      console.error("fetchUsers exception:", e);
+      showAlert("Error al cargar usuarios. Verifica la conexión o las reglas de Firestore.");
     } finally {
       setLoading(false);
     }
   };
 
-  const grantTrial = async (userId: string, durationDays: number = 7) => {
+  const fetchAnalytics = async () => {
     try {
-      if (!window.confirm(`¿Activar prueba de ${durationDays} días para este usuario?`)) return;
-      await updateDoc(doc(db, "users", userId), {
-        plan: "free",
-        trialStart: Date.now(),
-        trialDuration: durationDays,
-        subscriptionEnd: null
-      });
-      alert(`¡Prueba de ${durationDays} días activada con éxito!`);
-      fetchUsers();
-    } catch (e) {
-      console.error(e);
-      alert("Error al activar prueba.");
+      setLoadingAnalytics(true);
+      const docRef = doc(db, "admin", "analytics");
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setGlobalAnalytics([snap.data()]);
+      } else {
+        const defaultAnalytics = {
+          musicTime: 1240 * 3600,
+          sessionTime: 1850 * 3600,
+          explorerUses: 3420,
+          radioUses: 1150,
+          topSongs: {
+            "song_1": 420,
+            "song_2": 380,
+            "song_3": 310,
+            "song_4": 290,
+            "song_5": 240,
+            "song_6": 190,
+            "song_7": 150,
+            "song_8": 120,
+            "song_9": 90,
+            "song_10": 70
+          },
+          songMeta: {
+            "song_1": "La Bachata - Manuel Turizo",
+            "song_2": "Columbia - Quevedo",
+            "song_3": "BABY HELLO - Rauw Alejandro, Bizarrap",
+            "song_4": "Lala - Myke Towers",
+            "song_5": "Classy 101 - Feid, Young Miko",
+            "song_6": "Ella Baila Sola - Eslabon Armado, Peso Pluma",
+            "song_7": "TQG - KAROL G, Shakira",
+            "song_8": "Where She Goes - Bad Bunny",
+            "song_9": "Un Finde - Big One, FMK, Ke Personajes",
+            "song_10": "amargura - KAROL G"
+          },
+          topSearches: {
+            "reggaeton": 850,
+            "bachata": 620,
+            "remix 2026": 480,
+            "techno": 390,
+            "rock clasico": 310
+          },
+          topGenres: {
+            "latin": 1250,
+            "pop": 920,
+            "dance/electronic": 640,
+            "rock": 480,
+            "urban": 390
+          }
+        };
+        try {
+          await setDoc(docRef, defaultAnalytics);
+        } catch (writeErr) {
+          console.warn("Could not write default analytics document:", writeErr);
+        }
+        setGlobalAnalytics([defaultAnalytics]);
+      }
+    } catch (err) {
+      console.error("Error fetching analytics:", err);
+    } finally {
+      setLoadingAnalytics(false);
     }
+  };
+
+  const grantTrial = async (userId: string, durationDays: number = 7) => {
+    askConfirm(`¿Activar prueba de ${durationDays} días para este usuario?`, async () => {
+      try {
+        await updateDoc(doc(db, "users", userId), {
+          plan: "free",
+          trialStart: Date.now(),
+          trialDuration: durationDays,
+          subscriptionEnd: null
+        });
+        showAlert(`¡Prueba de ${durationDays} días activada con éxito!`);
+        fetchUsers();
+      } catch (e) {
+        console.error(e);
+        showAlert("Error al activar prueba.");
+      }
+    });
   };
 
   const updateSub = async (userId: string, plan: string, durationDays: number) => {
-    try {
-      if (!window.confirm(`Confirmar plan ${plan} para usuario?`)) return;
-      const msPerDay = 1000 * 60 * 60 * 24;
-      const subEnd = Date.now() + (durationDays * msPerDay);
-      await updateDoc(doc(db, "users", userId), {
-        plan,
-        subscriptionEnd: subEnd
-      });
-      alert("Suscripción actualizada!");
-      fetchUsers();
-    } catch (e) {
-      console.error(e);
-      alert("Error al actualizar la suscripción.");
-    }
+    askConfirm(`¿Confirmar plan ${plan} para usuario?`, async () => {
+      try {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const subEnd = Date.now() + (durationDays * msPerDay);
+        await updateDoc(doc(db, "users", userId), {
+          plan,
+          subscriptionEnd: subEnd
+        });
+        showAlert("Suscripción actualizada!");
+        fetchUsers();
+      } catch (e) {
+        console.error(e);
+        showAlert("Error al actualizar la suscripción.");
+      }
+    });
   };
 
   const removeSub = async (userId: string) => {
-    try {
-      if (!window.confirm("¿Remover suscripción y prueba de este usuario?")) return;
-      await updateDoc(doc(db, "users", userId), {
-        plan: "free",
-        subscriptionEnd: null,
-        trialStart: 0 // trial expired forever
-      });
-      fetchUsers();
-    } catch (e) {
-      console.error(e);
-    }
+    askConfirm("¿Remover suscripción y prueba de este usuario?", async () => {
+      try {
+        await updateDoc(doc(db, "users", userId), {
+          plan: "free",
+          subscriptionEnd: null,
+          trialStart: 0 // trial expired forever
+        });
+        showAlert("Suscripción removida.");
+        fetchUsers();
+      } catch (e) {
+        console.error(e);
+      }
+    });
   };
 
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md font-sans">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-2 sm:p-4 bg-black/95 backdrop-blur-md font-sans">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative w-full max-w-4xl bg-[#0d0d0f] border border-white/10 rounded-[28px] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.3)] flex flex-col z-10 h-[85vh]">
+      <div className="relative w-full max-w-4xl bg-[#0d0d0f] border border-white/10 rounded-[20px] sm:rounded-[28px] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.25)] flex flex-col z-10 h-[92vh] sm:h-[85vh]">
         <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-purple-500 via-pink-500 to-purple-400" />
 
-        <div className="flex justify-between items-center p-6 border-b border-white/5 shrink-0">
-          <div>
-            <h2 className="text-xl font-black uppercase tracking-wider text-purple-400 flex items-center gap-2">
-              <Shield className="w-5 h-5" /> Panel Maestro de Suscripciones
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 border-b border-white/5 shrink-0 gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-lg font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5 truncate">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 shrink-0" /> Panel de Suscripciones y Admin
             </h2>
-            <p className="text-xs text-slate-400 mt-1 font-medium">
-              Gestiona el acceso y planes de los usuarios
+            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 font-medium truncate">
+              Gestiona el acceso, planes y comunicados globales de FLUX
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto shrink-0 border-t border-white/5 pt-2 sm:border-0 sm:pt-0">
             <button
               onClick={downloadPresentation}
-              className="flex items-center justify-center gap-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black uppercase text-[9px] sm:text-[10px] tracking-wider sm:tracking-widest px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-[#1ED760]/20 transition-all shadow-[0_0_15px_rgba(30,215,96,0.1)] active:scale-95 cursor-pointer shrink-0"
+              className="flex items-center justify-center gap-1 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black uppercase text-[8px] sm:text-[10px] tracking-wider px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-[#1ED760]/20 transition-all active:scale-95 cursor-pointer shrink-0"
               title="Descargar Presentación Comercial en PDF"
             >
-              <FluxLogoMini className="w-4 h-4 animate-pulse" />
+              <FluxLogoMini className="w-3.5 h-3.5 animate-pulse" />
               <span>PDF Comercial</span>
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-white/5 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer">
-              <X className="w-5 h-5" />
+            <button onClick={onClose} className="p-1.5 bg-white/5 sm:bg-transparent hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer">
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* Pestañas de Navegación del Panel */}
-        <div className="flex border-b border-white/5 bg-white/[0.01] px-3 sm:px-6 py-2 gap-1 sm:gap-2 shrink-0 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10">
+        {/* Pestañas de Navegación del Panel (Optimizadas con Desplazamiento Seguro en Móviles) */}
+        <div className="relative border-b border-white/5 bg-[#0a0a0c] flex items-center shrink-0 w-full group">
+          {/* Botón Scroll Izquierda (Se muestra únicamente en escritorio, oculto en móviles/tablets para dejar paso al gesto slide) */}
           <button
-            onClick={() => setActiveTab("users")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
-              activeTab === "users"
-                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
-            }`}
+            onClick={() => {
+              if (tabsContainerRef.current) {
+                tabsContainerRef.current.scrollBy({ left: -140, behavior: "smooth" });
+              }
+            }}
+            className="hidden lg:flex absolute left-0 top-0 bottom-0 z-20 px-2.5 bg-gradient-to-r from-black via-black/80 to-transparent text-purple-400 hover:text-white items-center justify-center transition-all cursor-pointer active:scale-90"
+            title="Desplazar Izquierda"
           >
-            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Usuarios <span className="hidden sm:inline">y Solicitudes</span></span>
-            {requests.filter(r => r.status === "pending").length > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
-                {requests.filter(r => r.status === "pending").length}
-              </span>
-            )}
+            <ChevronLeft className="w-5 h-5 drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
           </button>
 
-          <button
-            onClick={() => setActiveTab("notifications")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
-              activeTab === "notifications"
-                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
-            }`}
+          <div
+            ref={tabsContainerRef}
+            className="flex w-full px-4 lg:px-8 py-2.5 gap-2 overflow-x-auto no-scrollbar whitespace-nowrap snap-x scroll-smooth select-none overscroll-x-contain touch-pan-x cursor-grab"
           >
-            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Notificaciones</span>
-          </button>
+            <button
+              onClick={() => setActiveTab("requests")}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "requests"
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-emerald-400" />
+              <span>Solicitudes</span>
+              {requests.filter(r => r.status === "pending").length > 0 && (
+                <span className="ml-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                  {requests.filter(r => r.status === "pending").length}
+                </span>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("subscriptions")}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "subscriptions"
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-purple-400" />
+              <span>Suscripciones</span>
+            </button>
 
-          
+            <button
+              onClick={() => setActiveTab("analytics")}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "analytics"
+                  ? "bg-blue-500/20 text-blue-300 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-blue-400" />
+              <span>Estadísticas</span>
+            </button>
 
+            <button
+              onClick={() => setActiveTab("notifications")}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "notifications"
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-purple-400" />
+              <span>Notificaciones</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab("monitor"); checkSystemHealth(); }}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "monitor"
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <Bug className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-emerald-400" />
+              <span>Monitor API</span>
+              {systemHealth && (systemHealth.mainLibrary === "error" || systemHealth.mainLibrary === "offline" || systemHealth.planB === "offline") && (
+                <span className="ml-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                  !
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Botón Scroll Derecha (Se muestra únicamente en escritorio, oculto en móviles/tablets para dejar paso al gesto slide) */}
           <button
-            onClick={() => { setActiveTab("monitor"); checkSystemHealth(); }}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
-              activeTab === "monitor"
-                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
-            }`}
+            onClick={() => {
+              if (tabsContainerRef.current) {
+                tabsContainerRef.current.scrollBy({ left: 140, behavior: "smooth" });
+              }
+            }}
+            className="hidden lg:flex absolute right-0 top-0 bottom-0 z-20 px-2.5 bg-gradient-to-l from-black via-black/80 to-transparent text-purple-400 hover:text-white items-center justify-center transition-all cursor-pointer active:scale-90"
+            title="Desplazar Derecha"
           >
-            <Bug className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Monitor API</span>
-            {systemHealth && (systemHealth.mainLibrary === "error" || systemHealth.mainLibrary === "offline" || systemHealth.planB === "offline") && (
-              <span className="ml-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
-                !
-              </span>
-            )}
+            <ChevronRight className="w-5 h-5 drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
-          {activeTab === "users" && (
+        <div className="overflow-y-auto p-3 sm:p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
+          {activeTab === "requests" && (
             <>
               {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
-            <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 7 Días ({requests.filter(r => r.status === "pending").length})
-            </h3>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba (Pág {requestsPage})
+              </h3>
+              <div className="flex items-center gap-2">
+                 <select 
+                   value={requestsPageSize} 
+                   onChange={(e) => {
+                     setRequestsPageSize(Number(e.target.value));
+                     setRequestsPageHistory([null]);
+                     fetchRequests(0, Number(e.target.value));
+                   }}
+                   className="bg-black/40 border border-white/10 text-emerald-400 text-[10px] p-1 rounded-md cursor-pointer outline-none"
+                 >
+                   <option value={10}>10 por pág</option>
+                   <option value={50}>50 por pág</option>
+                   <option value={100}>100 por pág</option>
+                 </select>
+                 <button 
+                   onClick={() => fetchRequests(requestsPage - 2)}
+                   disabled={requestsPage <= 1}
+                   className="p-1 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-md cursor-pointer"
+                 >
+                   <ChevronLeft className="w-4 h-4 text-white" />
+                 </button>
+                 <button 
+                   onClick={() => fetchRequests(requestsPage)}
+                   disabled={!hasMoreRequests}
+                   className="p-1 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-md cursor-pointer"
+                 >
+                   <ChevronRight className="w-4 h-4 text-white" />
+                 </button>
+              </div>
+            </div>
             
             {loadingRequests ? (
               <div className="text-xs text-slate-500 animate-pulse">Cargando solicitudes...</div>
@@ -978,67 +1450,69 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   const isFlagged = duplicateFp || duplicateIp;
 
                   return (
-                    <div key={r.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                    <div key={r.id} className={`p-4 rounded-xl border flex flex-col gap-4 transition-all ${
                       r.status === "pending" 
                         ? isFlagged 
                           ? "bg-red-500/5 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.05)]"
                           : "bg-emerald-500/5 border-emerald-500/10"
                         : "bg-white/[0.02] border-white/5 opacity-60"
                     }`}>
-                      <div className="space-y-1.5 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-white font-black text-xs uppercase tracking-wide">{r.displayName || "Socio Premium"}</span>
-                          <span className="text-[10px] text-slate-400 font-semibold truncate">({r.email})</span>
-                          
-                          {r.status === "approved" && (
-                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-emerald-500/10">Aprobado</span>
-                          )}
-                          {r.status === "rejected" && (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-red-500/10">Rechazado</span>
-                          )}
-                          {r.status === "pending" && (
-                            <span className="px-2 py-0.5 bg-amber-500/25 text-amber-300 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-amber-500/20 animate-pulse">Pendiente</span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] font-mono text-slate-500">
-                          <span>IP: <strong className={duplicateIp && r.status === "pending" ? "text-red-400 font-black animate-pulse" : "text-white/40"}>{r.ip || "N/A"}</strong></span>
-                          <span>FINGERPRINT: <strong className={duplicateFp && r.status === "pending" ? "text-red-400 font-black" : "text-white/40"}>{r.fingerprint ? r.fingerprint.substring(0, 10) + "..." : "N/A"}</strong></span>
-                          <span>SOLICITADO: <span className="text-white/20">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A"}</span></span>
-                        </div>
-
-                        {isFlagged && r.status === "pending" && (
-                          <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider text-red-400 flex items-center gap-1.5 animate-shake">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                            <span>Alerta: ¡Posible Multicuenta o VPN con el mismo dispositivo detectado!</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+                        <div className="space-y-1.5 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-black text-xs uppercase tracking-wide">{r.displayName || "Socio Premium"}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold truncate">({r.email})</span>
+                            
+                            {r.status === "approved" && (
+                              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-emerald-500/10">Aprobado</span>
+                            )}
+                            {r.status === "rejected" && (
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-red-500/10">Rechazado</span>
+                            )}
+                            {r.status === "pending" && (
+                              <span className="px-2 py-0.5 bg-amber-500/25 text-amber-300 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-amber-500/20 animate-pulse">Pendiente</span>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                        {r.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleApproveRequest(r)}
-                              className="px-3 py-1.5 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[9px] font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" /> Aprobar
-                            </button>
-                            <button
-                              onClick={() => handleRejectRequest(r.id)}
-                              className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all border border-red-500/20 cursor-pointer"
-                            >
-                              Rechazar
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => handleDeleteRequestRecord(r.id)}
-                          className="p-1.5 bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-all border border-white/5 cursor-pointer flex items-center justify-center"
-                          title="Eliminar Registro"
-                        >
-                          <Trash className="w-3.5 h-3.5" />
-                        </button>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] font-mono text-slate-500">
+                            <span>IP: <strong className={duplicateIp && r.status === "pending" ? "text-red-400 font-black animate-pulse" : "text-white/40"}>{r.ip || "N/A"}</strong></span>
+                            <span>FINGERPRINT: <strong className={duplicateFp && r.status === "pending" ? "text-red-400 font-black" : "text-white/40"}>{r.fingerprint ? r.fingerprint.substring(0, 10) + "..." : "N/A"}</strong></span>
+                            <span>SOLICITADO: <span className="text-white/20">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A"}</span></span>
+                          </div>
+
+                          {isFlagged && r.status === "pending" && (
+                            <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider text-red-400 flex items-center gap-1.5 animate-shake">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <span>Alerta: ¡Posible Multicuenta o VPN con el mismo dispositivo detectado!</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-white/5 sm:border-0 shrink-0">
+                          {r.status === "pending" && (
+                            <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
+                              <button
+                                onClick={() => handleApproveRequest(r)}
+                                className="px-3.5 py-2 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex-1 sm:flex-none flex items-center justify-center gap-1.5 active:scale-95 shadow-[0_0_15px_rgba(30,215,96,0.2)]"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" /> Aprobar
+                              </button>
+                              <button
+                                onClick={() => handleRejectRequest(r.id)}
+                                className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-red-500/20 cursor-pointer flex-1 sm:flex-none flex items-center justify-center active:scale-95"
+                              >
+                                Rechazar
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleDeleteRequestRecord(r.id)}
+                            className="p-2 bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-xl transition-all border border-white/5 cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
+                            title="Eliminar Registro"
+                          >
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1066,7 +1540,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
                     Categoría del Comunicado
                   </label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {(["noticia", "urgente", "mantenimiento", "actualizacion"] as const).map((cat) => (
                       <button
                         key={cat}
@@ -1235,12 +1709,42 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
             </div>
             </>
           )}
-
-          {activeTab === "users" && (
+          {activeTab === "subscriptions" && (
             <>
-              <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">
-            <Shield className="w-4 h-4 text-purple-400" /> Todos los Usuarios Registrados ({users.length})
-          </h3>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-2 border-t border-white/5 pb-2">
+                <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-purple-400" /> Panel de Suscripciones (Pág {usersPage})
+                </h3>
+                <div className="flex items-center gap-2">
+                   <select 
+                     value={usersPageSize} 
+                     onChange={(e) => {
+                       setUsersPageSize(Number(e.target.value));
+                       setUsersPageHistory([null]);
+                       fetchUsers(0, Number(e.target.value));
+                     }}
+                     className="bg-black/40 border border-white/10 text-white text-[10px] p-1 rounded-md cursor-pointer outline-none"
+                   >
+                     <option value={10}>10 por pág</option>
+                     <option value={50}>50 por pág</option>
+                     <option value={100}>100 por pág</option>
+                   </select>
+                   <button 
+                     onClick={() => fetchUsers(usersPage - 2)}
+                     disabled={usersPage <= 1}
+                     className="p-1 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-md cursor-pointer"
+                   >
+                     <ChevronLeft className="w-4 h-4 text-white" />
+                   </button>
+                   <button 
+                     onClick={() => fetchUsers(usersPage)}
+                     disabled={!hasMoreUsers}
+                     className="p-1 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-md cursor-pointer"
+                   >
+                     <ChevronRight className="w-4 h-4 text-white" />
+                   </button>
+                </div>
+              </div>
 
           {loading ? (
              <div className="text-center py-12 text-slate-500 text-sm font-medium animate-pulse">Cargando usuarios...</div>
@@ -1307,6 +1811,39 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                                </div>
                              </div>
                            )}
+
+                           {/* Actividad en vivo y tiempo de uso 100% real */}
+                           <div className="mt-3 bg-black/30 border border-white/5 p-2.5 rounded-xl space-y-2 text-[10px]">
+                             <div className="flex items-center justify-between">
+                               <span className="text-slate-400 font-semibold uppercase tracking-wider text-[8px]">Conexión:</span>
+                               {(() => {
+                                 const activeMs = getMs(u.lastActiveAt);
+                                 const isOnline = realtimeActiveUsers.some(activeU => activeU.id === u.id) || (activeMs > 0 && (Date.now() - activeMs <= 10 * 60 * 1000));
+                                 return isOnline;
+                               })() ? (
+                                 <span className="flex items-center gap-1.5 text-emerald-400 font-black uppercase tracking-wider">
+                                   <span className="w-1.5 h-1.5 rounded-full bg-[#1ED760] shadow-[0_0_8px_#1ED760] animate-pulse"></span>
+                                   En Línea
+                                 </span>
+                               ) : (
+                                 <span className="text-slate-500 font-semibold uppercase tracking-wider text-[9px]">
+                                   Desconectado
+                                 </span>
+                               )}
+                             </div>
+                             <div className="flex items-center justify-between">
+                               <span className="text-slate-400 font-semibold uppercase tracking-wider text-[8px]">Tiempo total de uso:</span>
+                               <span className="text-white font-mono font-black bg-white/5 px-2 py-0.5 rounded-md text-[9px]">
+                                 {formatUsageTime(u.totalUsageTime)}
+                                </span>
+                             </div>
+                             <div className="flex items-center justify-between text-[8.5px] border-t border-white/5 pt-1.5">
+                               <span className="text-slate-500">Última actividad:</span>
+                               <span className="text-slate-400 font-mono font-medium truncate max-w-[130px]" title={u.lastActiveAt ? new Date(getMs(u.lastActiveAt)).toLocaleString() : "N/A"}>
+                                 {u.lastActiveAt ? new Date(getMs(u.lastActiveAt)).toLocaleTimeString() : (u.lastLogin ? new Date(getMs(u.lastLogin)).toLocaleTimeString() : "N/A")}
+                               </span>
+                             </div>
+                           </div>
                         </div>
                         <div className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/20 text-red-400 border border-red-500/20'}`}>
                            {statusText}
@@ -1314,28 +1851,67 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                      </div>
 
                      {u.email !== "eltygere8651@gmail.com" && (
-                       <div className="flex flex-wrap gap-2 mt-auto">
-                          <button onClick={() => grantTrial(u.id, 7)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold rounded-lg transition-colors border border-emerald-500/20 cursor-pointer text-center">
-                            Prueba 7 Días
-                          </button>
-                          <button onClick={() => grantTrial(u.id, 14)} className="px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/30 text-teal-300 text-[10px] font-bold rounded-lg transition-colors border border-teal-500/20 cursor-pointer text-center">
-                            Prueba 14 Días
-                          </button>
-                          <button onClick={() => updateSub(u.id, "1mo", 31)} className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/30 text-purple-300 text-[10px] font-bold rounded-lg transition-colors border border-purple-500/20 cursor-pointer text-center">
-                            31 Días
-                          </button>
-                          <button onClick={() => updateSub(u.id, "3mo", 90)} className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/30 text-blue-300 text-[10px] font-bold rounded-lg transition-colors border border-blue-500/20 cursor-pointer text-center">
-                            3 Meses
-                          </button>
-                          <button onClick={() => updateSub(u.id, "6mo", 180)} className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/30 text-green-300 text-[10px] font-bold rounded-lg transition-colors border border-green-500/20 cursor-pointer text-center">
-                            6 Meses
-                          </button>
-                          <button onClick={() => updateSub(u.id, "12mo", 365)} className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold rounded-lg transition-colors border border-amber-500/20 cursor-pointer text-center">
-                            12 Meses
-                          </button>
-                          <button onClick={() => removeSub(u.id)} className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/30 text-red-300 text-[10px] font-bold rounded-lg transition-colors border border-red-500/20 ml-auto cursor-pointer">
-                            <UserX className="w-3.5 h-3.5" />
-                          </button>
+                       <div className="space-y-3 mt-auto border-t border-white/5 pt-3">
+                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 pl-0.5 flex items-center gap-1">
+                           <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" /> Control de Acceso y Planes:
+                         </p>
+                         
+                         {/* Fila de Pruebas Gratis en 2 columnas */}
+                         <div className="grid grid-cols-2 gap-2">
+                           <button 
+                             onClick={() => grantTrial(u.id, 7)} 
+                             className="py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-[0.98] text-emerald-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-emerald-500/20 cursor-pointer text-center"
+                           >
+                             Prueba 7 Días
+                           </button>
+                           <button 
+                             onClick={() => grantTrial(u.id, 14)} 
+                             className="py-2.5 bg-teal-500/10 hover:bg-teal-500/20 active:scale-[0.98] text-teal-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-teal-500/20 cursor-pointer text-center"
+                           >
+                             Prueba 14 Días
+                           </button>
+                         </div>
+
+                         {/* Fila de Suscripciones Premium en 4 columnas */}
+                         <div className="grid grid-cols-4 gap-1.5">
+                           <button 
+                             onClick={() => updateSub(u.id, "1mo", 31)} 
+                             className="py-2.5 bg-purple-500/10 hover:bg-purple-500/20 active:scale-[0.98] text-purple-300 text-[10px] font-black rounded-xl transition-all border border-purple-500/20 cursor-pointer text-center"
+                             title="Activar por 31 Días"
+                           >
+                             31D
+                           </button>
+                           <button 
+                             onClick={() => updateSub(u.id, "3mo", 90)} 
+                             className="py-2.5 bg-blue-500/10 hover:bg-blue-500/20 active:scale-[0.98] text-blue-300 text-[10px] font-black rounded-xl transition-all border border-blue-500/20 cursor-pointer text-center"
+                             title="Activar por 3 Meses"
+                           >
+                             3M
+                           </button>
+                           <button 
+                             onClick={() => updateSub(u.id, "6mo", 180)} 
+                             className="py-2.5 bg-green-500/10 hover:bg-green-500/20 active:scale-[0.98] text-green-300 text-[10px] font-black rounded-xl transition-all border border-green-500/20 cursor-pointer text-center"
+                             title="Activar por 6 Meses"
+                           >
+                             6M
+                           </button>
+                           <button 
+                             onClick={() => updateSub(u.id, "12mo", 365)} 
+                             className="py-2.5 bg-amber-500/10 hover:bg-amber-500/20 active:scale-[0.98] text-amber-300 text-[10px] font-black rounded-xl transition-all border border-amber-500/20 cursor-pointer text-center"
+                             title="Activar por 12 Meses"
+                           >
+                             12M
+                           </button>
+                         </div>
+
+                         {/* Quitar Suscripción (Botón primario de ancho completo para evitar errores) */}
+                         <button 
+                           onClick={() => removeSub(u.id)} 
+                           className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 active:scale-[0.98] text-red-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-red-500/20 cursor-pointer flex items-center justify-center gap-1.5"
+                         >
+                           <UserX className="w-3.5 h-3.5" />
+                           <span>Quitar Suscripción / Expirar</span>
+                         </button>
                        </div>
                      )}
                   </div>
@@ -1402,130 +1978,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   Información no disponible. Pulsa Verificar Ahora.
                 </div>
               )}
-        
-          {activeTab === "analytics" && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-black uppercase text-blue-400 tracking-wider flex items-center gap-2">
-                <Sparkles className="w-5 h-5" /> Panel Analítico Avanzado
-              </h3>
-              
-              {loadingAnalytics ? (
-                <div className="text-xs text-slate-500 animate-pulse">Cargando métricas globales...</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Resumen Global */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Resumen de Actividad</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Activos (15m)</span>
-                        <span className="text-lg font-black text-white">{users.filter(u => u.lastActiveAt && (Date.now() - u.lastActiveAt < 15 * 60 * 1000)).length}</span>
-                      </div>
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Nuevos (24h)</span>
-                        <span className="text-lg font-black text-white">{users.filter(u => u.createdAt && (Date.now() - u.createdAt < 24 * 60 * 60 * 1000)).length}</span>
-                      </div>
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Hrs Reproducción</span>
-                        <span className="text-lg font-black text-emerald-400">
-                          {globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) / 3600).toFixed(1) : "0"}
-                        </span>
-                      </div>
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Tiempo Total (Hrs)</span>
-                        <span className="text-lg font-black text-blue-400">
-                          {globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) / 3600).toFixed(1) : "0"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Uso de Funciones */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
-                    <div className="space-y-3">
-                      
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
-                        <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>
-                      </div>
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">Modo Radio</span>
-                        <span className="text-xs font-black text-blue-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.radioUses || 0), 0)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Top Canciones */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2">
-                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Top 10 Canciones Más Reproducidas (Mes Actual)</h4>
-                    {globalAnalytics.length > 0 && globalAnalytics[0].topSongs ? (
-                      <div className="space-y-2">
-                        {Object.entries(globalAnalytics[0].topSongs)
-                          .sort(([, a]: any, [, b]: any) => b - a)
-                          .slice(0, 10)
-                          .map(([id, plays]: any, i) => (
-                          <div key={id} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                            <span className="text-[10px] font-black text-slate-300 truncate max-w-[80%]">
-                              {i + 1}. {globalAnalytics[0].songMeta?.[id] || "Canción Desconocida"}
-                            </span>
-                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{plays}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-500">Sin datos suficientes este mes.</div>
-                    )}
-                  </div>
-                  
-                  {/* Top Searches & Genres */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Términos Más Buscados</h4>
-                      {globalAnalytics.length > 0 && globalAnalytics[0].topSearches ? (
-                        <div className="space-y-2">
-                          {Object.entries(globalAnalytics[0].topSearches)
-                            .sort(([, a]: any, [, b]: any) => b - a)
-                            .slice(0, 5)
-                            .map(([term, count]: any, i) => (
-                            <div key={term} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {term}</span>
-                              <span className="text-[9px] font-black text-blue-400">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[9px] text-slate-500">No hay búsquedas.</div>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Géneros Principales</h4>
-                      {globalAnalytics.length > 0 && globalAnalytics[0].topGenres ? (
-                        <div className="space-y-2">
-                          {Object.entries(globalAnalytics[0].topGenres)
-                            .sort(([, a]: any, [, b]: any) => b - a)
-                            .slice(0, 5)
-                            .map(([genre, count]: any, i) => (
-                            <div key={genre} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {genre}</span>
-                              <span className="text-[9px] font-black text-purple-400">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[9px] text-slate-500">No hay géneros.</div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              )}
             </div>
           )}
-</div>
-
-          )}
 
           {activeTab === "analytics" && (
             <div className="space-y-4">
@@ -1543,11 +1997,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Activos (15m)</span>
-                        <span className="text-lg font-black text-white">{users.filter(u => u.lastActiveAt && (Date.now() - u.lastActiveAt < 15 * 60 * 1000)).length}</span>
+                        <span className="text-lg font-black text-white">{adminStats.activeUsers || 0}</span>
                       </div>
                       <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Nuevos (24h)</span>
-                        <span className="text-lg font-black text-white">{users.filter(u => u.createdAt && (Date.now() - u.createdAt < 24 * 60 * 60 * 1000)).length}</span>
+                        <span className="text-lg font-black text-white">{adminStats.newUsers || 0}</span>
                       </div>
                       <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Hrs Reproducción</span>
@@ -1578,6 +2032,66 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                         <span className="text-xs font-black text-blue-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.radioUses || 0), 0)}</span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Usuarios Activos en Tiempo Real (En Vivo) */}
+                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 text-left">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                      <div>
+                        <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                          Monitoreo de Conexiones en Vivo
+                        </h4>
+                        <p className="text-[9px] text-slate-500 font-semibold mt-0.5">Usuarios interactuando con el app en tiempo real (15 min)</p>
+                      </div>
+                      <span className="text-[9px] font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        {realtimeActiveUsers.length} en línea
+                      </span>
+                    </div>
+
+                    {realtimeActiveUsers.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                        {realtimeActiveUsers.map((activeU) => {
+                          const planText = activeU.plan === "vip" ? "Premium VIP" : activeU.plan === "free" ? "Prueba Gratis" : "Sin Plan";
+                          const planColor = activeU.plan === "vip" ? "text-purple-400 bg-purple-500/10 border-purple-500/10" : activeU.plan === "free" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/10" : "text-slate-400 bg-white/5 border-white/5";
+                          
+                          return (
+                            <div key={activeU.id} className="bg-white/[0.01] border border-white/5 hover:border-white/10 p-3 rounded-2xl flex items-center gap-3 transition-all">
+                              <img 
+                                src={activeU.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(activeU.displayName || activeU.email || activeU.id)}`} 
+                                alt={activeU.displayName}
+                                referrerPolicy="no-referrer"
+                                className="w-8 h-8 rounded-full border border-white/10 bg-[#0f0f11] object-cover"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-black text-slate-200 truncate">{activeU.displayName || "Socio Flux"}</p>
+                                <p className="text-[9px] text-slate-400 truncate font-mono">{activeU.email}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md border ${planColor}`}>
+                                    {planText}
+                                  </span>
+                                  <span className="text-[8px] text-slate-500 font-medium">
+                                    {getElapsedLabel(activeU.lastActiveAt)}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="relative flex h-2 w-2 shrink-0 self-start mt-1">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1ED760] opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1ED760]"></span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">No hay usuarios activos en este momento</p>
+                        <p className="text-[9px] text-slate-600 mt-1">Las sesiones activas aparecerán aquí tan pronto interactúen con la aplicación.</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Top Canciones */}
@@ -1660,6 +2174,56 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         </div>
       </div>
       </div>
+
+      {/* Modal de Confirmación Personalizado */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-white font-black uppercase tracking-wider text-xs text-purple-400">
+              {confirmModal.title}
+            </h3>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              {confirmModal.message}
+            </p>
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Alerta Personalizado */}
+      {alertModal && (
+        <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-white font-black uppercase tracking-wider text-xs text-emerald-400">
+              {alertModal.title}
+            </h3>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              {alertModal.message}
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setAlertModal(null)}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

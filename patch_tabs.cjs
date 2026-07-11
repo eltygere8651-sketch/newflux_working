@@ -1,27 +1,51 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/components/GymMusicPlayer.tsx', 'utf8');
+let file = fs.readFileSync('src/components/UserManagementAdmin.tsx', 'utf8');
 
-// The gradient class that causes readability issues
-const gradientTextClass = 'font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm';
-const solidTextClass = 'font-black tracking-widest text-white drop-shadow-md uppercase';
+const targetTabs = `<button
+            onClick={() => setActiveTab("users")}
+            className={\`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none \${
+              activeTab === "users"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }\`}
+          >
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Usuarios <span className="hidden sm:inline">y Solicitudes</span></span>
+            {requests.filter(r => r.status === "pending").length > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                {requests.filter(r => r.status === "pending").length}
+              </span>
+            )}
+          </button>`;
 
-// Replace all occurrences
-code = code.split(gradientTextClass).join(solidTextClass);
+const newTabs = `<button
+            onClick={() => setActiveTab("requests")}
+            className={\`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none \${
+              activeTab === "requests"
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }\`}
+          >
+            <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Solicitudes</span>
+            {requests.filter(r => r.status === "pending").length > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                {requests.filter(r => r.status === "pending").length}
+              </span>
+            )}
+          </button>
+          
+          <button
+            onClick={() => setActiveTab("subscriptions")}
+            className={\`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none \${
+              activeTab === "subscriptions"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }\`}
+          >
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Suscripciones</span>
+          </button>`;
 
-// Find Karaoke button and update it
-const karaokeTarget = `<span className="flex items-center gap-1.5">
-            <span className="font-black tracking-widest text-white drop-shadow-md uppercase">Flux Karaoke</span>
-            <Mic className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-          </span>`;
-
-const karaokeReplacement = `<span className="flex items-center gap-2">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-80"></div>
-              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)]" />
-            </div>
-            <span className="font-black tracking-widest text-white drop-shadow-md uppercase">Karaoke</span>
-          </span>`;
-
-code = code.replace(karaokeTarget, karaokeReplacement);
-
-fs.writeFileSync('src/components/GymMusicPlayer.tsx', code);
+file = file.replace(targetTabs, newTabs);
+fs.writeFileSync('src/components/UserManagementAdmin.tsx', file);
