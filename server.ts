@@ -1236,6 +1236,38 @@ app.get("/api/youtube/upnext", async (req, res) => {
   }
 });
 
+app.get("/api/youtube/cast-stream", async (req, res) => {
+  const videoId = req.query.id as string;
+  if (!videoId) return res.status(400).json({ error: "Missing video ID" });
+
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const pRes = await fetch(`${instance}/streams/${videoId}`);
+      if (pRes.ok) {
+        const pData = (await pRes.json()) as any;
+        if (pData.audioStreams && pData.audioStreams.length > 0) {
+          const preferredStream = pData.audioStreams.find((s: any) => 
+            s.mimeType?.includes("audio/mp4") || s.mimeType?.includes("audio/m4a") || s.mimeType?.includes("audio/mpeg")
+          ) || pData.audioStreams[0];
+          
+          if (preferredStream && preferredStream.url) {
+            return res.json({ 
+              url: preferredStream.url,
+              mimeType: preferredStream.mimeType || "audio/mp4",
+              title: pData.title,
+              artist: pData.uploader,
+              thumbnail: pData.thumbnailUrl
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Try next instance
+    }
+  }
+  res.status(404).json({ error: "Could not find audio stream for this track" });
+});
+
 app.get("/api/youtube/video-info", async (req, res) => {
   const videoId = req.query.id as string;
   if (!videoId) return res.status(400).json({ error: "Missing video ID" });

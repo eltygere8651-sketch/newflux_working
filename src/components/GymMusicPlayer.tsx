@@ -65,7 +65,7 @@ import { Play,
   Tv,
   GripVertical,
   Globe,
-Mic, Bot } from "lucide-react";
+Mic, Bot, Cast } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { selectNextDJTrack, isReasonableTrack } from "../lib/djLogic";
@@ -1947,6 +1947,196 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     localStorage.setItem("gym_music_is_repeat", isRepeat.toString());
   }, [isRepeat]);
 
+  // Google Cast State & Logic
+  const [isCasting, setIsCasting] = useState(false);
+  const [castDeviceName, setCastDeviceName] = useState<string | null>(null);
+  const isCastingRef = useRef(isCasting);
+  useEffect(() => {
+    isCastingRef.current = isCasting;
+  }, [isCasting]);
+
+  const castSessionRef = useRef<any>(null);
+
+  const loadCastSDK = () => {
+    if ((window as any).chrome && (window as any).cast) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const existingScript = document.getElementById("google-cast-sdk");
+      if (existingScript) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = "google-cast-sdk";
+      script.src = "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
+      script.async = true;
+      
+      (window as any).__onGCastApiAvailable = (isAvailable: boolean) => {
+        if (isAvailable) {
+          resolve();
+        } else {
+          reject(new Error("Cast API not available"));
+        }
+      };
+
+      script.onerror = () => {
+        reject(new Error("Failed to load Cast SDK"));
+      };
+
+      document.head.appendChild(script);
+    });
+  };
+
+  const initCastFramework = () => {
+    try {
+      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      castContext.setOptions({
+        receiverApplicationId: (window as any).chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: (window as any).chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+      });
+
+      // Listen for session state changes
+      castContext.addEventListener(
+        (window as any).cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+        (event: any) => {
+          const SessionState = (window as any).cast.framework.SessionState;
+          switch (event.sessionState) {
+            case SessionState.SESSION_STARTING:
+              break;
+            case SessionState.SESSION_STARTED: {
+              const session = castContext.getCurrentSession();
+              castSessionRef.current = session;
+              setCastDeviceName(session?.getCastDevice()?.friendlyName || "Google Cast");
+              setIsCasting(true);
+              showNotification(`Conectado a ${session?.getCastDevice()?.friendlyName || "Google Cast"}`);
+              
+              // Load current track immediately on connect
+              const track = overrideCurrentTrackRef.current || 
+                (playingPlaylistRef.current?.tracks[currentTrackIndexRef.current] || ALL_DATABASE_TRACKS[currentTrackIndexRef.current]);
+              if (track) {
+                castTrack(track);
+              }
+              break;
+            }
+            case SessionState.SESSION_ENDED:
+              castSessionRef.current = null;
+              setCastDeviceName(null);
+              setIsCasting(false);
+              showNotification("Transmisión finalizada");
+              break;
+            case SessionState.SESSION_RESUMED: {
+              const session = castContext.getCurrentSession();
+              castSessionRef.current = session;
+              setCastDeviceName(session?.getCastDevice()?.friendlyName || "Google Cast");
+              setIsCasting(true);
+              break;
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.error("Error initializing Cast framework:", err);
+    }
+  };
+
+  const handleCastClick = async () => {
+    // Detect if running inside an iframe
+    const isIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (isIframe) {
+      showNotification("⚠️ Chromecast no funciona dentro de un iframe. Abre la app en una pestaña nueva para usarlo.");
+      return;
+    }
+
+    try {
+      await loadCastSDK();
+      initCastFramework();
+      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      await castContext.requestSession();
+    } catch (err: any) {
+      console.error("Google Cast Error:", err);
+      const errMsg = err && typeof err === "string" ? err : (err?.message || "");
+      if (errMsg.includes("session_error") || err === "session_error") {
+        showNotification("Chromecast: Error de conexión o no se detectaron dispositivos en tu red local.");
+      } else {
+        showNotification("No se pudieron encontrar dispositivos Chromecast.");
+      }
+    }
+  };
+
+  const castTrack = async (track: any) => {
+    if (!track || typeof window === "undefined" || !(window as any).cast) return;
+    try {
+      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      const castSession = castContext.getCurrentSession();
+      if (!castSession) return;
+
+      let mediaUrl = "";
+      let mimeType = "audio/mp4";
+
+      if (track.url && !track.url.includes("youtube.com") && !track.url.includes("youtu.be")) {
+        mediaUrl = track.url;
+      } else {
+        const trackId = track.id?.replace("yt_temp_", "");
+        const res = await fetch(`/api/youtube/cast-stream?id=${trackId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.url) {
+            mediaUrl = data.url;
+            mimeType = data.mimeType || "audio/mp4";
+          }
+        }
+      }
+
+      if (mediaUrl) {
+        const chrome = (window as any).chrome;
+        const mediaInfo = new chrome.cast.media.MediaInfo(mediaUrl, mimeType);
+        mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+        mediaInfo.metadata.metadataType = chrome.cast.media.MetadataType.MUSIC_TRACK;
+        mediaInfo.metadata.title = track.title || "Flux Music";
+        mediaInfo.metadata.artist = track.artist || "Flux DJ";
+        mediaInfo.metadata.images = [{ url: track.thumbnail_url || track.thumbnail || "https://fluxmusic.app/logo.png" }];
+
+        const request = new chrome.cast.media.LoadRequest(mediaInfo);
+        castSession.loadMedia(request).then(
+          () => {
+            console.log("Cast media load OK");
+            // Seek to current play position
+            const currentSeconds = positionRef.current / 1000;
+            if (currentSeconds > 2) {
+              const seekRequest = new chrome.cast.media.SeekRequest();
+              seekRequest.currentTime = currentSeconds;
+              castSession.getMediaSession()?.seek(seekRequest, () => {}, () => {});
+            }
+          },
+          (err: any) => {
+            console.error("Cast load media failed:", err);
+          }
+        );
+      }
+    } catch (err) {
+      console.error("Cast track error:", err);
+    }
+  };
+
+  const castSeek = (seconds: number) => {
+    if (typeof window === "undefined" || !(window as any).cast) return;
+    try {
+      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      const castSession = castContext.getCurrentSession();
+      const mediaSession = castSession?.getMediaSession();
+      if (mediaSession) {
+        const chrome = (window as any).chrome;
+        const seekRequest = new chrome.cast.media.SeekRequest();
+        seekRequest.currentTime = seconds;
+        mediaSession.seek(seekRequest, () => {}, () => {});
+      }
+    } catch (err) {
+      console.error("Cast seek failed:", err);
+    }
+  };
+
   const youtubePlayerRef = useRef<any>(null);
   const fallbackSilentAudioRef = useRef<HTMLAudioElement>(null);
 
@@ -2310,6 +2500,49 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     displayTracks[0] ||
     ALL_DATABASE_TRACKS[0];
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
+
+  // Sync Cast Track when track changes
+  useEffect(() => {
+    if (isCasting && currentTrack) {
+      castTrack(currentTrack);
+    }
+  }, [currentTrack?.id, isCasting]);
+
+  // Sync Cast Play/Pause state
+  useEffect(() => {
+    if (isCasting && typeof window !== "undefined" && (window as any).cast) {
+      try {
+        const castContext = (window as any).cast.framework.CastContext.getInstance();
+        const castSession = castContext.getCurrentSession();
+        const mediaSession = castSession?.getMediaSession();
+        if (mediaSession) {
+          const chrome = (window as any).chrome;
+          if (isPlaying) {
+            mediaSession.play(new chrome.cast.media.PlayRequest(), () => {}, () => {});
+          } else {
+            mediaSession.pause(new chrome.cast.media.PauseRequest(), () => {}, () => {});
+          }
+        }
+      } catch (err) {
+        console.error("Cast play/pause sync error:", err);
+      }
+    }
+  }, [isPlaying, isCasting]);
+
+  // Sync Cast Volume
+  useEffect(() => {
+    if (isCasting && typeof window !== "undefined" && (window as any).cast) {
+      try {
+        const castContext = (window as any).cast.framework.CastContext.getInstance();
+        const castSession = castContext.getCurrentSession();
+        if (castSession) {
+          castSession.setVolume(volume / 100);
+        }
+      } catch (err) {
+        console.error("Cast volume sync error:", err);
+      }
+    }
+  }, [volume, isCasting]);
 
   const lastTrackIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -4749,6 +4982,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     if (youtubePlayerRef.current) {
       youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
     }
+    if (isCasting) {
+      castSeek(newPos / 1000);
+    }
   };
 
   const handleTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -4763,6 +4999,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         setPosition(newPos);
         if (youtubePlayerRef.current) {
           youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
+        }
+        if (isCasting) {
+          castSeek(newPos / 1000);
         }
       }
     };
@@ -5179,7 +5418,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             ref={youtubePlayerRef}
             url={currentUrl}
             playing={isPlaying}
-            volume={isDucking ? (volume / 100) * 0.15 : (volume / 100)}
+            volume={isCasting ? 0 : (isDucking ? (volume / 100) * 0.15 : (volume / 100))}
             progressInterval={1000}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
@@ -6342,6 +6581,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
                     {/* Right: Actions + Volume */}
                     <div className="flex justify-end items-center gap-4 min-w-[200px] w-1/4">
+                      {/* Google Cast Button */}
+                      <button
+                        onClick={handleCastClick}
+                        className={`p-1.5 transition-colors outline-none cursor-pointer rounded-full ${
+                          isCasting ? "text-emerald-400 bg-emerald-500/10 animate-pulse" : "text-[#b3b3b3] hover:text-white"
+                        }`}
+                        title={isCasting ? `Transmitiendo a ${castDeviceName || "Chromecast"}` : "Transmitir a Chromecast"}
+                      >
+                        <Cast className="w-4.5 h-4.5" />
+                      </button>
+
                       <button
                         onClick={() =>
                           setIsTrackListExpanded(!isTrackListExpanded)
@@ -6710,6 +6960,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                             className={`p-1 sm:p-2 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
                           >
                             <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </button>
+
+                          {/* Google Cast Button */}
+                          <button
+                            onClick={handleCastClick}
+                            className={`p-1 sm:p-2 transition-all transform active:scale-95 ${
+                              isCasting ? "text-emerald-400 animate-pulse" : "text-slate-500 hover:text-white"
+                            }`}
+                            title={isCasting ? `Transmitiendo a ${castDeviceName || "Chromecast"}` : "Transmitir a Chromecast"}
+                          >
+                            <Cast className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
 
