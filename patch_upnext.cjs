@@ -1,58 +1,90 @@
 const fs = require('fs');
-let code = fs.readFileSync('server.ts', 'utf8');
 
-const routeCode = `
-app.get("/api/youtube/upnext", async (req, res) => {
-  const videoId = req.query.id as string;
-  if (!videoId) return res.status(400).json({ error: "Missing videoId" });
+let code = fs.readFileSync('src/components/GymMusicPlayer.tsx', 'utf8');
 
-  if (!yt) {
-    try {
-      yt = await Innertube.create({ generate_session_locally: true });
-    } catch (e) {
-      return res.status(503).json({ error: "YouTube service unavailable" });
-    }
-  }
+// Fix in the search click handler:
+const searchClickFind = `                                    fetch(\`/api/youtube/upnext?id=\${ytTrack.id}\`)
+                                      .then(r => r.json())
+                                      .then(data => {
+                                        if (data && data.length > 0) {
+                                          const radioQueue = data.filter((t: any) => t.id !== \`yt_temp_\${ytTrack.id}\`);
+                                          setTrackQueue(radioQueue);
+                                          trackQueueRef.current = radioQueue;
+                                          showNotification(\`\${radioQueue.length} canciones relacionadas añadidas a la cola\`);
+                                        }`;
 
-  try {
-    const upNext = await yt.music.getUpNext(videoId);
-    if (!upNext || !upNext.contents) {
-      return res.json([]);
-    }
-    
-    const items = upNext.contents.filter((c: any) => c.video_id).map((c: any) => {
-       let durationStr = c.duration?.text || "";
-       if (!durationStr && c.duration?.seconds) {
-          const min = Math.floor(c.duration.seconds / 60);
-          const sec = c.duration.seconds % 60;
-          durationStr = \`\${min}:\${sec.toString().padStart(2, '0')}\`;
-       }
-       
-       let thumbnail = "";
-       if (c.thumbnail && c.thumbnail.length > 0) {
-          thumbnail = c.thumbnail[c.thumbnail.length - 1].url;
-       }
+const searchClickReplace = `                                    fetch(\`/api/youtube/upnext?id=\${ytTrack.id}\`)
+                                      .then(r => r.json())
+                                      .then(data => {
+                                        if (data && data.length > 0) {
+                                          const radioQueue = data
+                                            .filter((t: any) => t.id !== ytTrack.id)
+                                            .map((t: any) => ({ ...t, id: \`yt_temp_\${t.id}\` }));
+                                          setTrackQueue(radioQueue);
+                                          trackQueueRef.current = radioQueue;
+                                          showNotification(\`\${radioQueue.length} canciones similares añadidas a la cola\`);
+                                        }`;
 
-       return {
-          id: 'yt_temp_' + c.video_id,
-          title: c.title?.text || "",
-          artist: c.author || c.artists?.map((a: any) => a.name).join(", ") || "",
-          duration: durationStr,
-          thumbnail: thumbnail,
-          url: \`https://www.youtube.com/watch?v=\${c.video_id}\`,
-          isPlaylist: false,
-          subType: "cancion",
-          bpm: 120
-       };
-    });
+code = code.replace(searchClickFind, searchClickReplace);
 
-    res.json(items);
-  } catch (error) {
-    console.error("UpNext error:", error);
-    res.status(500).json({ error: "Failed to fetch up next" });
-  }
-});
-`;
+// Fix in the grid click handler:
+const gridClickFind = `                                        fetch(\`/api/youtube/upnext?id=\${item.id}\`)
+                                          .then(r => r.json())
+                                          .then(data => {
+                                            if (data && data.length > 0) {
+                                              const radioQueue = data.filter((t: any) => t.id !== tempTrack.id);
+                                              setTrackQueue(radioQueue);
+                                              trackQueueRef.current = radioQueue;
+                                              showNotification(\`\${radioQueue.length} canciones relacionadas añadidas a la cola\`);
+                                            }
+                                          }).catch(() => {});`;
 
-code = code.replace('app.get("/api/youtube/video-info"', routeCode + '\napp.get("/api/youtube/video-info"');
-fs.writeFileSync('server.ts', code);
+const gridClickReplace = `                                        fetch(\`/api/youtube/upnext?id=\${item.id}\`)
+                                          .then(r => r.json())
+                                          .then(data => {
+                                            if (data && data.length > 0) {
+                                              const radioQueue = data
+                                                .filter((t: any) => t.id !== item.id)
+                                                .map((t: any) => ({ ...t, id: \`yt_temp_\${t.id}\` }));
+                                              setTrackQueue(radioQueue);
+                                              trackQueueRef.current = radioQueue;
+                                              showNotification(\`\${radioQueue.length} canciones relacionadas añadidas a la cola\`);
+                                            }
+                                          }).catch(() => {});`;
+
+code = code.replace(gridClickFind, gridClickReplace);
+
+// Fix in handleNext infinite radio logic:
+const nextRadioFind = `      // Infinite radio logic: if queue is empty and we are playing a youtube track, fetch more related tracks
+      if (newQueue.length === 0 && nextTrackTarget.id.startsWith('yt_temp_')) {
+          const ytId = nextTrackTarget.id.replace('yt_temp_', '');
+          fetch(\`/api/youtube/upnext?id=\${ytId}\`)
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.length > 0) {
+                const radioQueue = data.filter((t: any) => t.id !== nextTrackTarget.id);
+                setTrackQueue(radioQueue);
+                trackQueueRef.current = radioQueue;
+              }
+            }).catch(() => {});
+      }`;
+
+const nextRadioReplace = `      // Infinite radio logic: if queue is empty and we are playing a youtube track, fetch more related tracks
+      if (newQueue.length === 0 && nextTrackTarget.id.startsWith('yt_temp_')) {
+          const ytId = nextTrackTarget.id.replace('yt_temp_', '');
+          fetch(\`/api/youtube/upnext?id=\${ytId}\`)
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.length > 0) {
+                const radioQueue = data
+                  .filter((t: any) => t.id !== ytId)
+                  .map((t: any) => ({ ...t, id: \`yt_temp_\${t.id}\` }));
+                setTrackQueue(radioQueue);
+                trackQueueRef.current = radioQueue;
+              }
+            }).catch(() => {});
+      }`;
+
+code = code.replace(nextRadioFind, nextRadioReplace);
+
+fs.writeFileSync('src/components/GymMusicPlayer.tsx', code);

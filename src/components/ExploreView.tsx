@@ -466,7 +466,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     };
 
     return (
-      <div className="space-y-4 pb-32 px-0 sm:px-2">
+      <div className="space-y-6 pb-6 px-0">
         {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
         <div className="px-3 flex items-center justify-between">
           {setSelectedCountry && selectedCountry && (
@@ -986,11 +986,11 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                           }}
                         />
                         <div className="absolute inset-0 bg-black/10 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                          <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
                             {isActive && isPlaying ? (
-                              <Pause className="w-2 h-2 text-black fill-black" />
+                              <Pause className="w-5 h-5 text-black fill-black" />
                             ) : (
-                              <Play className="w-2 h-2 text-black fill-black ml-0.5" />
+                              <Play className="w-5 h-5 text-black fill-black ml-0.5" />
                             )}
                           </div>
                         </div>

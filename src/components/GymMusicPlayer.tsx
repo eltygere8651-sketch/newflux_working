@@ -617,35 +617,6 @@ const getPlaylistPopularity = (pl: MusicPlaylist) => {
   return { rating: ratingVal, score: scoreVal };
 };
 
-const getPlaylistPlays = (pl: MusicPlaylist) => {
-  const idStr = pl.id || pl.name || "flux";
-  let hash = 0;
-  for (let i = 0; i < idStr.length; i++) {
-    hash = (hash << 5) - hash + idStr.charCodeAt(i);
-    hash |= 0;
-  }
-  const absHash = Math.abs(hash);
-  const trackFactor = pl.tracks ? pl.tracks.length * 153 : 240;
-  const basePlays = (absHash % 2500) + 1240 + trackFactor;
-
-  let extraPlays = 0;
-  try {
-    const storedPlays = localStorage.getItem("flux_playlist_playbacks");
-    if (storedPlays) {
-      const playsMap = JSON.parse(storedPlays);
-      extraPlays = playsMap[pl.id] || 0;
-    }
-  } catch (e) {
-    console.warn(e);
-  }
-
-  const finalPlays = basePlays + extraPlays * 45;
-  if (finalPlays > 1000) {
-    return `${(finalPlays / 1000).toFixed(1)}k`;
-  }
-  return String(finalPlays);
-};
-
 const getPlaylistSaves = (
   pl: MusicPlaylist,
   userPlaylists: MusicPlaylist[],
@@ -2538,7 +2509,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             .then(r => r.json())
             .then(data => {
               if (data && data.length > 0) {
-                const radioQueue = data.filter((t: any) => t.id !== nextTrackTarget.id);
+                const targetIdWithPrefix = `yt_temp_${ytId}`;
+                const radioQueue = data
+                  .filter((t: any) => t.id !== ytId && t.id !== targetIdWithPrefix)
+                  .map((t: any) => ({
+                    ...t,
+                    id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
+                  }));
                 setTrackQueue(radioQueue);
                 trackQueueRef.current = radioQueue;
               }
@@ -3087,7 +3064,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       }
       try {
         const { getDocs, collection, query, orderBy } = await import("firebase/firestore");
-        const data = await fetchWithCache(`gym_music_user_cache_${user.uid}`, 0, async () => {
+        const data = await fetchWithCache(`gym_music_user_cache_${user.uid}`, 30000, async () => {
           const qUser = query(
             collection(db, "users", user.uid, "playlists"),
             orderBy("createdAt", "desc"),
@@ -4726,34 +4703,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     setMobileView("player");
   };
 
-  const incrementPlaylistPlays = async (playlist: MusicPlaylist) => {
-    try {
-      if (!playlist.id || !(playlist as any).ref?.path) return;
-      
-      // Do not increment own playlists
-      if (user && playlist.ownerId === user.uid) return;
-
-      const { doc, increment, updateDoc } = await import("firebase/firestore");
-      const docRef = doc(db, (playlist as any).ref.path);
-      await updateDoc(docRef, { plays: increment(1) });
-    } catch(e) {
-      console.warn("Could not increment plays", e);
-    }
-  };
-
   const playPreviewTrack = (playlist: MusicPlaylist, trackIdx: number) => {
     expectedPlayingRef.current = true;
     setOverrideCurrentTrack(null);
+    setTrackQueue([]);
+    trackQueueRef.current = [];
     setShowLibrary(false);
     setIsSidebarExpanded(false);
 
     const isSamePlaylist = playingPlaylist?.id === playlist.id;
     setPlayingPlaylist(playlist);
     setSelectedPlaylist(playlist);
-    
-    if (!isSamePlaylist) {
-      incrementPlaylistPlays(playlist);
-    }
 
     if (isSamePlaylist) {
       if (currentTrackIndex === trackIdx) {
@@ -5508,13 +5468,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       </div>
 
       {/* GLOBAL TABS / PILLS HEADER */}
-      <Carousel className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+      <Carousel className="px-3 py-2 gap-1.5 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+        {/* Explorar - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
             setSearchQuery("");
             setYoutubeResults([]);
             setPreviewPlaylist(null);
-    setTrackListTab("search");
+            setTrackListTab("search");
             setIsTrackListExpanded(true);
             setShowLibrary(false);
             setIsSidebarExpanded(false);
@@ -5522,19 +5483,39 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setMobileView("player");
             }
           }}
-          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
+          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
             searchQuery === "" &&
             trackListTab === "search" &&
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Explorar</span>
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Explorar</span>
           {hasNewExplore && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
         </button>
+
+        {/* Comunidad (Moved here from hidden, replacing Flux position) */}
+        <button
+          onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            setShowLibrary(true);
+            setIsSidebarExpanded(false);
+          }}
+          className={`relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
+            showLibrary && !isSidebarExpanded
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+          }`}
+        >
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Comunidad</span>
+        </button>
+
+        {/* FLUX - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
             setSearchQuery("");
@@ -5549,17 +5530,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setMobileView("player");
             }
           }}
-          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
             trackListTab === "radio-fai" &&
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
           <span className="flex items-center gap-1.5">
-            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">FLUX</span>
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">FLUX</span>
             <Radio className="w-3.5 h-3.5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)] animate-pulse" />
           </span>
           {Date.now() < new Date("2026-07-06T17:16:26Z").getTime() && (
@@ -5568,6 +5549,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             </span>
           )}
         </button>
+
+        {/* Karaoke - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
             setSearchQuery("");
@@ -5582,20 +5565,25 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setMobileView("player");
             }
           }}
-          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
             trackListTab === "karaoke" &&
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
-          <span className="flex items-center gap-1.5">
-            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Flux Karaoke</span>
-            <Mic className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          <span className="flex items-center gap-2">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
+              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
+            </div>
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
           </span>
         </button>
+
+        {/* Podcasts */}
         <button
           onClick={() => {
             setSearchQuery("");
@@ -5609,121 +5597,53 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setMobileView("player");
             }
           }}
-          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+          className={`relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
             trackListTab === "entertainment" &&
             !showLibrary &&
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Podcasts</span>
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
         </button>
+
+        {/* Soporte */}
         <button
           onClick={() => {
-            if (window.innerWidth < 768) {
-              setShowLibrary(false);
-              if (mobileView === "playlists") {
-                setMobileView("player");
-              } else {
-                setMobileView("playlists");
-                setIsTrackListExpanded(true);
-              }
-            } else {
-              setShowLibrary(false);
-              setIsSidebarExpanded(!isSidebarExpanded);
-            }
+            window.dispatchEvent(new Event("open-support"));
           }}
-          className={`hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start items-center gap-1.5 ${
-            isSidebarExpanded ||
-            (window.innerWidth < 768 &&
-              mobileView === "playlists" &&
-              !showLibrary)
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
-          }`}
+          className="relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
         >
-          <Library className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Mi Biblioteca</span>
+          <span className="flex items-center gap-1.5 font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">
+            Soporte
+            <MessageSquare className="w-3.5 h-3.5 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+            {unreadRepliesCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-bounce">
+                {unreadRepliesCount}
+              </span>
+            )}
+          </span>
         </button>
+
+        {/* Mi Biblioteca - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
-            if (showLibrary) {
-              setShowLibrary(false);
-            } else {
-              setShowLibrary(true);
-              setPreviewPlaylist(null);
-              setIsSidebarExpanded(false);
-              if (window.innerWidth < 768) {
-                setMobileView("player");
-              }
-            }
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            setIsSidebarExpanded(true);
+            setShowLibrary(false);
           }}
-          className={`relative hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
-            showLibrary
-              ? "bg-blue-600 text-white border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
+            isSidebarExpanded && !showLibrary
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">Comunidad</span>
-          {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Mi Biblioteca</span>
         </button>
-        {[
-          {
-            label: "Energía",
-            query: "Energía Mix Oficial YouTube Music Playlist",
-          },
-          {
-            label: "Relax",
-            query: "Relax Chill Mix Oficial YouTube Music Playlist",
-          },
-          {
-            label: "Éxitos",
-            query: "Exitos Mix Oficial YouTube Music Playlist",
-          },
-          {
-            label: "Fiesta",
-            query: "Fiesta Reggaeton Mix Oficial YouTube Music Playlist",
-          },
-          {
-            label: "Concentración",
-            query: "Concentración Focus Mix Oficial YouTube Music Playlist",
-          },
-        ].map((pill, idx) => (
-          <button
-            key={idx}
-            onClick={() => {
-              setShowLibrary(false);
-              setIsSidebarExpanded(false);
-              setSelectedPlaylist(null);
-              if (searchQuery === pill.label) {
-                setSearchQuery("");
-                setYoutubeResults([]);
-                setPreviewPlaylist(null);
-    setTrackListTab("search");
-              } else {
-                setSearchQuery(pill.label);
-                setPreviewPlaylist(null);
-    setTrackListTab("search");
-                setIsSearchingYT(true);
-                fetch(`/api/youtube/search?q=${encodeURIComponent(pill.query)}`)
-                  .then((res) => res.json())
-                  .then((data) => setYoutubeResults(data))
-                  .catch(console.error)
-                  .finally(() => setIsSearchingYT(false));
-              }
-              setIsTrackListExpanded(true);
-            }}
-            className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
-              searchQuery === pill.label && trackListTab === "search"
-                ? "bg-white text-black border-white shadow-md"
-                : "bg-white/5 border-white/10 text-white hover:bg-white/10"
-            }`}
-          >
-            {pill.label}
-          </button>
-        ))}
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
@@ -6970,7 +6890,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 </div>
               )}
 
-              <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
+              <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0b] relative overflow-hidden">
+                {/* Unified ambient background glow matching FAIView (FLUX) tab */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-gradient-to-b from-fuchsia-600/10 via-cyan-600/5 to-transparent blur-[120px] rounded-full pointer-events-none z-0" />
                 <div
                   className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
                 >
@@ -7199,7 +7121,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 </div>
                                 <button className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center shadow-lg transition-transform hover:scale-110" onClick={(e) => {
                                   e.stopPropagation();
-                                  loadPlaylistAndPlay({
+                                  handleLoadExplorePlaylist({
                                     id: ytTrack.radioId,
                                     title: `Radio de ${ytTrack.title}`,
                                     isPlaylist: true,
@@ -7293,10 +7215,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       .then(r => r.json())
                                       .then(data => {
                                         if (data && data.length > 0) {
-                                          const radioQueue = data.filter((t: any) => t.id !== `yt_temp_${ytTrack.id}`);
+                                          const targetIdWithPrefix = `yt_temp_${ytTrack.id}`;
+                                          const radioQueue = data
+                                            .filter((t: any) => t.id !== ytTrack.id && t.id !== targetIdWithPrefix)
+                                            .map((t: any) => ({
+                                              ...t,
+                                              id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
+                                            }));
                                           setTrackQueue(radioQueue);
                                           trackQueueRef.current = radioQueue;
-                                          showNotification(`${radioQueue.length} canciones relacionadas añadidas a la cola`);
+                                          showNotification(`${radioQueue.length} canciones similares añadidas a la cola`);
                                         } else {
                                           const allTracksOnly = youtubeResults
                                             .filter((t) => !t.isPlaylist)
@@ -7739,7 +7667,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 {section.items.map((item: any, iIdx: number) => (
                                   <div key={iIdx} className="shrink-0 w-[140px] snap-start group/item cursor-pointer" onClick={() => {
                                       if (item.isPlaylist) {
-                                        loadPlaylistAndPlay(item);
+                                        handleLoadExplorePlaylist(item);
                                       } else {
                                         const tempTrack = {
                                           id: 'yt_temp_' + item.id,
@@ -7760,7 +7688,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                           .then(r => r.json())
                                           .then(data => {
                                             if (data && data.length > 0) {
-                                              const radioQueue = data.filter((t: any) => t.id !== tempTrack.id);
+                                              const targetIdWithPrefix = `yt_temp_${item.id}`;
+                                              const radioQueue = data
+                                                .filter((t: any) => t.id !== item.id && t.id !== targetIdWithPrefix)
+                                                .map((t: any) => ({
+                                                  ...t,
+                                                  id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
+                                                }));
                                               setTrackQueue(radioQueue);
                                               trackQueueRef.current = radioQueue;
                                               showNotification(`${radioQueue.length} canciones relacionadas añadidas a la cola`);
@@ -7974,6 +7908,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                             }}
                             onClick={() => {
                               setOverrideCurrentTrack(null);
+                              setTrackQueue([]);
+                              trackQueueRef.current = [];
                               if (isActive) {
                                 expectedPlayingRef.current = !isPlaying;
                                 setIsPlaying(!isPlaying);
@@ -8359,138 +8295,157 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden flex h-[58px] bg-[#0c0c0d]/95  border-t border-white/5 shrink-0 justify-around items-center px-1 pb-1 pt-1 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+      <div className="md:hidden flex h-[62px] bg-[#0c0c0d]/95 border-t border-white/5 shrink-0 justify-around items-center px-2 pb-1.5 pt-1.5 gap-1.5 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
         
         {/* Explorar */}
-        <button
-          onClick={() => {
-            setSelectedPlaylist(null);
-            setTrackListTab("search");
-            setIsTrackListExpanded(true);
-            setMobileView("player");
-            setShowLibrary(false);
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          className={`relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
-            mobileView === "player" &&
-            trackListTab === "search" &&
-            !selectedPlaylist &&
-            !showLibrary
-              ? "text-blue-400 font-bold"
-              : "text-slate-500 hover:text-blue-400"
-          }`}
-        >
-          <div className="relative">
-            <Compass className="w-5 h-5" />
-            {hasNewExplore && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
-          </div>
-          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
-            Explorar
-          </span>
-        </button>
+        {(() => {
+          const isExploreActive = mobileView === "player" && trackListTab === "search" && !selectedPlaylist && !showLibrary;
+          return (
+            <button
+              onClick={() => {
+                setSelectedPlaylist(null);
+                setTrackListTab("search");
+                setIsTrackListExpanded(true);
+                setMobileView("player");
+                setShowLibrary(false);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                isExploreActive
+                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                  : "bg-transparent hover:bg-white/5"
+              }`}
+            >
+              <div className="relative">
+                <Compass className={`w-4 h-4 transition-transform ${isExploreActive ? "scale-110" : ""} text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]`} />
+                {hasNewExplore && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                Explorar
+              </span>
+            </button>
+          );
+        })()}
 
-        
-
-
-        {/* Comunidad (Second Position) */}
-        <button
-          onClick={() => {
-            setIsSidebarExpanded(false);
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            if (showLibrary) {
-              setShowLibrary(false);
-            } else {
-              setShowLibrary(true);
-              setPreviewPlaylist(null);
-            }
-          }}
-          className={`relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
-            showLibrary
-              ? "text-blue-400 font-bold"
-              : "text-slate-500 hover:text-blue-400"
-          }`}
-        >
-          <div className="relative">
-            <Users className="w-5 h-5" />
-            {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
-          </div>
-          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
-            Comunidad
-          </span>
-        </button>
+        {/* FLUX */}
+        {(() => {
+          const isFluxActive = trackListTab === "radio-fai" && !showLibrary && mobileView === "player";
+          return (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setYoutubeResults([]);
+                setPreviewPlaylist(null);
+                setTrackListTab("radio-fai");
+                setIsTrackListExpanded(true);
+                setShowLibrary(false);
+                setMobileView("player");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                isFluxActive
+                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                  : "bg-transparent hover:bg-white/5"
+              }`}
+            >
+              <div className="relative">
+                <Radio className={`w-4 h-4 transition-transform ${isFluxActive ? "scale-110" : ""} text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)]`} />
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                FLUX
+              </span>
+            </button>
+          );
+        })()}
 
         {/* Mi Biblioteca */}
-        <button
-          onClick={() => {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            setShowLibrary(false);
-            if (mobileView === "playlists") {
-              setMobileView("player");
-            } else {
-              setMobileView("playlists");
-              setIsTrackListExpanded(true);
-            }
-          }}
-          className={`flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
-            mobileView === "playlists" && !showLibrary
-              ? "text-white font-bold"
-              : "text-slate-500 hover:text-white"
-          }`}
-        >
-          <Library className="w-5 h-5" />
-          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
-            Biblioteca
-          </span>
-        </button>
+        {(() => {
+          const isLibraryActive = mobileView === "playlists" && !showLibrary;
+          return (
+            <button
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                setShowLibrary(false);
+                if (mobileView === "playlists") {
+                  setMobileView("player");
+                } else {
+                  setMobileView("playlists");
+                  setIsTrackListExpanded(true);
+                }
+              }}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                isLibraryActive
+                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                  : "bg-transparent hover:bg-white/5"
+              }`}
+            >
+              <Library className={`w-4 h-4 transition-transform ${isLibraryActive ? "scale-110" : ""} text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]`} />
+              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                Biblioteca
+              </span>
+            </button>
+          );
+        })()}
 
-        
-        
+        {/* Karaoke */}
+        {(() => {
+          const isKaraokeActive = trackListTab === "karaoke" && !showLibrary && mobileView === "player";
+          return (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setYoutubeResults([]);
+                setPreviewPlaylist(null);
+                setTrackListTab("karaoke");
+                setIsTrackListExpanded(true);
+                setShowLibrary(false);
+                setMobileView("player");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                isKaraokeActive
+                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                  : "bg-transparent hover:bg-white/5"
+              }`}
+            >
+              <div className="relative">
+                <Mic className={`w-4 h-4 transition-transform ${isKaraokeActive ? "scale-110" : ""} text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]`} />
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                Karaoke
+              </span>
+            </button>
+          );
+        })()}
 
         {/* Reproductor / Activo */}
-        <button
-          onClick={() => {
-            setShowLibrary(false);
-            setMobileView("player");
-            if (currentTrack || isPlaying || overrideCurrentTrack) {
-              setIsTrackListExpanded(false);
-            }
-          }}
-          className={`relative group flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
-            mobileView === "player" &&
-            (currentTrack || isPlaying || overrideCurrentTrack) &&
-            !isTrackListExpanded &&
-            !showLibrary
-              ? "text-blue-400 font-bold"
-              : "text-slate-500 hover:text-blue-400"
-          }`}
-        >
-          {isPlaying &&
-            (mobileView !== "player" || isTrackListExpanded || showLibrary) && (
-              <div className="absolute top-0.5 right-1 w-2 h-2 bg-emerald-500 rounded-full border border-[#0c0c0d]" />
-            )}
-          <Music className="w-5 h-5 relative z-10" />
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#1ED760]">
-            Activo
-          </span>
-        </button>
-
-        {/* Soporte */}
-        <button
-          onClick={() => {
-            window.dispatchEvent(new Event("open-support"));
-          }}
-          className="relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all text-slate-500 hover:text-blue-400 active:scale-95 cursor-pointer"
-        >
-          <MessageSquare className="w-5 h-5" />
-          <span className="text-[8px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm">
-            Soporte
-          </span>
-          {unreadRepliesCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-bounce">
-              {unreadRepliesCount}
-            </span>
-          )}
-        </button>
+        {(() => {
+          const isActiveTrackActive = mobileView === "player" && (currentTrack || isPlaying || overrideCurrentTrack) && !isTrackListExpanded && !showLibrary;
+          return (
+            <button
+              onClick={() => {
+                setShowLibrary(false);
+                setMobileView("player");
+                if (currentTrack || isPlaying || overrideCurrentTrack) {
+                  setIsTrackListExpanded(false);
+                }
+              }}
+              className={`relative group flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+                isActiveTrackActive
+                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                  : "bg-transparent hover:bg-white/5"
+              }`}
+            >
+              {isPlaying && (mobileView !== "player" || isTrackListExpanded || showLibrary) && (
+                <div className="absolute top-1 right-2 w-2 h-2 bg-emerald-500 rounded-full border border-[#0c0c0d]" />
+              )}
+              <Music className={`w-4 h-4 transition-transform relative z-10 ${isActiveTrackActive ? "scale-110" : ""} text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]`} />
+              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                Activo
+              </span>
+            </button>
+          );
+        })()}
       </div>
 
       {showNicknameModal && (
@@ -8712,9 +8667,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                   >
                                     ★ {getPlaylistPopularity(pl).rating}
                                   </span>
-                                  <span className="text-[8px] text-slate-400 font-bold shrink-0">
-                                    • {getPlaylistPlays(pl)} Escub.
-                                  </span>
                                 </div>
                               )}
                               {previewPlaylist && (
@@ -8890,15 +8842,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 ({getPlaylistPopularity(previewPlaylist).score}
                                 %)
                               </span>
-                            </span>
-                          </div>
-                          {/* Play count */}
-                          <div className="bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5 flex flex-col items-center sm:items-start shrink-0 text-center sm:text-left min-w-[100px] transition-colors duration-300 hover:bg-white/[0.04]">
-                            <span className="text-[7px] xl:text-[7.5px] uppercase tracking-wider text-slate-500 font-bold">
-                              Espectadores
-                            </span>
-                            <span className="text-[10.5px] text-white font-extrabold mt-0.5">
-                              {getPlaylistPlays(previewPlaylist)} reproducciones
                             </span>
                           </div>
                           {/* Saves count */}

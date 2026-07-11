@@ -738,7 +738,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               key={(currentTrack?.title) + "-title"}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 truncate px-4 text-center w-full drop-shadow-md"
+              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-white truncate px-4 text-center w-full drop-shadow-md"
             >
               {currentTrack?.title || "Cargando..."}
             </motion.h2>

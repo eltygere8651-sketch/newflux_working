@@ -1,32 +1,14 @@
 const fs = require('fs');
+
 let code = fs.readFileSync('server.ts', 'utf8');
+const routes = code.split('app.get("/api/youtube/upnext", async (req, res) => {');
 
-const anchor = `    if (playlistResults.status === "fulfilled" && playlistResults.value) {`;
-
-const newCode = `    try {
-      const musicResults = await yt.music.search(query, { type: 'song' }).catch(() => null);
-      if (musicResults && musicResults.contents) {
-        const shelf = musicResults.contents.find((c) => c.type === 'MusicShelf');
-        if (shelf && shelf.contents) {
-          const songs = shelf.contents.slice(0, 5).map((item) => {
-            if (item.type === 'MusicResponsiveListItem') {
-              return {
-                 type: 'Video',
-                 id: item.id,
-                 title: { text: item.title },
-                 author: { name: item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist' },
-                 duration: { text: item.duration?.text || '' },
-                 thumbnails: item.thumbnails
-              };
-            }
-            return item;
-          }).filter(x => x.id);
-          rawItems.unshift(...songs);
-        }
-      }
-    } catch (e) {}
-    
-    if (playlistResults.status === "fulfilled" && playlistResults.value) {`;
-
-code = code.replace(anchor, newCode);
-fs.writeFileSync('server.ts', code);
+if (routes.length === 3) {
+  // We have 2 occurrences, which means split gives 3 parts.
+  // We keep the first part (before the first occurrence), and the last part (the second occurrence and onwards).
+  code = routes[0] + 'app.get("/api/youtube/upnext", async (req, res) => {' + routes[2];
+  fs.writeFileSync('server.ts', code);
+  console.log("Removed duplicated route");
+} else {
+  console.log("Not exactly two occurrences found", routes.length);
+}
