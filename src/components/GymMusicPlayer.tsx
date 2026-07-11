@@ -1956,6 +1956,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   }, [isCasting]);
 
   const castSessionRef = useRef<any>(null);
+  const isCastInitializedRef = useRef(false);
 
   const loadCastSDK = () => {
     if ((window as any).chrome && (window as any).cast) {
@@ -1964,7 +1965,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     return new Promise<void>((resolve, reject) => {
       const existingScript = document.getElementById("google-cast-sdk");
       if (existingScript) {
-        resolve();
+        if ((window as any).chrome && (window as any).cast) {
+          resolve();
+        } else {
+          const oldCallback = (window as any).__onGCastApiAvailable;
+          (window as any).__onGCastApiAvailable = (isAvailable: boolean) => {
+            if (oldCallback) oldCallback(isAvailable);
+            if (isAvailable) resolve();
+            else reject(new Error("Cast API not available"));
+          };
+        }
         return;
       }
 
@@ -1990,8 +2000,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const initCastFramework = () => {
+    if (isCastInitializedRef.current) return;
     try {
-      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      const castContext = (window as any).cast?.framework?.CastContext?.getInstance();
+      if (!castContext) return;
+
       castContext.setOptions({
         receiverApplicationId: (window as any).chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
         autoJoinPolicy: (window as any).chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
@@ -2036,10 +2049,26 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }
         }
       );
+      isCastInitializedRef.current = true;
     } catch (err) {
       console.error("Error initializing Cast framework:", err);
     }
   };
+
+  // Load Cast SDK automatically on app mount so network scanning has time to run
+  useEffect(() => {
+    const isIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (isIframe) return;
+
+    loadCastSDK()
+      .then(() => {
+        initCastFramework();
+        console.log("Google Cast SDK auto-initialized on mount.");
+      })
+      .catch((err) => {
+        console.warn("Could not auto-initialize Cast SDK on mount:", err);
+      });
+  }, []);
 
   const handleCastClick = async () => {
     // Detect if running inside an iframe
@@ -2050,15 +2079,22 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
 
     try {
+      showNotification("Iniciando búsqueda de dispositivos Chromecast...");
       await loadCastSDK();
       initCastFramework();
-      const castContext = (window as any).cast.framework.CastContext.getInstance();
+      
+      const castContext = (window as any).cast?.framework?.CastContext?.getInstance();
+      if (!castContext) {
+        showNotification("Cargando el soporte de Chromecast... Intenta en un momento.");
+        return;
+      }
+      
       await castContext.requestSession();
     } catch (err: any) {
       console.error("Google Cast Error:", err);
       const errMsg = err && typeof err === "string" ? err : (err?.message || "");
       if (errMsg.includes("session_error") || err === "session_error") {
-        showNotification("Chromecast: Error de conexión o no se detectaron dispositivos en tu red local.");
+        showNotification("Chromecast: No se seleccionó ningún dispositivo o no se detectaron en tu Wi-Fi.");
       } else {
         showNotification("No se pudieron encontrar dispositivos Chromecast.");
       }
