@@ -756,6 +756,22 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [isCheckingTrialRequest, setIsCheckingTrialRequest] = useState(false);
   const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
 
+  const [connectCode, setConnectCode] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("flux_connect_active_code");
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleConnectChange = (e: any) => {
+      setConnectCode(e.detail?.code || null);
+    };
+    window.addEventListener("flux-connect-changed", handleConnectChange);
+    return () => window.removeEventListener("flux-connect-changed", handleConnectChange);
+  }, []);
+
   const getBrowserFingerprint = () => {
     let token = localStorage.getItem("flux_device_token");
     if (!token) {
@@ -2332,6 +2348,58 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     ? (currentTrack.url || `https://www.youtube.com/watch?v=${currentTrack.id}`) 
     : "";
   const currentUrl = currentUrlRaw.replace("music.youtube.com", "www.youtube.com");
+
+  // Flux Connect Reactive Synchronization
+  const syncPlayerStateToFirestore = useCallback((updatedFields: Partial<any>) => {
+    const activeCode = localStorage.getItem("flux_connect_active_code") || connectCode;
+    if (!activeCode) return;
+
+    // Dynamic lazy-import of sendControllerStateUpdate to minimize main bundle impact
+    import("../lib/fluxConnect").then(({ sendControllerStateUpdate }) => {
+      sendControllerStateUpdate(activeCode, updatedFields).catch((err) => {
+        console.warn("Flux Connect Sync Error:", err);
+      });
+    });
+  }, [connectCode]);
+
+  // Hook to capture seek position changes cleanly
+  const syncCurrentSeekTime = useCallback((seconds: number) => {
+    syncPlayerStateToFirestore({ currentTime: seconds });
+  }, [syncPlayerStateToFirestore]);
+
+  useEffect(() => {
+    const activeCode = localStorage.getItem("flux_connect_active_code") || connectCode;
+    if (!activeCode) return;
+
+    const trackData = currentTrack ? {
+      id: currentTrack.id || "",
+      title: currentTrack.title || "",
+      artist: currentTrack.artist || "",
+      thumbnail: currentTrack.thumbnail || "",
+      duration: currentTrack.duration || "",
+      url: currentUrl || ""
+    } : null;
+
+    const stateToSync = {
+      track: trackData,
+      isPlaying,
+      volume,
+      isKaraoke: trackListTab === "karaoke",
+      isFluxRadio: trackListTab === "radio-fai",
+      playlistId: selectedPlaylist?.id || null,
+    };
+
+    syncPlayerStateToFirestore(stateToSync);
+  }, [
+    connectCode,
+    currentTrack?.id,
+    currentUrl,
+    isPlaying,
+    volume,
+    trackListTab,
+    selectedPlaylist?.id,
+    syncPlayerStateToFirestore
+  ]);
 
   const reactPlayerConfig = useMemo(() => {
     const vars: any = {
@@ -4748,6 +4816,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     setPosition(newPos);
     if (youtubePlayerRef.current) {
       youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
+      syncCurrentSeekTime(newPos / 1000);
     }
   };
 
@@ -4778,6 +4847,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       container.releasePointerCapture(e.pointerId);
       container.removeEventListener("pointermove", handlePointerMove);
       container.removeEventListener("pointerup", handlePointerUp);
+      if (youtubePlayerRef.current) {
+        const currentSecs = youtubePlayerRef.current.getCurrentTime() || 0;
+        syncCurrentSeekTime(currentSecs);
+      }
     };
 
     container.addEventListener("pointermove", handlePointerMove);
