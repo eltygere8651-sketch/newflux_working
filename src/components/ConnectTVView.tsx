@@ -79,6 +79,71 @@ export default function ConnectTVView() {
     };
   }, []);
 
+  const [lyrics, setLyrics] = useState<{ time: number; text: string }[] | string | null>(null);
+  const [lyricsState, setLyricsState] = useState<"loading" | "found" | "not_found" | "idle">("idle");
+
+  // Fetch lyrics automatically when in Karaoke Mode on TV
+  useEffect(() => {
+    const clientState = session?.clientState;
+    const currentTrack = clientState?.track;
+
+    if (clientState?.isKaraoke && currentTrack) {
+      setLyrics(null);
+      setLyricsState("loading");
+
+      let query = currentTrack.title
+        .replace(/karaoke|instrumental|cover|lyrics|letra|video oficial|official video/gi, "")
+        .trim();
+      query = query.replace(/\[.*?\]|\(.*?\)/g, "").trim();
+
+      if (!query) {
+        setLyricsState("not_found");
+        return;
+      }
+
+      fetch(`/api/lyrics/search?q=${encodeURIComponent(query)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`Server returned ${res.status}`);
+          return res.json();
+        })
+        .then((data) => {
+          if (data && data.length > 0) {
+            const bestMatch = data.find((d: any) => d.syncedLyrics) || data[0];
+            if (bestMatch.syncedLyrics) {
+              const lines = bestMatch.syncedLyrics.split("\n");
+              const parsed = [];
+              const regex = /\[(\d{2}):(\d{2}\.\d{2,3})\](.*)/;
+              for (const line of lines) {
+                const match = line.match(regex);
+                if (match) {
+                  const min = parseInt(match[1]);
+                  const sec = parseFloat(match[2]);
+                  const text = match[3].trim();
+                  if (text) parsed.push({ time: min * 60 + sec, text });
+                }
+              }
+              setLyrics(parsed);
+              setLyricsState("found");
+            } else if (bestMatch.plainLyrics) {
+              setLyrics(bestMatch.plainLyrics);
+              setLyricsState("found");
+            } else {
+              setLyricsState("not_found");
+            }
+          } else {
+            setLyricsState("not_found");
+          }
+        })
+        .catch((err) => {
+          console.error("Lyrics fetch error in TV View:", err);
+          setLyricsState("not_found");
+        });
+    } else {
+      setLyrics(null);
+      setLyricsState("idle");
+    }
+  }, [session?.clientState?.isKaraoke, session?.clientState?.track?.id, session?.clientState?.track?.title]);
+
   // Sync seek position when remote state updates
   useEffect(() => {
     if (session?.clientState && playerRef.current) {
@@ -130,6 +195,9 @@ export default function ConnectTVView() {
   const isConnected = session?.status === "connected";
   const clientState = session?.clientState;
   const currentTrack = clientState?.track;
+  const trackUrl = currentTrack
+    ? (currentTrack.url || `https://www.youtube.com/watch?v=${currentTrack.id}`).replace("music.youtube.com", "www.youtube.com")
+    : "";
 
   return (
     <div id="tv-connect-container" className="h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden relative select-none">
@@ -232,27 +300,29 @@ export default function ConnectTVView() {
             className="absolute inset-0 flex flex-col justify-between p-12 md:p-16 z-10"
           >
             {/* Ambient Background Glow matching the active track metadata */}
-            <div className="absolute inset-0 z-[-1] overflow-hidden pointer-events-none">
-              <div
-                className="absolute -top-[40%] -left-[20%] w-[120%] h-[120%] rounded-full opacity-20 blur-[140px] transition-all duration-1000"
-                style={{
-                  background: currentTrack?.thumbnail
-                    ? "radial-gradient(circle, rgba(16,185,129,0.3) 0%, rgba(5,5,5,0) 70%)"
-                    : "radial-gradient(circle, rgba(147,51,234,0.2) 0%, rgba(5,5,5,0) 70%)",
-                }}
-              ></div>
-              <div
-                className="absolute -bottom-[40%] -right-[20%] w-[120%] h-[120%] rounded-full opacity-15 blur-[140px] transition-all duration-1000"
-                style={{
-                  background: currentTrack?.thumbnail
-                    ? "radial-gradient(circle, rgba(30,215,96,0.2) 0%, rgba(5,5,5,0) 70%)"
-                    : "radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(5,5,5,0) 70%)",
-                }}
-              ></div>
-            </div>
+            {!clientState?.isKaraoke && (
+              <div className="absolute inset-0 z-[-1] overflow-hidden pointer-events-none">
+                <div
+                  className="absolute -top-[40%] -left-[20%] w-[120%] h-[120%] rounded-full opacity-20 blur-[140px] transition-all duration-1000"
+                  style={{
+                    background: currentTrack?.thumbnail
+                      ? "radial-gradient(circle, rgba(16,185,129,0.3) 0%, rgba(5,5,5,0) 70%)"
+                      : "radial-gradient(circle, rgba(147,51,234,0.2) 0%, rgba(5,5,5,0) 70%)",
+                  }}
+                ></div>
+                <div
+                  className="absolute -bottom-[40%] -right-[20%] w-[120%] h-[120%] rounded-full opacity-15 blur-[140px] transition-all duration-1000"
+                  style={{
+                    background: currentTrack?.thumbnail
+                      ? "radial-gradient(circle, rgba(30,215,96,0.2) 0%, rgba(5,5,5,0) 70%)"
+                      : "radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(5,5,5,0) 70%)",
+                  }}
+                ></div>
+              </div>
+            )}
 
             {/* Header of Active Screen */}
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center z-20">
               <FluxLogoLarge />
               <div className="flex items-center gap-4">
                 {clientState?.isKaraoke && (
@@ -274,94 +344,195 @@ export default function ConnectTVView() {
               </div>
             </div>
 
-            {/* Immersive Center Player View */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center my-auto w-full max-w-6xl mx-auto">
-              {/* Massive Artwork Display */}
-              <div className="lg:col-span-5 flex justify-center">
-                <div className="relative group select-none">
-                  <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-emerald-500 to-[#1ED760] opacity-10 blur-2xl group-hover:opacity-25 transition duration-1000"></div>
-                  {currentTrack?.thumbnail ? (
-                    <img
-                      src={currentTrack.thumbnail.replace("default.jpg", "hqdefault.jpg")}
-                      alt={currentTrack.title}
-                      className="w-72 h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 object-cover rounded-3xl border border-white/10 shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        // Fallback image
-                        (e.target as any).src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=600";
-                      }}
-                    />
-                  ) : (
-                    <div className="w-72 h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 bg-gradient-to-br from-emerald-950 to-neutral-900 border border-white/5 rounded-3xl flex items-center justify-center text-emerald-500/50 shadow-2xl">
-                      <Music className="w-24 h-24 stroke-[1.5]" />
+            {/* Main view container: changes layout depending on karaoke active status */}
+            {clientState?.isKaraoke ? (
+              /* IMMERSIVE TV KARAOKE VIEW WITH SYNCED LYRICS AND FULLSCREEN DESIGN */
+              <div className="flex-1 flex flex-col justify-between w-full h-full z-10 relative pointer-events-none mt-4">
+                
+                {/* Floating liquid orbs of light behind lyrics for high-contrast visibility */}
+                <div className="absolute inset-0 z-[-1] overflow-hidden">
+                  <div className="absolute top-[20%] left-[20%] w-[60%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
+                  <div className="absolute bottom-[20%] right-[20%] w-[60%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
+                </div>
+
+                {/* Top minimalist details */}
+                <div className="flex items-center justify-between w-full p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                      <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
+                      <h2 className="text-sm font-bold text-white truncate max-w-md">{currentTrack?.title}</h2>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
+                    <p className="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      Activo
+                    </p>
+                  </div>
+                </div>
+
+                {/* Lyrics Layer */}
+                <div className="flex-1 flex flex-col items-center justify-center py-12 px-6">
+                  {lyricsState === "loading" && (
+                    <div className="text-xl md:text-2xl font-black text-white/70 animate-pulse bg-black/65 border border-white/5 px-8 py-4 rounded-full backdrop-blur-md shadow-2xl">
+                      Cargando letras sincronizadas...
                     </div>
                   )}
 
-                  {/* Micro state badge: playing/paused status overlay */}
-                  <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-md border border-white/10 p-2.5 rounded-2xl text-white shadow-xl flex items-center justify-center">
-                    {clientState?.isPlaying ? (
-                      <div className="flex gap-1 items-end h-4 w-4">
-                        <span className="w-1 bg-emerald-500 rounded-full animate-[pulse_1s_infinite_0.1s] h-4"></span>
-                        <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_1s_infinite_0.3s] h-2"></span>
-                        <span className="w-1 bg-emerald-500 rounded-full animate-[pulse_1s_infinite_0.5s] h-3"></span>
-                      </div>
-                    ) : (
-                      <Pause className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                </div>
-              </div>
+                  {lyricsState === "not_found" && (
+                    <div className="text-center space-y-4 max-w-xl bg-black/60 p-8 rounded-3xl border border-white/5 backdrop-blur-md shadow-2xl">
+                      <p className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Sigue la letra en pantalla</p>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        No hemos encontrado letras sincronizadas automáticas para esta versión. Usa las letras de la pista instrumental en el vídeo de fondo.
+                      </p>
+                    </div>
+                  )}
 
-              {/* Title, Description & Metadata */}
-              <div className="lg:col-span-7 flex flex-col justify-center text-left">
-                {currentTrack ? (
-                  <div className="space-y-4">
-                    <span className="text-xs font-black uppercase tracking-[0.25em] text-emerald-500 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Reproduciendo ahora</span>
-                    </span>
+                  {lyricsState === "found" && Array.isArray(lyrics) && (
+                    <div className="w-full max-w-5xl flex flex-col items-center justify-center space-y-6">
+                      {(() => {
+                        const activeIndex = lyrics.findIndex(
+                          (l, i) => l.time <= playedSeconds && (!lyrics[i + 1] || lyrics[i + 1].time > playedSeconds)
+                        );
+                        return lyrics.map((line, idx) => {
+                          const isActive = idx === activeIndex;
+                          const isPast = idx < activeIndex;
 
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white leading-tight uppercase tracking-tight line-clamp-2 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                      {currentTrack.title}
-                    </h2>
+                          if (idx < activeIndex - 1 || idx > activeIndex + 2) return null;
 
-                    <p className="text-xl md:text-2xl font-bold text-slate-300 tracking-wide">
-                      {currentTrack.artist}
-                    </p>
+                          return (
+                            <motion.div
+                              key={idx}
+                              initial={{ opacity: 0, y: 15 }}
+                              animate={{
+                                opacity: isActive ? 1 : isPast ? 0.35 : 0.6,
+                                y: 0,
+                                scale: isActive ? 1.08 : 0.96,
+                              }}
+                              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                              className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-4 leading-tight ${
+                                isActive
+                                  ? "text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-[#1ED760]"
+                                  : "text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-white/80"
+                              }`}
+                              style={{
+                                textShadow: isActive
+                                  ? "0 0 20px rgba(30,215,96,0.8), 0 2px 10px rgba(0,0,0,0.95)"
+                                  : "0 2px 10px rgba(0,0,0,0.9)",
+                              }}
+                            >
+                              {line.text}
+                            </motion.div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
 
-                    <div className="pt-6 flex items-center gap-8">
-                      {/* Speaker icon and Volume status */}
-                      <div className="flex items-center gap-2 text-slate-400 font-bold text-xs">
-                        {clientState?.volume === 0 ? (
-                          <VolumeX className="w-4 h-4 text-rose-500" />
-                        ) : (
-                          <Volume2 className="w-4 h-4 text-emerald-500" />
-                        )}
-                        <span>{clientState?.volume}%</span>
-                      </div>
-
-                      {/* Code helper on TV so they can re-identify */}
-                      <div className="text-slate-500 text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-3 py-1 rounded-lg">
-                        Código: {sessionCode}
+                  {lyricsState === "found" && typeof lyrics === "string" && (
+                    <div className="w-full max-w-3xl h-[60%] relative overflow-hidden bg-black/60 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
+                      <div className="absolute inset-0 overflow-y-auto p-6 text-center font-black text-xl sm:text-2xl md:text-3xl text-white/95 whitespace-pre-line leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
+                        {lyrics}
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <Tv className="w-16 h-16 text-emerald-500/40 mb-2 animate-pulse" />
-                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wide text-slate-300">
-                      Dispositivo Vinculado
-                    </h2>
-                    <p className="text-slate-400 text-sm max-w-md">
-                      Tu dispositivo está conectado. Elige cualquier pista, playlist, karaoke o inicia la radio en tu móvil para comenzar la experiencia.
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
+
               </div>
-            </div>
+            ) : (
+              /* STANDARD TV MUSIC PLAYER VIEW */
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center my-auto w-full max-w-6xl mx-auto z-10">
+                {/* Massive Artwork Display */}
+                <div className="lg:col-span-5 flex justify-center">
+                  <div className="relative group select-none">
+                    <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-emerald-500 to-[#1ED760] opacity-10 blur-2xl group-hover:opacity-25 transition duration-1000"></div>
+                    {currentTrack?.thumbnail ? (
+                      <img
+                        src={currentTrack.thumbnail.replace("default.jpg", "hqdefault.jpg")}
+                        alt={currentTrack.title}
+                        className="w-72 h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 object-cover rounded-3xl border border-white/10 shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          // Fallback image
+                          (e.target as any).src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=600";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-72 h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 bg-gradient-to-br from-emerald-950 to-neutral-900 border border-white/5 rounded-3xl flex items-center justify-center text-emerald-500/50 shadow-2xl">
+                        <Music className="w-24 h-24 stroke-[1.5]" />
+                      </div>
+                    )}
+
+                    {/* Micro state badge: playing/paused status overlay */}
+                    <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-md border border-white/10 p-2.5 rounded-2xl text-white shadow-xl flex items-center justify-center">
+                      {clientState?.isPlaying ? (
+                        <div className="flex gap-1 items-end h-4 w-4">
+                          <span className="w-1 bg-emerald-500 rounded-full animate-[pulse_1s_infinite_0.1s] h-4"></span>
+                          <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_1s_infinite_0.3s] h-2"></span>
+                          <span className="w-1 bg-emerald-500 rounded-full animate-[pulse_1s_infinite_0.5s] h-3"></span>
+                        </div>
+                      ) : (
+                        <Pause className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title, Description & Metadata */}
+                <div className="lg:col-span-7 flex flex-col justify-center text-left">
+                  {currentTrack ? (
+                    <div className="space-y-4">
+                      <span className="text-xs font-black uppercase tracking-[0.25em] text-emerald-500 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Reproduciendo ahora</span>
+                      </span>
+
+                      <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white leading-tight uppercase tracking-tight line-clamp-2 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                        {currentTrack.title}
+                      </h2>
+
+                      <p className="text-xl md:text-2xl font-bold text-slate-300 tracking-wide">
+                        {currentTrack.artist}
+                      </p>
+
+                      <div className="pt-6 flex items-center gap-8">
+                        {/* Speaker icon and Volume status */}
+                        <div className="flex items-center gap-2 text-slate-400 font-bold text-xs">
+                          {clientState?.volume === 0 ? (
+                            <VolumeX className="w-4 h-4 text-rose-500" />
+                          ) : (
+                            <Volume2 className="w-4 h-4 text-emerald-500" />
+                          )}
+                          <span>{clientState?.volume}%</span>
+                        </div>
+
+                        {/* Code helper on TV so they can re-identify */}
+                        <div className="text-slate-500 text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-3 py-1 rounded-lg">
+                          Código: {sessionCode}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <Tv className="w-16 h-16 text-emerald-500/40 mb-2 animate-pulse" />
+                      <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wide text-slate-300">
+                        Dispositivo Vinculado
+                      </h2>
+                      <p className="text-slate-400 text-sm max-w-md">
+                        Tu dispositivo está conectado. Elige cualquier pista, playlist, karaoke o inicia la radio en tu móvil para comenzar la experiencia.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Sync Progress Bar at the bottom */}
-            <div className="w-full space-y-2 mt-auto">
+            <div className="w-full space-y-2 mt-auto z-20">
               <div className="flex justify-between items-center text-[11px] font-bold tracking-widest text-slate-400 font-mono">
                 <span>{formatTime(playedSeconds)}</span>
                 <span>{formatTime(duration)}</span>
@@ -376,29 +547,60 @@ export default function ConnectTVView() {
               </div>
             </div>
 
-            {/* Hidden React Player performing actual stream playback on TV */}
-            {currentTrack?.url && (
-              <div className="absolute top-0 left-0 w-1 h-1 overflow-hidden opacity-0 pointer-events-none select-none">
-                <ReactPlayer
-                  ref={playerRef}
-                  url={currentTrack.url}
-                  playing={clientState?.isPlaying}
-                  volume={(clientState?.volume ?? 80) / 100}
-                  onProgress={(progress) => {
-                    setPlayedSeconds(progress.playedSeconds);
-                  }}
-                  onDuration={(d) => {
-                    setDuration(d);
-                  }}
-                  onEnded={() => {
-                    // Drive automatic next song. The controller is the brain and handles track ends, 
-                    // but we ensure played seconds sits on end.
-                    setPlayedSeconds(duration);
-                  }}
-                  onError={(err) => {
-                    console.error("TV ReactPlayer Error:", err);
-                  }}
-                />
+            {/* React Player performing actual stream playback on TV */}
+            {trackUrl && (
+              <div
+                className={
+                  clientState?.isKaraoke
+                    ? "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black"
+                    : "absolute top-0 left-0 w-1 h-1 overflow-hidden opacity-0 pointer-events-none select-none"
+                }
+              >
+                <div className={clientState?.isKaraoke ? "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none" : "w-full h-full"}>
+                  <ReactPlayer
+                    ref={playerRef}
+                    url={trackUrl}
+                    playing={clientState?.isPlaying}
+                    volume={(clientState?.volume ?? 80) / 100}
+                    onProgress={(progress) => {
+                      setPlayedSeconds(progress.playedSeconds);
+                    }}
+                    onDuration={(d) => {
+                      setDuration(d);
+                    }}
+                    onEnded={() => {
+                      setPlayedSeconds(duration);
+                    }}
+                    onError={(err) => {
+                      console.error("TV ReactPlayer Error:", err);
+                    }}
+                    width="100%"
+                    height="100%"
+                    config={{
+                      youtube: {
+                        playerVars: {
+                          modestbranding: 1,
+                          rel: 0,
+                          showinfo: 0,
+                          iv_load_policy: 3,
+                          fs: 0,
+                          cc_load_policy: 0,
+                          controls: 0,
+                          disablekb: 1,
+                          autohide: 1,
+                          playsinline: 1,
+                        },
+                      },
+                    }}
+                  />
+                </div>
+                {/* Visual mask gradients to hide YouTube watermarks/bars */}
+                {clientState?.isKaraoke && (
+                  <>
+                    <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/95 to-transparent z-10 pointer-events-none" />
+                  </>
+                )}
               </div>
             )}
           </motion.div>

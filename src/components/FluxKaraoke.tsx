@@ -23,6 +23,7 @@ import {
   ListPlus,
   PlaySquare
 } from "lucide-react";
+import { sendControllerStateUpdate } from "../lib/fluxConnect";
 
 export const FluxKaraoke = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,6 +39,41 @@ export const FluxKaraoke = () => {
   
   const [karaokeQueue, setKaraokeQueue] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"genres" | "search" | "library" | "queue">("genres");
+
+  // Flux Connect TV synchronization logic
+  const syncPlayerStateToFirestore = (updatedFields: Partial<any>) => {
+    try {
+      const activeCode = localStorage.getItem("flux_connect_active_code");
+      if (!activeCode) return;
+      sendControllerStateUpdate(activeCode, updatedFields).catch((err) => {
+        console.warn("Flux Connect Sync Error from Karaoke:", err);
+      });
+    } catch (e) {
+      console.warn("Error in syncPlayerStateToFirestore:", e);
+    }
+  };
+
+  useEffect(() => {
+    const activeCode = localStorage.getItem("flux_connect_active_code");
+    if (!activeCode) return;
+
+    const trackData = currentTrack ? {
+      id: currentTrack.id || "",
+      title: currentTrack.title || "",
+      artist: currentTrack.artist || currentTrack.author || "Karaoke",
+      thumbnail: currentTrack.thumbnail || "",
+      duration: currentTrack.duration || "",
+      url: currentTrack.url || `https://www.youtube.com/watch?v=${currentTrack.id}`
+    } : null;
+
+    syncPlayerStateToFirestore({
+      track: trackData,
+      isPlaying,
+      isKaraoke: true,
+      isFluxRadio: false,
+      playlistId: null
+    });
+  }, [currentTrack?.id, isPlaying]);
 
   // Library State
   const [recentTracks, setRecentTracks] = useState<any[]>(() => {

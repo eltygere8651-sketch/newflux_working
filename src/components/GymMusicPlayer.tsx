@@ -1702,6 +1702,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
   useEffect(() => {
     localStorage.setItem("gym_music_last_tab", trackListTab);
+    // Pause standard music player when entering karaoke mode to avoid audio overlapping
+    if (trackListTab === "karaoke") {
+      setIsPlaying(false);
+      expectedPlayingRef.current = false;
+      if (fallbackSilentAudioRef.current) {
+        fallbackSilentAudioRef.current.pause();
+      }
+    }
   }, [trackListTab]);
   const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "cola">(
     "artwork",
@@ -2364,12 +2372,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
   // Hook to capture seek position changes cleanly
   const syncCurrentSeekTime = useCallback((seconds: number) => {
+    if (trackListTab === "karaoke") return;
     syncPlayerStateToFirestore({ currentTime: seconds });
-  }, [syncPlayerStateToFirestore]);
+  }, [syncPlayerStateToFirestore, trackListTab]);
 
   useEffect(() => {
     const activeCode = localStorage.getItem("flux_connect_active_code") || connectCode;
     if (!activeCode) return;
+
+    // In Karaoke tab, the independent FluxKaraoke component manages its own track/play status sync.
+    // We return early here so standard player state does not overwrite the active karaoke track in Firestore.
+    if (trackListTab === "karaoke") return;
 
     const trackData = currentTrack ? {
       id: currentTrack.id || "",
