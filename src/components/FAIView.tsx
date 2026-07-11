@@ -691,20 +691,38 @@ export const FAIView: React.FC<FAIViewProps> = ({
       <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 pb-4 sm:pt-6 sm:pb-6 z-10 max-w-lg mx-auto w-full overflow-y-auto overflow-x-hidden premium-scrollbar relative">
         <div className="w-full flex flex-col items-center justify-center min-h-min py-8 sm:py-12 overflow-x-hidden">
         {/* Top Controls / Settings */}
-        <div className="w-full flex justify-end shrink-0 relative z-20 mb-4 px-2">
+        <div className="w-full flex justify-center shrink-0 relative z-20 mb-6 px-2 mt-2">
           <button
             onClick={() => setShowConfig(true)}
-            className="group relative overflow-hidden h-10 sm:h-12 px-5 sm:px-6 rounded-full flex items-center gap-2 sm:gap-3 transition-all hover:scale-[1.02] active:scale-95 bg-black/40 backdrop-blur-xl border border-white/10 hover:border-fuchsia-500/50 shadow-[0_0_20px_rgba(0,0,0,0.5)] hover:shadow-[0_0_25px_rgba(232,121,249,0.2)]"
-            title="Configuración de Mezcla"
+            className="group relative overflow-hidden h-14 sm:h-16 px-5 sm:px-8 rounded-2xl sm:rounded-full flex items-center justify-between gap-3 transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-b from-[#1a1c23]/90 to-black/80 backdrop-blur-2xl border border-white/10 hover:border-[#17d1a5]/50 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_40px_rgba(23,209,165,0.2)] w-full max-w-md mx-auto"
+            title="Elige tu música"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-fuchsia-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <Settings2 className="w-4 h-4 sm:w-5 sm:h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)] group-hover:animate-spin-slow relative z-10" />
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 drop-shadow-sm relative z-10">
-              Ajustes
-            </span>
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-[#17d1a5]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            
+            <div className="relative z-10 flex items-center gap-3 sm:gap-4 overflow-hidden">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-full bg-gradient-to-br from-white/5 to-white/10 flex items-center justify-center border border-white/10 group-hover:border-[#17d1a5]/50 transition-all shadow-inner shrink-0">
+                {genreExploration ? (
+                  <Music className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 group-hover:text-[#17d1a5] transition-colors" />
+                ) : (
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white/80 group-hover:text-[#17d1a5] transition-colors" />
+                )}
+              </div>
+              
+              <div className="flex flex-col items-start text-left truncate">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-[#17d1a5] drop-shadow-[0_0_8px_rgba(23,209,165,0.5)] mb-0.5">
+                  {genreExploration ? "Escuchando" : "Mezcla Algorítmica"}
+                </span>
+                <span className="text-sm sm:text-lg font-black text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:via-[#17d1a5] group-hover:to-cyan-300 transition-all truncate w-full">
+                  {genreExploration ? selectedGenre : "Mix Inteligente FLX"}
+                </span>
+              </div>
+            </div>
+
+            <div className="relative z-10 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-[#17d1a5]/10 group-hover:border-[#17d1a5]/30 transition-all shrink-0">
+              <Settings2 className="w-4 h-4 text-white/50 group-hover:text-[#17d1a5] group-hover:animate-spin-slow" />
+            </div>
           </button>
         </div>
-
         <div className="w-full flex justify-center items-center shrink-0 mb-4 sm:mb-8 px-2 relative">
           
           {/* Album Art Card */}

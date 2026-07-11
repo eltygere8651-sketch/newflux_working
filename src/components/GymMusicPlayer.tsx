@@ -4726,6 +4726,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         setPosition(0);
         setDuration(0);
         setIsPlaying(true);
+        if (playlist.tracks && playlist.tracks[trackIdx]) {
+          loadIframeVideoDirectly(playlist.tracks[trackIdx]);
+        }
       }
     } else {
       setIsLoadingTrack(true);
@@ -4734,6 +4737,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       setPosition(0);
       setDuration(0);
       setIsPlaying(true);
+      if (playlist.tracks && playlist.tracks[trackIdx]) {
+        loadIframeVideoDirectly(playlist.tracks[trackIdx]);
+      }
     }
   };
 
@@ -5515,6 +5521,39 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Comunidad</span>
         </button>
 
+        {/* Karaoke - Moved to top for mobile */}
+        <button
+          onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            
+            setTrackListTab("karaoke");
+            setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
+          }}
+          className={`relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
+            trackListTab === "karaoke" &&
+            !showLibrary &&
+            !isSidebarExpanded &&
+            (window.innerWidth >= 768 || mobileView === "player")
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
+              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
+            </div>
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
+          </span>
+        </button>
+
         {/* FLUX - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
@@ -5548,39 +5587,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               Novedad
             </span>
           )}
-        </button>
-
-        {/* Karaoke - Desktop Only (in bottom bar on mobile) */}
-        <button
-          onClick={() => {
-            setSearchQuery("");
-            setYoutubeResults([]);
-            setPreviewPlaylist(null);
-            
-            setTrackListTab("karaoke");
-            setIsTrackListExpanded(true);
-            setShowLibrary(false);
-            setIsSidebarExpanded(false);
-            if (window.innerWidth < 768) {
-              setMobileView("player");
-            }
-          }}
-          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
-            trackListTab === "karaoke" &&
-            !showLibrary &&
-            !isSidebarExpanded &&
-            (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
-              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
-              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
-            </div>
-            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
-          </span>
         </button>
 
         {/* Podcasts */}
@@ -7046,9 +7052,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       onUpdateExploreLayout={
                                         handleUpdateExploreLayout
                                       }
-                                      setOverrideCurrentTrack={
-                                        setOverrideCurrentTrack
-                                      }
+                                      setOverrideCurrentTrack={(track) => {
+                                        setOverrideCurrentTrack(track);
+                                        loadIframeVideoDirectly(track);
+                                      }}
                                       setIsPlaying={setIsPlaying}
                                       showNotification={showNotification}
                                       addYoutubeTrackToPlaylist={
@@ -7073,6 +7080,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                         setPosition(0);
                                         setDuration(0);
                                         setIsPlaying(true);
+                                        loadIframeVideoDirectly(mapped[startIdx]);
                                         if (mapped.length > startIdx + 1) {
                                           const queue = mapped.slice(
                                             startIdx + 1,
@@ -7209,25 +7217,47 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                     setPosition(0);
                                     setDuration(0);
                                     setIsPlaying(true);
+                                    loadIframeVideoDirectly(selectedTrackObj);
                                     showNotification(`Reproduciendo: ${ytTrack.title}`);
 
-                                    fetch(`/api/youtube/upnext?id=${ytTrack.id}`)
-                                      .then(r => r.json())
-                                      .then(data => {
-                                        if (data && data.length > 0) {
-                                          const targetIdWithPrefix = `yt_temp_${ytTrack.id}`;
-                                          const radioQueue = data
-                                            .filter((t: any) => t.id !== ytTrack.id && t.id !== targetIdWithPrefix)
-                                            .map((t: any) => ({
-                                              ...t,
-                                              id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
-                                            }));
+                                    const artistName = ytTrack.artist && ytTrack.artist !== "Flux" ? ytTrack.artist : "";
+
+                                    if (artistName && searchQuery && searchQuery.trim().length > 0) {
+                                      // Buscar el repertorio del artista específicamente para no mezclar
+                                      Promise.all([
+                                        fetch(`/api/youtube/search?q=${encodeURIComponent(artistName + " exitos")}`).then(r => r.json()).catch(() => []),
+                                        fetch(`/api/youtube/search?q=${encodeURIComponent(artistName + " audio")}`).then(r => r.json()).catch(() => []),
+                                        fetch(`/api/youtube/search?q=${encodeURIComponent(artistName + " album completo")}`).then(r => r.json()).catch(() => [])
+                                      ]).then(([exitosData, audioData, albumData]) => {
+                                        const combined = [...(Array.isArray(exitosData) ? exitosData : []), ...(Array.isArray(audioData) ? audioData : []), ...(Array.isArray(albumData) ? albumData : [])];
+                                        const uniqueMap = new Map();
+                                        const targetIdWithPrefix = `yt_temp_${ytTrack.id}`;
+                                        
+                                        combined.forEach(t => {
+                                          if (!t.isPlaylist && t.id !== ytTrack.id && t.id !== targetIdWithPrefix) {
+                                            const tArtist = (t.artist || "").toLowerCase();
+                                            const tTitle = (t.title || "").toLowerCase();
+                                            const aNameLower = artistName.toLowerCase();
+                                            // Filtro estricto: el nombre del artista debe estar en el campo de artista o en el título (para fts)
+                                            if (tArtist.includes(aNameLower) || tTitle.includes(aNameLower)) {
+                                              uniqueMap.set(t.id, t);
+                                            }
+                                          }
+                                        });
+                                        
+                                        const radioQueue = Array.from(uniqueMap.values()).map((t: any) => ({
+                                          ...t,
+                                          id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
+                                        }));
+                                        
+                                        if (radioQueue.length > 0) {
                                           setTrackQueue(radioQueue);
                                           trackQueueRef.current = radioQueue;
-                                          showNotification(`${radioQueue.length} canciones similares añadidas a la cola`);
+                                          showNotification(`${radioQueue.length} éxitos de ${artistName} añadidos a la cola`);
                                         } else {
+                                          // Fallback a los resultados actuales de la búsqueda
                                           const allTracksOnly = youtubeResults
-                                            .filter((t) => !t.isPlaylist)
+                                            .filter((t) => !t.isPlaylist && t.id !== ytTrack.id)
                                             .map((t) => ({
                                               id: `yt_temp_${t.id}`,
                                               title: t.title,
@@ -7236,14 +7266,47 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                               duration: t.duration || "N/A",
                                               bpm: 120,
                                             }));
-                                          const currentIdx = allTracksOnly.findIndex((t) => t.id === trackId);
-                                          if (currentIdx !== -1 && allTracksOnly.length > currentIdx + 1) {
-                                            const nextInSearch = allTracksOnly.slice(currentIdx + 1);
-                                            setTrackQueue(nextInSearch);
-                                            trackQueueRef.current = nextInSearch;
-                                          }
+                                          setTrackQueue(allTracksOnly);
+                                          trackQueueRef.current = allTracksOnly;
+                                          showNotification(`${allTracksOnly.length} canciones añadidas a la cola`);
                                         }
                                       }).catch(() => {});
+                                    } else {
+                                      // Fallback original para otras listas o cuando no hay artista definido
+                                      fetch(`/api/youtube/upnext?id=${ytTrack.id}`)
+                                        .then(r => r.json())
+                                        .then(data => {
+                                          if (data && data.length > 0) {
+                                            const targetIdWithPrefix = `yt_temp_${ytTrack.id}`;
+                                            const radioQueue = data
+                                              .filter((t: any) => t.id !== ytTrack.id && t.id !== targetIdWithPrefix)
+                                              .map((t: any) => ({
+                                                ...t,
+                                                id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
+                                              }));
+                                            setTrackQueue(radioQueue);
+                                            trackQueueRef.current = radioQueue;
+                                            showNotification(`${radioQueue.length} canciones similares añadidas a la cola`);
+                                          } else {
+                                            const allTracksOnly = youtubeResults
+                                              .filter((t) => !t.isPlaylist)
+                                              .map((t) => ({
+                                                id: `yt_temp_${t.id}`,
+                                                title: t.title,
+                                                artist: t.artist || "Flux",
+                                                url: t.url,
+                                                duration: t.duration || "N/A",
+                                                bpm: 120,
+                                              }));
+                                            const currentIdx = allTracksOnly.findIndex((t) => t.id === trackId);
+                                            if (currentIdx !== -1 && allTracksOnly.length > currentIdx + 1) {
+                                              const nextInSearch = allTracksOnly.slice(currentIdx + 1);
+                                              setTrackQueue(nextInSearch);
+                                              trackQueueRef.current = nextInSearch;
+                                            }
+                                          }
+                                        }).catch(() => {});
+                                    }
 
                                   }
                                 }}
@@ -7368,6 +7431,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                               setPosition(0);
                                               setDuration(0);
                                               setIsPlaying(true);
+                                              loadIframeVideoDirectly(mapped[0]);
                                               if (mapped.length > 1) {
                                                 const rest = mapped.slice(1);
                                                 setTrackQueue(rest);
@@ -7591,6 +7655,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                                 setPosition(0);
                                                 setDuration(0);
                                                 setIsPlaying(true);
+                                                loadIframeVideoDirectly(finalTrack);
                                                 showNotification(
                                                   `Reproduciendo: ${subTrack.title}`,
                                                 );
@@ -7682,6 +7747,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                         setPosition(0);
                                         setDuration(0);
                                         setIsPlaying(true);
+                                        loadIframeVideoDirectly(tempTrack);
                                         showNotification(`Reproduciendo: ${item.title}`);
 
                                         fetch(`/api/youtube/upnext?id=${item.id}`)
@@ -7777,6 +7843,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                   setPosition(0);
                                   setDuration(0);
                                   setIsPlaying(true);
+                                  loadIframeVideoDirectly(track);
                                   setTrackQueue((prev) =>
                                     prev.filter((_, i) => i !== idx),
                                   );
@@ -7921,6 +7988,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 setPosition(0);
                                 setDuration(0);
                                 setIsPlaying(true);
+                                if (selectedPlaylist && selectedPlaylist.tracks && selectedPlaylist.tracks[idx]) {
+                                  loadIframeVideoDirectly(selectedPlaylist.tracks[idx]);
+                                }
                               }
                             }}
                             draggable={Boolean(isReorderable)}
@@ -8382,37 +8452,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               <Library className={`w-4 h-4 transition-transform ${isLibraryActive ? "scale-110" : ""} text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]`} />
               <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                 Biblioteca
-              </span>
-            </button>
-          );
-        })()}
-
-        {/* Karaoke */}
-        {(() => {
-          const isKaraokeActive = trackListTab === "karaoke" && !showLibrary && mobileView === "player";
-          return (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setYoutubeResults([]);
-                setPreviewPlaylist(null);
-                setTrackListTab("karaoke");
-                setIsTrackListExpanded(true);
-                setShowLibrary(false);
-                setMobileView("player");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
-                isKaraokeActive
-                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
-                  : "bg-transparent hover:bg-white/5"
-              }`}
-            >
-              <div className="relative">
-                <Mic className={`w-4 h-4 transition-transform ${isKaraokeActive ? "scale-110" : ""} text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]`} />
-              </div>
-              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                Karaoke
               </span>
             </button>
           );
