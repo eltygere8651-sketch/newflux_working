@@ -5521,37 +5521,22 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Comunidad</span>
         </button>
 
-        {/* Karaoke - Moved to top for mobile */}
+        {/* Mi Biblioteca - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
             setSearchQuery("");
             setYoutubeResults([]);
             setPreviewPlaylist(null);
-            
-            setTrackListTab("karaoke");
-            setIsTrackListExpanded(true);
+            setIsSidebarExpanded(true);
             setShowLibrary(false);
-            setIsSidebarExpanded(false);
-            if (window.innerWidth < 768) {
-              setMobileView("player");
-            }
           }}
-          className={`relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
-            trackListTab === "karaoke" &&
-            !showLibrary &&
-            !isSidebarExpanded &&
-            (window.innerWidth >= 768 || mobileView === "player")
+          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
+            isSidebarExpanded && !showLibrary
               ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
               : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
-          <span className="flex items-center gap-2">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
-              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
-            </div>
-            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
-          </span>
+          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Mi Biblioteca</span>
         </button>
 
         {/* FLUX - Desktop Only (in bottom bar on mobile) */}
@@ -5587,6 +5572,39 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               Novedad
             </span>
           )}
+        </button>
+
+        {/* Karaoke - Moved to top for mobile */}
+        <button
+          onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            
+            setTrackListTab("karaoke");
+            setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
+          }}
+          className={`relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
+            trackListTab === "karaoke" &&
+            !showLibrary &&
+            !isSidebarExpanded &&
+            (window.innerWidth >= 768 || mobileView === "player")
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
+              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
+            </div>
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
+          </span>
         </button>
 
         {/* Podcasts */}
@@ -5631,24 +5649,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               </span>
             )}
           </span>
-        </button>
-
-        {/* Mi Biblioteca - Desktop Only (in bottom bar on mobile) */}
-        <button
-          onClick={() => {
-            setSearchQuery("");
-            setYoutubeResults([]);
-            setPreviewPlaylist(null);
-            setIsSidebarExpanded(true);
-            setShowLibrary(false);
-          }}
-          className={`hidden md:flex relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
-            isSidebarExpanded && !showLibrary
-              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
-              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-          }`}
-        >
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Mi Biblioteca</span>
         </button>
       </Carousel>
 
