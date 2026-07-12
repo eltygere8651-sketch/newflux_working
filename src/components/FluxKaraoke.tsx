@@ -40,6 +40,22 @@ export const FluxKaraoke = () => {
   const [karaokeQueue, setKaraokeQueue] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"genres" | "search" | "library" | "queue">("genres");
 
+  const [connectCode, setConnectCode] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("flux_connect_active_code");
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleConnectChange = (e: any) => {
+      setConnectCode(e.detail?.code || null);
+    };
+    window.addEventListener("flux-connect-changed", handleConnectChange);
+    return () => window.removeEventListener("flux-connect-changed", handleConnectChange);
+  }, []);
+
   // Flux Connect TV synchronization logic
   const syncPlayerStateToFirestore = (updatedFields: Partial<any>) => {
     try {
@@ -1222,6 +1238,7 @@ export const FluxKaraoke = () => {
                   <ReactPlayer
                     url={`https://www.youtube.com/watch?v=${currentTrack.id}`}
                     playing={isPlaying}
+                    muted={Boolean(connectCode)}
                     onProgress={(p) => setCurrentTime(p.playedSeconds)}
                     onEnded={handlePlayNextInQueue}
                     onReady={() => { setIsPlayerReady(true); setIsBuffering(false); }}

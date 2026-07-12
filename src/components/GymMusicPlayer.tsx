@@ -5265,6 +5265,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             ref={youtubePlayerRef}
             url={currentUrl}
             playing={isPlaying}
+            muted={Boolean(connectCode)}
             volume={isDucking ? (volume / 100) * 0.15 : (volume / 100)}
             progressInterval={1000}
             onError={async (e) => {

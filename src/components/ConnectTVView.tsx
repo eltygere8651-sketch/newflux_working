@@ -378,17 +378,9 @@ export default function ConnectTVView() {
                 {/* Lyrics Layer */}
                 <div className="flex-1 flex flex-col items-center justify-center py-12 px-6">
                   {lyricsState === "loading" && (
-                    <div className="text-xl md:text-2xl font-black text-white/70 animate-pulse bg-black/65 border border-white/5 px-8 py-4 rounded-full backdrop-blur-md shadow-2xl">
-                      Cargando letras sincronizadas...
-                    </div>
-                  )}
-
-                  {lyricsState === "not_found" && (
-                    <div className="text-center space-y-4 max-w-xl bg-black/60 p-8 rounded-3xl border border-white/5 backdrop-blur-md shadow-2xl">
-                      <p className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Sigue la letra en pantalla</p>
-                      <p className="text-sm text-slate-400 leading-relaxed">
-                        No hemos encontrado letras sincronizadas automáticas para esta versión. Usa las letras de la pista instrumental en el vídeo de fondo.
-                      </p>
+                    <div className="absolute top-24 right-8 flex items-center gap-2 text-xs font-black text-white/50 bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-md">
+                      <Loader2 className="w-3 h-3 animate-spin text-emerald-500" />
+                      <span>Buscando letras...</span>
                     </div>
                   )}
 
