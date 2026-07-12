@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 // Triggering an update for GitHub export 2
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -21,8 +21,7 @@ import {
   MessageCircle,
   Send,
   Loader2,
-  Trash2,
-  Tv
+  Trash2
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
@@ -33,10 +32,6 @@ import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
 
-// Flux Connect Lazy Loaded Components
-const LazyConnectTVView = lazy(() => import("./components/ConnectTVView"));
-const LazyFluxConnectModal = lazy(() => import("./components/FluxConnectModal"));
-
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
 
@@ -46,15 +41,6 @@ function AppContent() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [globalBanner, setGlobalBanner] = useState<{title: string, content: string, category?: string} | null>(null);
-
-  const [isFluxConnectOpen, setIsFluxConnectOpen] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("connect")) {
-      setIsFluxConnectOpen(true);
-    }
-  }, []);
 
   // States for Live Premium Support
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
@@ -593,23 +579,6 @@ function AppContent() {
 
   const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
 
-  // Conditional rendering for Flux Connect Receiver Mode (/connect route)
-  const isConnectPath = window.location.pathname === "/connect";
-  if (isConnectPath) {
-    return (
-      <div id="tv-route-wrapper" className="h-screen w-screen bg-[#050505]">
-        <Suspense fallback={
-          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#050505]">
-            <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-3" />
-            <span className="text-xs font-black uppercase tracking-widest text-slate-500 font-mono">Cargando Flux Connect...</span>
-          </div>
-        }>
-          <LazyConnectTVView />
-        </Suspense>
-      </div>
-    );
-  }
-
   return (
     <div
       id="premium-music-app"
@@ -702,14 +671,16 @@ function AppContent() {
               className="sm:hidden overflow-hidden w-full border-t border-white/5 bg-[#090b0a]"
             >
               <div className="px-3.5 py-2.5 flex flex-wrap items-center justify-center gap-2 bg-[#090b0a]">
-                <button
-                  type="button"
-                  onClick={() => { setIsMobileMenuOpen(false); setIsFluxConnectOpen(true); }}
-                  className="flex-1 min-w-[90px] h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shadow-[0_2px_8px_rgba(30,215,96,0.15)] active:scale-[0.98]"
-                >
-                  <Tv className="w-3 h-3 stroke-[2.5px]" />
-                  <span>Flux Connect</span>
-                </button>
+                {canShowInstallHelper && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsMobileMenuOpen(false); handleInstallPress(); }}
+                    className="flex-1 min-w-[90px] h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shadow-[0_2px_8px_rgba(30,215,96,0.15)] active:scale-[0.98]"
+                  >
+                    <Download className="w-3 h-3 stroke-[2.5px]" />
+                    <span>Instalar App</span>
+                  </button>
+                )}
                 {user && (
                   <button
                     type="button"
@@ -782,14 +753,16 @@ function AppContent() {
             className="hidden sm:block absolute top-16 left-4 bg-[#090b0a] border border-white/10 rounded-xl p-2 w-48 z-[100] shadow-2xl"
           >
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => { setIsDesktopMenuOpen(false); setIsFluxConnectOpen(true); }}
-                className="h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
-              >
-                <Tv className="w-3.5 h-3.5 stroke-[2.5px]" />
-                <span>Flux Connect</span>
-              </button>
+              {canShowInstallHelper && (
+                <button
+                  type="button"
+                  onClick={() => { setIsDesktopMenuOpen(false); handleInstallPress(); }}
+                  className="h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
+                >
+                  <Download className="w-3.5 h-3.5 stroke-[2.5px]" />
+                  <span>Instalar App</span>
+                </button>
+              )}
               {user && (
                 <button
                   type="button"
@@ -1271,13 +1244,6 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <Suspense fallback={null}>
-        <LazyFluxConnectModal
-          isOpen={isFluxConnectOpen}
-          onClose={() => setIsFluxConnectOpen(false)}
-        />
-      </Suspense>
     </div>
   );
 }

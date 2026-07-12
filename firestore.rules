@@ -129,12 +129,5 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
-
-    // 8. Flux Connect Sessions (Sincronización multidispositivo)
-    match /flux_connect_sessions/{sessionId} {
-      // Permitimos lectura, creación y actualización pública conociendo el código de sesión
-      allow get, create, update: if true;
-      allow list, delete: if false;
-    }
   }
 }
