@@ -133,7 +133,7 @@ export const FluxKaraoke = () => {
 
   const handlePlayTrack = (track: any) => {
     setCurrentTrack(track);
-    setIsPlaying(false);
+    setIsPlaying(true);
     
     // Request fullscreen on mobile directly inside the user click handler to satisfy browser gesture requirements
     if (window.innerWidth < 768) {
@@ -224,7 +224,8 @@ export const FluxKaraoke = () => {
       setLyrics(null);
       setCurrentTime(0);
       setLyricsState("loading");
-      setIsPlaying(false);
+      // Set to true immediately to satisfy iOS autoplay user-gesture requirements
+      setIsPlaying(true);
       setShowMobileControls(true);
       setIsPlayerReady(false);
       setIsBuffering(true);
@@ -291,8 +292,9 @@ export const FluxKaraoke = () => {
     }
   }, [currentTrack]);
     
-  // Auto-play when lyrics are loaded
+  // Auto-play is now triggered immediately in the track selection to support iOS
   useEffect(() => {
+    // Only used to ensure it stays playing if state changes
     if (currentTrack && (lyricsState === "found" || lyricsState === "not_found")) {
       setIsPlaying(true);
     }
@@ -1128,7 +1130,7 @@ export const FluxKaraoke = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="absolute inset-y-0 left-0 right-0 lg:right-[380px] z-30 flex flex-col overflow-hidden bg-black" 
+            className="fixed inset-0 lg:absolute lg:inset-y-0 lg:left-0 lg:right-[380px] z-[99999] lg:z-30 flex flex-col overflow-hidden bg-black" 
             onClick={handlePlayerScreenTouch}
           >
             {/* CSS custom floating keyframes */}
@@ -1162,12 +1164,11 @@ export const FluxKaraoke = () => {
 
             {/* Dynamic theme elements */}
             {(() => {
-              if (lyricsState === "not_found") return null;
               const theme = getDynamicTheme(currentTrack.title);
               return (
                 <>
                   {/* Immersive animated background layer */}
-                  <div className={`absolute inset-0 bg-gradient-to-tr ${theme.base} transition-all duration-1000 z-0 overflow-hidden`}>
+                  <div className={`absolute inset-0 bg-gradient-to-tr ${theme.base} transition-all duration-1000 z-0 overflow-hidden ${lyricsState === 'not_found' ? 'opacity-40' : 'opacity-100'}`}>
                     {/* Floating liquid orbs of light (Apple Music/Singa style) */}
                     <div className={`absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full ${theme.orb1} blur-[120px] animate-orb-1 pointer-events-none transition-all duration-1000`} />
                     <div className={`absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full ${theme.orb2} blur-[120px] animate-orb-2 pointer-events-none transition-all duration-1000`} />
@@ -1178,7 +1179,7 @@ export const FluxKaraoke = () => {
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%),_linear-gradient(90deg,_rgba(255,0,0,0.06),_rgba(0,255,0,0.02),_rgba(0,0,255,0.06))] bg-[length:100%_4px,_3px_100%] pointer-events-none opacity-40" />
                   </div>
                   {/* Ambient Glow Gradient */}
-                  <div className={`absolute inset-0 bg-gradient-to-b ${theme.overlay} pointer-events-none z-10`} />
+                  <div className={`absolute inset-0 bg-gradient-to-b ${theme.overlay} pointer-events-none z-10 ${lyricsState === 'not_found' ? 'opacity-50' : 'opacity-100'}`} />
                 </>
               );
             })()}

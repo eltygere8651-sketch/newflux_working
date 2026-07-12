@@ -3823,79 +3823,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
   };
 
-  const handleMoveTrack = async (
-    index: number,
-    direction: "up" | "down",
-    event: React.MouseEvent,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!selectedPlaylist?.id || selectedPlaylist.id === "all") return;
-
-    const isMasterAdmin = savedSecurityCode === "ho82788278";
-    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin && !isMasterAdmin) {
-      showNotification("No tienes permisos para editar esta playlist.");
-      return;
-    }
-
-    if (
-      (direction === "up" && index === 0) ||
-      (direction === "down" && index === selectedPlaylist.tracks.length - 1)
-    )
-      return;
-
-    try {
-      const updatedTracks = [...selectedPlaylist.tracks];
-      const newIndex = direction === "up" ? index - 1 : index + 1;
-
-      // Swap
-      [updatedTracks[index], updatedTracks[newIndex]] = [
-        updatedTracks[newIndex],
-        updatedTracks[index],
-      ];
-
-      const docRef = selectedPlaylist.path
-        ? doc(db, selectedPlaylist.path)
-        : doc(
-            db,
-            "users",
-            selectedPlaylist.ownerId,
-            "playlists",
-            selectedPlaylist.id,
-          );
-      const { setDoc } = await import("firebase/firestore");
-      await setDoc(
-        docRef,
-        { tracks: updatedTracks, updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-
-      const newPlaylistObj = { ...selectedPlaylist, tracks: updatedTracks };
-      setSelectedPlaylist(newPlaylistObj);
-
-      if (previewPlaylist?.id === selectedPlaylist.id) {
-        setPreviewPlaylist(newPlaylistObj);
-      }
-
-      // To prevent jumping if shifting current track
-      if (playingPlaylist?.id === selectedPlaylist.id) {
-        setPlayingPlaylist(newPlaylistObj);
-        if (currentTrackIndex === index) {
-          setCurrentTrackIndex(newIndex);
-        } else if (currentTrackIndex === newIndex) {
-          setCurrentTrackIndex(index);
-        }
-      }
-
-      setUserPlaylists((prev) =>
-        prev.map((p) => (p.id === selectedPlaylist.id ? newPlaylistObj : p)),
-      );
-    } catch (error) {
-      console.error("Error moving track:", error);
-      showNotification("Error al mover la canción.");
-    }
-  };
-
   const startEditingTrack = (track: MusicTrack, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -5167,7 +5094,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         )}
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
-      <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
+      <div className="absolute top-[-300px] left-[-300px] w-[300px] h-[300px] overflow-hidden pointer-events-none select-none z-[-1] opacity-[0.01]">
         <audio
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}
@@ -8197,7 +8124,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       onClick={(e) =>
                                         handleDeleteTrack(track, e)
                                       }
-                                      className="hidden sm:block p-1.5 sm:p-1 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer"
+                                      className="p-1.5 sm:p-1 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer"
                                       title="Eliminar de la playlist"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />

@@ -388,7 +388,7 @@ app.get("/api/lyrics/search", async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'FluxMusicPlayer/1.0.0 (https://fluxmusic.example.com)'
       },
       signal: controller.signal
     });
