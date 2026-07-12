@@ -1157,10 +1157,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         { tracks: updatedTracks, updatedAt: serverTimestamp() },
         { merge: true },
       );
-      setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+
+      const newPlaylistObj = { ...selectedPlaylist, tracks: updatedTracks };
+      setSelectedPlaylist(newPlaylistObj);
+
+      if (previewPlaylist?.id === selectedPlaylist.id) {
+        setPreviewPlaylist(newPlaylistObj);
+      }
 
       if (playingPlaylist?.id === selectedPlaylist.id) {
-        setPlayingPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+        setPlayingPlaylist(newPlaylistObj);
         if (currentTrackIndex === draggedTrackIdx) {
           setCurrentTrackIndex(dropIdx);
         } else if (
@@ -1175,6 +1181,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           setCurrentTrackIndex(currentTrackIndex + 1);
         }
       }
+
+      setUserPlaylists((prev) =>
+        prev.map((p) => (p.id === selectedPlaylist.id ? newPlaylistObj : p)),
+      );
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
     } catch (error) {
       console.error("Error drop moving track:", error);
       showNotification("Error al mover la canción.");
@@ -3811,6 +3822,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       setUserPlaylists((prev) =>
         prev.map((p) => (p.id === selectedPlaylist.id ? newPlaylistObj : p)),
       );
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
 
       showNotification(
         `"${trackToDeleteConfirm.title}" de "${selectedPlaylist.name}" eliminada`,
@@ -3890,6 +3902,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       setUserPlaylists((prev) =>
         prev.map((p) => (p.id === selectedPlaylist.id ? newPlaylistObj : p)),
       );
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
 
       showNotification("Canción actualizada.");
       setEditingTrack(null);
