@@ -37,16 +37,15 @@ export default function ConnectTVView() {
 
   // Generate session code and initialize session on mount
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-
     const initSession = async () => {
       try {
         const code = generateSessionCode();
         setSessionCode(code);
         await createReceiverSession(code, "Flux Smart TV");
+        setLoading(false);
 
         // Listen for remote controller connections & changes
-        unsub = subscribeToSession(
+        const unsubscribe = subscribeToSession(
           code,
           (updatedSession) => {
             if (updatedSession) {
@@ -62,7 +61,7 @@ export default function ConnectTVView() {
           }
         );
 
-        setLoading(false);
+        return unsubscribe;
       } catch (err: any) {
         console.error("Error creating receiver session:", err);
         setError("No se pudo iniciar Flux Connect. Inténtalo de nuevo.");
@@ -70,7 +69,10 @@ export default function ConnectTVView() {
       }
     };
 
-    initSession();
+    let unsub: (() => void) | undefined;
+    initSession().then((u) => {
+      if (u) unsub = u;
+    });
 
     return () => {
       if (unsub) unsub();
@@ -190,66 +192,6 @@ export default function ConnectTVView() {
     );
   }
 
-  const [deviceType, setDeviceType] = useState<"tv" | "pc">("tv");
-  const [isUiActive, setIsUiActive] = useState<boolean>(true);
-  const uiTimeoutRef = useRef<any>(null);
-
-  useEffect(() => {
-    try {
-      const savedType = localStorage.getItem("flux_connect_device_type");
-      if (savedType === "pc" || savedType === "tv") {
-        setDeviceType(savedType);
-        return;
-      }
-    } catch (e) {
-      console.warn("Storage access not allowed:", e);
-    }
-
-    const ua = navigator.userAgent.toLowerCase();
-    const isTVUA = /smart-tv|smarttv|googletv|appletv|tizen|webos|hbbtv|netcast|viera|bravia|playstation|xbox|aftb|afts|firetv|roku|nintendo/i.test(ua);
-    if (isTVUA) {
-      setDeviceType("tv");
-    } else {
-      setDeviceType("pc");
-    }
-  }, []);
-
-  const toggleDeviceType = () => {
-    const nextType = deviceType === "tv" ? "pc" : "tv";
-    setDeviceType(nextType);
-    try {
-      localStorage.setItem("flux_connect_device_type", nextType);
-    } catch (e) {
-      console.warn("Storage write not allowed:", e);
-    }
-  };
-
-  useEffect(() => {
-    const clientState = session?.clientState;
-    if (deviceType !== "tv" || !clientState?.isKaraoke) {
-      setIsUiActive(true);
-      return;
-    }
-
-    const resetTimer = () => {
-      setIsUiActive(true);
-      if (uiTimeoutRef.current) clearTimeout(uiTimeoutRef.current);
-      uiTimeoutRef.current = setTimeout(() => {
-        setIsUiActive(false);
-      }, 4000);
-    };
-
-    window.addEventListener("mousemove", resetTimer);
-    window.addEventListener("touchstart", resetTimer);
-    resetTimer();
-
-    return () => {
-      window.removeEventListener("mousemove", resetTimer);
-      window.removeEventListener("touchstart", resetTimer);
-      if (uiTimeoutRef.current) clearTimeout(uiTimeoutRef.current);
-    };
-  }, [deviceType, session?.clientState?.isKaraoke, session?.clientState?.track?.id]);
-
   const isConnected = session?.status === "connected";
   const clientState = session?.clientState;
   const currentTrack = clientState?.track;
@@ -257,49 +199,8 @@ export default function ConnectTVView() {
     ? (currentTrack.url || `https://www.youtube.com/watch?v=${currentTrack.id}`).replace("music.youtube.com", "www.youtube.com")
     : "";
 
-  const renderReactPlayer = () => {
-    return (
-      <ReactPlayer
-        ref={playerRef}
-        url={trackUrl}
-        playing={clientState?.isPlaying}
-        volume={(clientState?.volume ?? 80) / 100}
-        onProgress={(progress) => {
-          setPlayedSeconds(progress.playedSeconds);
-        }}
-        onDuration={(d) => {
-          setDuration(d);
-        }}
-        onEnded={() => {
-          setPlayedSeconds(duration);
-        }}
-        onError={(err) => {
-          console.error("TV ReactPlayer Error:", err);
-        }}
-        width="100%"
-        height="100%"
-        config={{
-          youtube: {
-            playerVars: {
-              modestbranding: 1,
-              rel: 0,
-              showinfo: 0,
-              iv_load_policy: 3,
-              fs: 0,
-              cc_load_policy: 0,
-              controls: 0,
-              disablekb: 1,
-              autohide: 1,
-              playsinline: 1,
-            },
-          },
-        }}
-      />
-    );
-  };
-
   return (
-    <div id="tv-connect-container" className="min-h-screen w-screen bg-[#050505] text-white font-sans overflow-y-auto overflow-x-hidden relative select-none">
+    <div id="tv-connect-container" className="h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden relative select-none">
       
       {/* 1. WAITING FOR CONNECTION SCREEN */}
       <AnimatePresence mode="wait">
@@ -310,22 +211,14 @@ export default function ConnectTVView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen flex flex-col justify-between p-4 sm:p-8 md:p-12 lg:p-16 w-full relative z-10"
+            className="absolute inset-0 flex flex-col justify-between p-12 md:p-16"
           >
             {/* Header */}
-            <div className="flex justify-between items-center z-20">
+            <div className="flex justify-between items-center">
               <FluxLogoLarge />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={toggleDeviceType}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-[11px] font-black uppercase tracking-wider text-slate-200 transition-all pointer-events-auto cursor-pointer"
-                >
-                  {deviceType === "tv" ? "📺 Modo TV" : "🖥️ Modo PC"}
-                </button>
-                <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-black uppercase tracking-wider text-slate-400">
-                  <Wifi className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                  <span>Esperando conexión...</span>
-                </div>
+              <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <Wifi className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                <span>Esperando conexión...</span>
               </div>
             </div>
 
@@ -404,7 +297,7 @@ export default function ConnectTVView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen flex flex-col justify-between p-4 sm:p-8 md:p-12 lg:p-16 w-full relative z-10"
+            className="absolute inset-0 flex flex-col justify-between p-12 md:p-16 z-10"
           >
             {/* Ambient Background Glow matching the active track metadata */}
             {!clientState?.isKaraoke && (
@@ -429,15 +322,9 @@ export default function ConnectTVView() {
             )}
 
             {/* Header of Active Screen */}
-            <div className={`flex justify-between items-center z-20 transition-opacity duration-500 w-full ${(!clientState?.isKaraoke || deviceType !== "tv" || isUiActive) ? "opacity-100 animate-fade-in" : "opacity-0 pointer-events-none"}`}>
+            <div className="flex justify-between items-center z-20">
               <FluxLogoLarge />
               <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleDeviceType}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-[10px] font-black uppercase tracking-wider text-white transition-all cursor-pointer pointer-events-auto"
-                >
-                  {deviceType === "tv" ? "📺 Modo TV" : "🖥️ Modo PC"}
-                </button>
                 {clientState?.isKaraoke && (
                   <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-fuchsia-500/20 border border-fuchsia-500/30 text-[10px] font-black uppercase tracking-wider text-fuchsia-300 shadow-[0_0_15px_rgba(217,70,239,0.15)] animate-pulse">
                     <Mic2 className="w-3.5 h-3.5 text-cyan-400" />
@@ -459,201 +346,103 @@ export default function ConnectTVView() {
 
             {/* Main view container: changes layout depending on karaoke active status */}
             {clientState?.isKaraoke ? (
-              deviceType === "pc" ? (
-                /* 🖥️ PC SPLIT SCREEN KARAOKE VIEW */
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full max-w-7xl mx-auto my-auto p-4 z-10">
-                  
-                  {/* Left Side: Video Player Frame */}
-                  <div className="lg:col-span-7 flex flex-col justify-center space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-2xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/10 shrink-0">
-                          <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div>
-                          <p className="text-[8px] uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
-                          <h2 className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">{currentTrack?.title}</h2>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
-                        <p className="text-[10px] font-bold text-emerald-400 flex items-center justify-end gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          Activo
-                        </p>
-                      </div>
-                    </div>
+              /* IMMERSIVE TV KARAOKE VIEW WITH SYNCED LYRICS AND FULLSCREEN DESIGN */
+              <div className="flex-1 flex flex-col justify-between w-full h-full z-10 relative pointer-events-none mt-4">
+                
+                {/* Floating liquid orbs of light behind lyrics for high-contrast visibility */}
+                <div className="absolute inset-0 z-[-1] overflow-hidden">
+                  <div className="absolute top-[20%] left-[20%] w-[60%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
+                  <div className="absolute bottom-[20%] right-[20%] w-[60%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
+                </div>
 
-                    <div className="relative w-full aspect-video rounded-3xl overflow-hidden border border-white/10 bg-black shadow-2xl">
-                      <div className="absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none">
-                        {renderReactPlayer()}
-                      </div>
-                      {/* Video masking gradients */}
-                      <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
-                      <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent pointer-events-none z-10" />
+                {/* Top minimalist details */}
+                <div className="flex items-center justify-between w-full p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                      <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
+                      <h2 className="text-sm font-bold text-white truncate max-w-md">{currentTrack?.title}</h2>
                     </div>
                   </div>
-
-                  {/* Right Side: Optimized Lyrics Panel */}
-                  <div className="lg:col-span-5 flex flex-col bg-white/5 border border-white/5 rounded-3xl p-6 shadow-2xl relative min-h-[300px] justify-center items-center overflow-hidden">
-                    {/* Floating background art */}
-                    <div className="absolute -right-10 -bottom-10 w-44 h-44 rounded-full bg-fuchsia-500/5 blur-3xl pointer-events-none" />
-                    <div className="absolute -left-10 -top-10 w-44 h-44 rounded-full bg-cyan-500/5 blur-3xl pointer-events-none" />
-
-                    {lyricsState === "loading" && (
-                      <div className="flex flex-col items-center justify-center space-y-3">
-                        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
-                        <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider animate-pulse">Sincronizando letra de Flux...</p>
-                      </div>
-                    )}
-
-                    {lyricsState === "not_found" && (
-                      <div className="flex flex-col items-center justify-center text-center p-4 space-y-4">
-                        <div className="p-4 rounded-full bg-white/5 border border-white/10 text-slate-400">
-                          <Music className="w-8 h-8" />
-                        </div>
-                        <h3 className="text-base font-black text-white uppercase tracking-tight">Sigue la letra en el reproductor</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
-                          No se han encontrado letras interactivas externas. Utiliza la letra integrada en el vídeo de karaoke de la izquierda.
-                        </p>
-                      </div>
-                    )}
-
-                    {lyricsState === "found" && Array.isArray(lyrics) && (
-                      <div className="w-full h-full flex flex-col items-center justify-center space-y-4 overflow-y-auto max-h-[380px] premium-scrollbar">
-                        {(() => {
-                          const activeIndex = lyrics.findIndex(
-                            (l, i) => l.time <= playedSeconds && (!lyrics[i + 1] || lyrics[i + 1].time > playedSeconds)
-                          );
-                          return lyrics.map((line, idx) => {
-                            const isActive = idx === activeIndex;
-                            const isPast = idx < activeIndex;
-
-                            if (idx < activeIndex - 1 || idx > activeIndex + 2) return null;
-
-                            return (
-                              <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{
-                                  opacity: isActive ? 1 : isPast ? 0.4 : 0.6,
-                                  scale: isActive ? 1.05 : 0.95,
-                                }}
-                                className={`text-center font-extrabold transition-all duration-300 px-4 leading-snug ${
-                                  isActive
-                                    ? "text-2xl sm:text-3xl text-[#1ED760]"
-                                    : "text-lg sm:text-xl text-white/70"
-                                }`}
-                              >
-                                {line.text}
-                              </motion.div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
-
-                    {lyricsState === "found" && typeof lyrics === "string" && (
-                      <div className="w-full h-full relative overflow-hidden bg-black/40 rounded-2xl p-4 border border-white/5">
-                        <div className="absolute inset-0 overflow-y-auto p-4 text-center font-bold text-base text-white/90 whitespace-pre-line leading-relaxed scrollbar-thin">
-                          {lyrics}
-                        </div>
-                      </div>
-                    )}
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
+                    <p className="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      Activo
+                    </p>
                   </div>
                 </div>
-              ) : (
-                /* 📺 IMMERSIVE TV KARAOKE VIEW WITH FULLSCREEN DESIGN */
-                <div className="flex-1 flex flex-col justify-between w-full h-full z-10 relative pointer-events-none mt-4">
-                  
-                  {/* Floating liquid orbs of light behind lyrics for high-contrast visibility */}
-                  <div className="absolute inset-0 z-[-1] overflow-hidden">
-                    <div className="absolute top-[20%] left-[20%] w-[60%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
-                    <div className="absolute bottom-[20%] right-[20%] w-[60%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
-                  </div>
 
-                  {/* Top minimalist details */}
-                  <div className={`flex items-center justify-between w-full p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5 transition-opacity duration-500 ${isUiActive ? "opacity-100" : "opacity-0"}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0">
-                        <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
-                        <h2 className="text-sm font-bold text-white truncate max-w-md">{currentTrack?.title}</h2>
-                      </div>
+                {/* Lyrics Layer */}
+                <div className="flex-1 flex flex-col items-center justify-center py-12 px-6">
+                  {lyricsState === "loading" && (
+                    <div className="text-xl md:text-2xl font-black text-white/70 animate-pulse bg-black/65 border border-white/5 px-8 py-4 rounded-full backdrop-blur-md shadow-2xl">
+                      Cargando letras sincronizadas...
                     </div>
-                    <div className="text-right">
-                      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
-                      <p className="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        Activo
+                  )}
+
+                  {lyricsState === "not_found" && (
+                    <div className="text-center space-y-4 max-w-xl bg-black/60 p-8 rounded-3xl border border-white/5 backdrop-blur-md shadow-2xl">
+                      <p className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Sigue la letra en pantalla</p>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        No hemos encontrado letras sincronizadas automáticas para esta versión. Usa las letras de la pista instrumental en el vídeo de fondo.
                       </p>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Lyrics Layer - ZERO overlapping clutter in the center! */}
-                  <div className="flex-1 flex flex-col items-center justify-center py-12 px-6">
-                    {lyricsState === "loading" && (
-                      <div className="text-xl md:text-2xl font-black text-white/70 animate-pulse bg-black/65 border border-white/5 px-8 py-4 rounded-full backdrop-blur-md shadow-2xl">
-                        Cargando letras sincronizadas...
-                      </div>
-                    )}
+                  {lyricsState === "found" && Array.isArray(lyrics) && (
+                    <div className="w-full max-w-5xl flex flex-col items-center justify-center space-y-6">
+                      {(() => {
+                        const activeIndex = lyrics.findIndex(
+                          (l, i) => l.time <= playedSeconds && (!lyrics[i + 1] || lyrics[i + 1].time > playedSeconds)
+                        );
+                        return lyrics.map((line, idx) => {
+                          const isActive = idx === activeIndex;
+                          const isPast = idx < activeIndex;
 
-                    {/* If lyrics are not found, we render ABSOLUTELY NOTHING in the center so the background video's lyrics are 100% visible! */}
-                    {lyricsState === "not_found" && null}
+                          if (idx < activeIndex - 1 || idx > activeIndex + 2) return null;
 
-                    {lyricsState === "found" && Array.isArray(lyrics) && (
-                      <div className="w-full max-w-5xl flex flex-col items-center justify-center space-y-6">
-                        {(() => {
-                          const activeIndex = lyrics.findIndex(
-                            (l, i) => l.time <= playedSeconds && (!lyrics[i + 1] || lyrics[i + 1].time > playedSeconds)
+                          return (
+                            <motion.div
+                              key={idx}
+                              initial={{ opacity: 0, y: 15 }}
+                              animate={{
+                                opacity: isActive ? 1 : isPast ? 0.35 : 0.6,
+                                y: 0,
+                                scale: isActive ? 1.08 : 0.96,
+                              }}
+                              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                              className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-4 leading-tight ${
+                                isActive
+                                  ? "text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-[#1ED760]"
+                                  : "text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-white/80"
+                              }`}
+                              style={{
+                                textShadow: isActive
+                                  ? "0 0 20px rgba(30,215,96,0.8), 0 2px 10px rgba(0,0,0,0.95)"
+                                  : "0 2px 10px rgba(0,0,0,0.9)",
+                              }}
+                            >
+                              {line.text}
+                            </motion.div>
                           );
-                          return lyrics.map((line, idx) => {
-                            const isActive = idx === activeIndex;
-                            const isPast = idx < activeIndex;
+                        });
+                      })()}
+                    </div>
+                  )}
 
-                            if (idx < activeIndex - 1 || idx > activeIndex + 2) return null;
-
-                            return (
-                              <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, y: 15 }}
-                                animate={{
-                                  opacity: isActive ? 1 : isPast ? 0.35 : 0.6,
-                                  y: 0,
-                                  scale: isActive ? 1.08 : 0.96,
-                                }}
-                                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-4 leading-tight ${
-                                  isActive
-                                    ? "text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-[#1ED760]"
-                                    : "text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-white/80"
-                                }`}
-                                style={{
-                                  textShadow: isActive
-                                    ? "0 0 20px rgba(30,215,96,0.8), 0 2px 10px rgba(0,0,0,0.95)"
-                                    : "0 2px 10px rgba(0,0,0,0.9)",
-                                }}
-                              >
-                                {line.text}
-                              </motion.div>
-                            );
-                          });
-                        })()}
+                  {lyricsState === "found" && typeof lyrics === "string" && (
+                    <div className="w-full max-w-3xl h-[60%] relative overflow-hidden bg-black/60 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
+                      <div className="absolute inset-0 overflow-y-auto p-6 text-center font-black text-xl sm:text-2xl md:text-3xl text-white/95 whitespace-pre-line leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
+                        {lyrics}
                       </div>
-                    )}
-
-                    {lyricsState === "found" && typeof lyrics === "string" && (
-                      <div className="w-full max-w-3xl h-[60%] relative overflow-hidden bg-black/60 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
-                        <div className="absolute inset-0 overflow-y-auto p-6 text-center font-black text-xl sm:text-2xl md:text-3xl text-white/95 whitespace-pre-line leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
-                          {lyrics}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
-              )
+
+              </div>
             ) : (
               /* STANDARD TV MUSIC PLAYER VIEW */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center my-auto w-full max-w-6xl mx-auto z-10">
@@ -743,7 +532,7 @@ export default function ConnectTVView() {
             )}
 
             {/* Sync Progress Bar at the bottom */}
-            <div className={`w-full space-y-2 mt-auto z-20 transition-opacity duration-500 ${(!clientState?.isKaraoke || deviceType !== "tv" || isUiActive) ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+            <div className="w-full space-y-2 mt-auto z-20">
               <div className="flex justify-between items-center text-[11px] font-bold tracking-widest text-slate-400 font-mono">
                 <span>{formatTime(playedSeconds)}</span>
                 <span>{formatTime(duration)}</span>
@@ -763,17 +552,50 @@ export default function ConnectTVView() {
               <div
                 className={
                   clientState?.isKaraoke
-                    ? deviceType === "tv"
-                      ? "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black"
-                      : "absolute -left-[9999px] top-0 w-[300px] h-[200px] overflow-hidden pointer-events-none select-none"
-                    : "absolute -left-[9999px] top-0 w-[300px] h-[200px] overflow-hidden pointer-events-none select-none"
+                    ? "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black"
+                    : "absolute top-0 left-0 w-1 h-1 overflow-hidden opacity-0 pointer-events-none select-none"
                 }
               >
-                <div className={(clientState?.isKaraoke && deviceType === "tv") ? "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none" : "w-full h-full"}>
-                  {!(clientState?.isKaraoke && deviceType === "pc") && renderReactPlayer()}
+                <div className={clientState?.isKaraoke ? "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none" : "w-full h-full"}>
+                  <ReactPlayer
+                    ref={playerRef}
+                    url={trackUrl}
+                    playing={clientState?.isPlaying}
+                    volume={(clientState?.volume ?? 80) / 100}
+                    onProgress={(progress) => {
+                      setPlayedSeconds(progress.playedSeconds);
+                    }}
+                    onDuration={(d) => {
+                      setDuration(d);
+                    }}
+                    onEnded={() => {
+                      setPlayedSeconds(duration);
+                    }}
+                    onError={(err) => {
+                      console.error("TV ReactPlayer Error:", err);
+                    }}
+                    width="100%"
+                    height="100%"
+                    config={{
+                      youtube: {
+                        playerVars: {
+                          modestbranding: 1,
+                          rel: 0,
+                          showinfo: 0,
+                          iv_load_policy: 3,
+                          fs: 0,
+                          cc_load_policy: 0,
+                          controls: 0,
+                          disablekb: 1,
+                          autohide: 1,
+                          playsinline: 1,
+                        },
+                      },
+                    }}
+                  />
                 </div>
                 {/* Visual mask gradients to hide YouTube watermarks/bars */}
-                {clientState?.isKaraoke && deviceType === "tv" && (
+                {clientState?.isKaraoke && (
                   <>
                     <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black via-black/80 to-transparent z-10 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/95 to-transparent z-10 pointer-events-none" />

@@ -33,8 +33,9 @@ import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
 
-import ConnectTVView from "./components/ConnectTVView";
-import FluxConnectModal from "./components/FluxConnectModal";
+// Flux Connect Lazy Loaded Components
+const LazyConnectTVView = lazy(() => import("./components/ConnectTVView"));
+const LazyFluxConnectModal = lazy(() => import("./components/FluxConnectModal"));
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
@@ -593,12 +594,18 @@ function AppContent() {
   const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
 
   // Conditional rendering for Flux Connect Receiver Mode (/connect route)
-  const normalizedPath = window.location.pathname.toLowerCase().replace(/\/$/, "");
-  const isConnectPath = normalizedPath === "/connect";
+  const isConnectPath = window.location.pathname === "/connect";
   if (isConnectPath) {
     return (
       <div id="tv-route-wrapper" className="h-screen w-screen bg-[#050505]">
-        <ConnectTVView />
+        <Suspense fallback={
+          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#050505]">
+            <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-3" />
+            <span className="text-xs font-black uppercase tracking-widest text-slate-500 font-mono">Cargando Flux Connect...</span>
+          </div>
+        }>
+          <LazyConnectTVView />
+        </Suspense>
       </div>
     );
   }
@@ -1265,10 +1272,12 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      <FluxConnectModal
-        isOpen={isFluxConnectOpen}
-        onClose={() => setIsFluxConnectOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <LazyFluxConnectModal
+          isOpen={isFluxConnectOpen}
+          onClose={() => setIsFluxConnectOpen(false)}
+        />
+      </Suspense>
     </div>
   );
 }

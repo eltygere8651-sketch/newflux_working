@@ -19,24 +19,9 @@ import firebaseConfig from '../../firebase-applet-config.json';
 setLogLevel('silent');
 
 const app = initializeApp(firebaseConfig);
-
-let dbInstance;
-try {
-  dbInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
-  }, (firebaseConfig as any).firestoreDatabaseId);
-} catch (cacheError) {
-  console.warn("Firebase persistent cache failed to initialize, falling back to standard Firestore:", cacheError);
-  try {
-    dbInstance = initializeFirestore(app, {}, (firebaseConfig as any).firestoreDatabaseId);
-  } catch (dbError) {
-    console.error("Firestore standard initialization failed:", dbError);
-    // In worst case, try default getFirestore
-    dbInstance = getFirestore(app);
-  }
-}
-
-export const db = dbInstance;
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+}, (firebaseConfig as any).firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
