@@ -41,7 +41,11 @@ export default function ConnectTVView() {
       try {
         const code = generateSessionCode();
         setSessionCode(code);
-        await createReceiverSession(code, "Flux Smart TV");
+        
+        const isTV = /SmartTV|TV|WebOS|Tizen|Roku|AppleTV/i.test(navigator.userAgent);
+        const deviceName = isTV ? "Flux Smart TV" : "Flux PC Receiver";
+        
+        await createReceiverSession(code, deviceName);
         setLoading(false);
 
         // Listen for remote controller connections & changes
@@ -350,13 +354,13 @@ export default function ConnectTVView() {
               <div className="flex-1 flex flex-col justify-between w-full h-full z-10 relative pointer-events-none mt-4">
                 
                 {/* Floating liquid orbs of light behind lyrics for high-contrast visibility */}
-                <div className="absolute inset-0 z-[-1] overflow-hidden">
+                <div className={`absolute inset-0 z-[-1] overflow-hidden ${lyricsState === 'not_found' ? 'opacity-0' : 'opacity-100'}`}>
                   <div className="absolute top-[20%] left-[20%] w-[60%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
                   <div className="absolute bottom-[20%] right-[20%] w-[60%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
                 </div>
 
-                {/* Top minimalist details */}
-                <div className="flex items-center justify-between w-full p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5">
+                {/* Top minimalist details - Positioned absolutely so it doesn't interfere with flex centering */}
+                <div className={`absolute top-4 left-4 right-4 flex items-center justify-between p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5 transition-opacity duration-500 z-50 ${lyricsState === 'not_found' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0">
                       <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
@@ -376,7 +380,7 @@ export default function ConnectTVView() {
                 </div>
 
                 {/* Lyrics Layer */}
-                <div className="flex-1 flex flex-col items-center justify-center py-12 px-6">
+                <div className={`flex-1 flex flex-col items-center justify-center py-12 px-6 ${lyricsState === 'not_found' ? 'hidden' : 'flex'}`}>
                   {lyricsState === "loading" && (
                     <div className="absolute top-24 right-8 flex items-center gap-2 text-xs font-black text-white/50 bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-md">
                       <Loader2 className="w-3 h-3 animate-spin text-emerald-500" />
@@ -544,11 +548,19 @@ export default function ConnectTVView() {
               <div
                 className={
                   clientState?.isKaraoke
-                    ? "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black"
+                    ? (lyricsState === "not_found"
+                        ? "absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-xl z-20 pointer-events-auto"
+                        : "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black pointer-events-none")
                     : "absolute top-0 left-0 w-1 h-1 overflow-hidden opacity-0 pointer-events-none select-none"
                 }
               >
-                <div className={clientState?.isKaraoke ? "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none" : "w-full h-full"}>
+                <div className={
+                  clientState?.isKaraoke
+                    ? (lyricsState === "not_found"
+                        ? "w-full max-w-[90vw] md:max-w-6xl aspect-video rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(30,215,96,0.15)] border border-white/10"
+                        : "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none opacity-[0.15]")
+                    : "w-full h-full"
+                }>
                   <ReactPlayer
                     ref={playerRef}
                     url={trackUrl}

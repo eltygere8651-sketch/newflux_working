@@ -1229,12 +1229,20 @@ export const FluxKaraoke = () => {
             })()}
 
             {/* Immersive Video/Lyrics container */}
-            <div className="flex-1 relative w-full h-full overflow-hidden flex flex-col items-center justify-center z-20">
+            <div className={`flex-1 relative w-full h-full overflow-hidden flex flex-col items-center justify-center z-20 ${lyricsState === 'not_found' ? 'p-8' : ''}`}>
               
               {/* Background player (Visible if lyrics not found, invisible otherwise) */}
-              <div className={`absolute inset-0 z-0 overflow-hidden bg-black transition-opacity duration-1000 ${lyricsState === 'not_found' ? 'opacity-100' : 'opacity-[0.01] pointer-events-none'}`}>
-                {/* Oversized wrapper to crop the iframe borders (pushing YouTube's logo and title card outside the visible area) */}
-                <div className="absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none">
+              <div className={
+                lyricsState === "not_found"
+                  ? "w-full max-w-6xl aspect-video rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(30,215,96,0.15)] border border-white/10 z-0 bg-black pointer-events-auto relative transition-all duration-1000"
+                  : "absolute inset-0 z-0 overflow-hidden bg-black transition-opacity duration-1000 opacity-[0.05] pointer-events-none"
+              }>
+                {/* Wrapper */}
+                <div className={
+                  lyricsState === "not_found"
+                    ? "w-full h-full"
+                    : "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none"
+                }>
                   <ReactPlayer
                     url={`https://www.youtube.com/watch?v=${currentTrack.id}`}
                     playing={isPlaying}
