@@ -594,7 +594,8 @@ function AppContent() {
   const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
 
   // Conditional rendering for Flux Connect Receiver Mode (/connect route)
-  const isConnectPath = window.location.pathname === "/connect";
+  const normalizedPath = window.location.pathname.toLowerCase().replace(/\/$/, "");
+  const isConnectPath = normalizedPath === "/connect";
   if (isConnectPath) {
     return (
       <div id="tv-route-wrapper" className="h-screen w-screen bg-[#050505]">

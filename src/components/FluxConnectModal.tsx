@@ -26,9 +26,14 @@ interface FluxConnectModalProps {
 export default function FluxConnectModal({ isOpen, onClose }: FluxConnectModalProps) {
   const { user } = useFirebase();
   const [code, setCode] = useState<string>("");
-  const [activeCode, setActiveCode] = useState<string | null>(
-    localStorage.getItem("flux_connect_active_code")
-  );
+  const [activeCode, setActiveCode] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("flux_connect_active_code");
+    } catch (e) {
+      console.warn("Storage access not allowed:", e);
+      return null;
+    }
+  });
   const [session, setSession] = useState<FluxConnectSession | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +78,11 @@ export default function FluxConnectModal({ isOpen, onClose }: FluxConnectModalPr
   }, [isOpen]);
 
   const handleLocalDisconnect = () => {
-    localStorage.removeItem("flux_connect_active_code");
+    try {
+      localStorage.removeItem("flux_connect_active_code");
+    } catch (e) {
+      console.warn("Storage write not allowed:", e);
+    }
     setActiveCode(null);
     setSession(null);
     window.dispatchEvent(
@@ -94,7 +103,11 @@ export default function FluxConnectModal({ isOpen, onClose }: FluxConnectModalPr
     try {
       await joinSessionAsController(codeToConnect, user?.uid || "anonymous_user");
       
-      localStorage.setItem("flux_connect_active_code", codeToConnect);
+      try {
+        localStorage.setItem("flux_connect_active_code", codeToConnect);
+      } catch (e) {
+        console.warn("Storage write not allowed:", e);
+      }
       setActiveCode(codeToConnect);
       setSuccess(true);
       setError(null);

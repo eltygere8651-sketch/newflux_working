@@ -197,24 +197,33 @@ export default function ConnectTVView() {
   const uiTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
-    const savedType = localStorage.getItem("flux_connect_device_type");
-    if (savedType === "pc" || savedType === "tv") {
-      setDeviceType(savedType);
-    } else {
-      const ua = navigator.userAgent.toLowerCase();
-      const isTVUA = /smart-tv|smarttv|googletv|appletv|tizen|webos|hbbtv|netcast|viera|bravia|playstation|xbox|aftb|afts|firetv|roku|nintendo/i.test(ua);
-      if (isTVUA) {
-        setDeviceType("tv");
-      } else {
-        setDeviceType("pc");
+    try {
+      const savedType = localStorage.getItem("flux_connect_device_type");
+      if (savedType === "pc" || savedType === "tv") {
+        setDeviceType(savedType);
+        return;
       }
+    } catch (e) {
+      console.warn("Storage access not allowed:", e);
+    }
+
+    const ua = navigator.userAgent.toLowerCase();
+    const isTVUA = /smart-tv|smarttv|googletv|appletv|tizen|webos|hbbtv|netcast|viera|bravia|playstation|xbox|aftb|afts|firetv|roku|nintendo/i.test(ua);
+    if (isTVUA) {
+      setDeviceType("tv");
+    } else {
+      setDeviceType("pc");
     }
   }, []);
 
   const toggleDeviceType = () => {
     const nextType = deviceType === "tv" ? "pc" : "tv";
     setDeviceType(nextType);
-    localStorage.setItem("flux_connect_device_type", nextType);
+    try {
+      localStorage.setItem("flux_connect_device_type", nextType);
+    } catch (e) {
+      console.warn("Storage write not allowed:", e);
+    }
   };
 
   useEffect(() => {
