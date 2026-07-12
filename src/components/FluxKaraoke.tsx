@@ -134,6 +134,17 @@ export const FluxKaraoke = () => {
   const handlePlayTrack = (track: any) => {
     setCurrentTrack(track);
     setIsPlaying(false);
+    
+    // Request fullscreen on mobile directly inside the user click handler to satisfy browser gesture requirements
+    if (window.innerWidth < 768) {
+      const el = document.documentElement as any;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch((err: any) => console.log("Fullscreen prevented", err));
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    }
+
     // Add to recents
     setRecentTracks(prev => {
       const filtered = prev.filter(t => t.id !== track.id);
@@ -210,15 +221,6 @@ export const FluxKaraoke = () => {
 
   useEffect(() => {
     if (currentTrack) {
-      if (window.innerWidth < 768) {
-        const el = document.documentElement as any;
-        if (el.requestFullscreen) {
-          el.requestFullscreen().catch(() => {});
-        } else if (el.webkitRequestFullscreen) {
-          el.webkitRequestFullscreen();
-        }
-      }
-
       setLyrics(null);
       setCurrentTime(0);
       setLyricsState("loading");
@@ -235,8 +237,12 @@ export const FluxKaraoke = () => {
         return;
       }
       
-      fetch(`/api/lyrics/search?q=${encodeURIComponent(query)}`)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 seconds max
+
+      fetch(`/api/lyrics/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
         .then(res => {
+          clearTimeout(timeoutId);
           if (!res.ok) throw new Error(`Server returned ${res.status}`);
           return res.json();
         })
@@ -268,6 +274,7 @@ export const FluxKaraoke = () => {
              setLyricsState("not_found");
           }
         }).catch(err => {
+          clearTimeout(timeoutId);
           console.error("Lyrics fetch error:", err);
           setLyricsState("not_found");
         });
@@ -284,12 +291,12 @@ export const FluxKaraoke = () => {
     }
   }, [currentTrack]);
     
-  // Auto-play when BOTH lyrics and player are fully prepared
+  // Auto-play when lyrics are loaded
   useEffect(() => {
-    if (currentTrack && isPlayerReady && (lyricsState === "found" || lyricsState === "not_found")) {
+    if (currentTrack && (lyricsState === "found" || lyricsState === "not_found")) {
       setIsPlaying(true);
     }
-  }, [lyricsState, isPlayerReady, currentTrack]);
+  }, [lyricsState, currentTrack]);
 
 
   // Microphone & Audio Engine
@@ -1181,8 +1188,8 @@ export const FluxKaraoke = () => {
               
               {/* Background player (Visible if lyrics not found, invisible otherwise) */}
               <div className={`absolute inset-0 z-0 overflow-hidden bg-black transition-opacity duration-1000 ${lyricsState === 'not_found' ? 'opacity-100' : 'opacity-[0.01] pointer-events-none'}`}>
-                {/* Oversized wrapper to crop the iframe borders (pushing YouTube's logo and title card outside the visible area) */}
-                <div className="absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none">
+                {/* When lyrics are not found, we show the full video to not crop YouTube's built-in karaoke lyrics. Otherwise, we oversize it to hide YouTube branding. */}
+                <div className={`absolute pointer-events-none transition-all duration-700 ${lyricsState === 'not_found' ? 'w-full h-full left-0 top-0' : 'w-[124%] h-[124%] left-[-12%] top-[-12%]'}`}>
                   <ReactPlayer
                     url={`https://www.youtube.com/watch?v=${currentTrack.id}`}
                     playing={isPlaying}
@@ -1220,7 +1227,7 @@ export const FluxKaraoke = () => {
               </div>
 
               {/* Unified Premium Sincronización / Loading Glass Screen */}
-              {(lyricsState === "loading" || !isPlayerReady || isBuffering) && (
+              {lyricsState === "loading" && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-45 flex flex-col items-center justify-center p-6 text-center">
                   <div className="relative mb-6">
                     {/* Double pulsing neon circle loader representing sync alignment */}
@@ -1230,11 +1237,15 @@ export const FluxKaraoke = () => {
                     </div>
                   </div>
                   <h3 className="text-lg font-black uppercase tracking-widest text-emerald-400 mb-2">Alineando Escenario</h3>
-                  <p className="text-xs text-slate-400 font-medium max-w-xs leading-relaxed">
-                    {lyricsState === "loading" 
-                      ? "Sincronizando pistas de karaoke y letras inteligentes..." 
-                      : "Preparando reproductor instrumental continuo..."}
+                  <p className="text-xs text-slate-400 font-medium max-w-xs leading-relaxed mb-6">
+                    Sincronizando pistas de karaoke y letras inteligentes...
                   </p>
+                  <button 
+                    onClick={() => setCurrentTrack(null)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold rounded-full transition-all backdrop-blur-md"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Cancelar
+                  </button>
                 </div>
               )}
 
@@ -1334,7 +1345,6 @@ export const FluxKaraoke = () => {
                         const isPast = idx < activeIndex;
                         
                         if (idx < activeIndex - 1 || idx > activeIndex + 2) return null;
-                        
                         return (
                           <motion.div 
                             key={idx}
@@ -1342,20 +1352,20 @@ export const FluxKaraoke = () => {
                             animate={{ 
                               opacity: isActive ? 1 : isPast ? 0.35 : 0.6, 
                               y: 0,
-                              scale: isActive ? 1.08 : 0.96
+                              scale: isActive ? 1.05 : 0.98
                             }}
                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                            className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-2 leading-tight ${
+                            className={`w-full max-w-[95vw] text-center font-black transition-all duration-300 drop-shadow-2xl px-2 leading-tight break-words ${
                               isActive 
-                                ? 'text-[36px] sm:text-[44px] md:text-5xl lg:text-6xl text-emerald-400' 
-                                : 'text-[24px] sm:text-[30px] md:text-3xl lg:text-4xl text-white/80'
+                                ? 'text-2xl sm:text-4xl md:text-5xl lg:text-6xl text-emerald-400' 
+                                : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl text-white/80'
                             }`}
                             style={{ 
                               textShadow: isActive 
                                 ? '0 0 15px rgba(16,185,129,0.7), 0 2px 8px rgba(0,0,0,0.9)' 
                                 : '0 2px 8px rgba(0,0,0,0.9)' 
                             }}
-                          >
+                          > 
                              {line.text}
                           </motion.div>
                         );
