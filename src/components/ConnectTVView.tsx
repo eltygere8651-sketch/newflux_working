@@ -41,11 +41,7 @@ export default function ConnectTVView() {
       try {
         const code = generateSessionCode();
         setSessionCode(code);
-        
-        const isTV = /SmartTV|TV|WebOS|Tizen|Roku|AppleTV/i.test(navigator.userAgent);
-        const deviceName = isTV ? "Flux Smart TV" : "Flux PC Receiver";
-        
-        await createReceiverSession(code, deviceName);
+        await createReceiverSession(code, "Flux Smart TV");
         setLoading(false);
 
         // Listen for remote controller connections & changes
@@ -351,45 +347,52 @@ export default function ConnectTVView() {
             {/* Main view container: changes layout depending on karaoke active status */}
             {clientState?.isKaraoke ? (
               /* IMMERSIVE TV KARAOKE VIEW WITH SYNCED LYRICS AND FULLSCREEN DESIGN */
-              <div className="flex-1 flex flex-col justify-between w-full h-full z-10 relative pointer-events-none mt-4">
+              <div className="flex-1 flex w-full h-full z-10 relative mt-0">
                 
                 {/* Floating liquid orbs of light behind lyrics for high-contrast visibility */}
-                <div className={`absolute inset-0 z-[-1] overflow-hidden ${lyricsState === 'not_found' ? 'opacity-0' : 'opacity-100'}`}>
-                  <div className="absolute top-[20%] left-[20%] w-[60%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
-                  <div className="absolute bottom-[20%] right-[20%] w-[60%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
+                <div className="absolute inset-0 z-[-1] overflow-hidden pointer-events-none">
+                  <div className="absolute top-[10%] left-[10%] w-[80%] h-[60%] rounded-full bg-emerald-500/10 blur-[150px]" />
+                  <div className="absolute bottom-[10%] right-[10%] w-[80%] h-[60%] rounded-full bg-cyan-500/10 blur-[150px]" />
                 </div>
 
-                {/* Top minimalist details - Positioned absolutely so it doesn't interfere with flex centering */}
-                <div className={`absolute top-4 left-4 right-4 flex items-center justify-between p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5 transition-opacity duration-500 z-50 ${lyricsState === 'not_found' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                {/* Top minimalist details */}
+                <div className="absolute top-8 left-8 right-8 flex items-center justify-between p-4 bg-black/40 backdrop-blur-md rounded-2xl border border-white/5 z-30 shadow-2xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 shrink-0 shadow-lg">
                       <img src={currentTrack?.thumbnail || ""} alt="" className="w-full h-full object-cover" />
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
-                      <h2 className="text-sm font-bold text-white truncate max-w-md">{currentTrack?.title}</h2>
+                      <p className="text-[10px] md:text-xs uppercase font-black tracking-widest text-[#1ED760]">Cantando ahora</p>
+                      <h2 className="text-sm md:text-base font-bold text-white truncate max-w-sm md:max-w-md lg:max-w-lg">{currentTrack?.title}</h2>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
-                    <p className="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      Activo
-                    </p>
+                  <div className="text-right flex items-center gap-4">
+                    <div className="hidden md:block text-right">
+                      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Modo</p>
+                      <p className="text-xs font-bold text-white/80">Karaoke TV</p>
+                    </div>
+                    <div className="h-8 w-[1px] bg-white/10 hidden md:block"></div>
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Micrófono</p>
+                      <p className="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        Activo
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 {/* Lyrics Layer */}
-                <div className={`flex-1 flex flex-col items-center justify-center py-12 px-6 ${lyricsState === 'not_found' ? 'hidden' : 'flex'}`}>
+                <div className="flex-1 flex flex-col items-center justify-center pt-32 pb-24 px-8 z-20 w-full h-full relative">
                   {lyricsState === "loading" && (
-                    <div className="absolute top-24 right-8 flex items-center gap-2 text-xs font-black text-white/50 bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-md">
-                      <Loader2 className="w-3 h-3 animate-spin text-emerald-500" />
+                    <div className="absolute top-32 right-8 flex items-center gap-2 text-xs font-black text-white/50 bg-black/40 px-4 py-2 rounded-full border border-white/5 backdrop-blur-md shadow-xl">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
                       <span>Buscando letras...</span>
                     </div>
                   )}
 
                   {lyricsState === "found" && Array.isArray(lyrics) && (
-                    <div className="w-full max-w-5xl flex flex-col items-center justify-center space-y-6">
+                    <div className="w-full max-w-6xl h-full flex flex-col items-center justify-center space-y-4 md:space-y-6">
                       {(() => {
                         const activeIndex = lyrics.findIndex(
                           (l, i) => l.time <= playedSeconds && (!lyrics[i + 1] || lyrics[i + 1].time > playedSeconds)
@@ -407,17 +410,17 @@ export default function ConnectTVView() {
                               animate={{
                                 opacity: isActive ? 1 : isPast ? 0.35 : 0.6,
                                 y: 0,
-                                scale: isActive ? 1.08 : 0.96,
+                                scale: isActive ? 1.05 : 0.95,
                               }}
                               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                              className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-4 leading-tight ${
+                              className={`text-center font-black transition-all duration-300 drop-shadow-2xl px-6 leading-tight max-w-5xl ${
                                 isActive
-                                  ? "text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-[#1ED760]"
-                                  : "text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-white/80"
+                                  ? "text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-[#1ED760]"
+                                  : "text-xl sm:text-2xl md:text-3xl lg:text-4xl text-white/80"
                               }`}
                               style={{
                                 textShadow: isActive
-                                  ? "0 0 20px rgba(30,215,96,0.8), 0 2px 10px rgba(0,0,0,0.95)"
+                                  ? "0 0 25px rgba(30,215,96,0.5), 0 4px 15px rgba(0,0,0,0.9)"
                                   : "0 2px 10px rgba(0,0,0,0.9)",
                               }}
                             >
@@ -430,8 +433,8 @@ export default function ConnectTVView() {
                   )}
 
                   {lyricsState === "found" && typeof lyrics === "string" && (
-                    <div className="w-full max-w-3xl h-[60%] relative overflow-hidden bg-black/60 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
-                      <div className="absolute inset-0 overflow-y-auto p-6 text-center font-black text-xl sm:text-2xl md:text-3xl text-white/95 whitespace-pre-line leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
+                    <div className="w-full max-w-4xl h-[70%] mt-12 relative overflow-hidden bg-black/50 backdrop-blur-md rounded-3xl p-8 border border-white/5 shadow-2xl">
+                      <div className="absolute inset-0 overflow-y-auto p-8 text-center font-bold text-xl sm:text-2xl md:text-3xl text-white/90 whitespace-pre-line leading-relaxed scrollbar-thin scrollbar-thumb-white/10">
                         {lyrics}
                       </div>
                     </div>
@@ -548,19 +551,11 @@ export default function ConnectTVView() {
               <div
                 className={
                   clientState?.isKaraoke
-                    ? (lyricsState === "not_found"
-                        ? "absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-xl z-20 pointer-events-auto"
-                        : "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black pointer-events-none")
+                    ? "absolute inset-0 w-full h-full z-0 overflow-hidden bg-black"
                     : "absolute top-0 left-0 w-1 h-1 overflow-hidden opacity-0 pointer-events-none select-none"
                 }
               >
-                <div className={
-                  clientState?.isKaraoke
-                    ? (lyricsState === "not_found"
-                        ? "w-full max-w-[90vw] md:max-w-6xl aspect-video rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(30,215,96,0.15)] border border-white/10"
-                        : "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none opacity-[0.15]")
-                    : "w-full h-full"
-                }>
+                <div className={clientState?.isKaraoke ? "absolute w-[124%] h-[124%] left-[-12%] top-[-12%] pointer-events-none" : "w-full h-full"}>
                   <ReactPlayer
                     ref={playerRef}
                     url={trackUrl}
