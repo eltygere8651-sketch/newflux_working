@@ -37,15 +37,16 @@ export default function ConnectTVView() {
 
   // Generate session code and initialize session on mount
   useEffect(() => {
+    let unsub: (() => void) | undefined;
+
     const initSession = async () => {
       try {
         const code = generateSessionCode();
         setSessionCode(code);
         await createReceiverSession(code, "Flux Smart TV");
-        setLoading(false);
 
         // Listen for remote controller connections & changes
-        const unsubscribe = subscribeToSession(
+        unsub = subscribeToSession(
           code,
           (updatedSession) => {
             if (updatedSession) {
@@ -61,7 +62,7 @@ export default function ConnectTVView() {
           }
         );
 
-        return unsubscribe;
+        setLoading(false);
       } catch (err: any) {
         console.error("Error creating receiver session:", err);
         setError("No se pudo iniciar Flux Connect. Inténtalo de nuevo.");
@@ -69,10 +70,7 @@ export default function ConnectTVView() {
       }
     };
 
-    let unsub: (() => void) | undefined;
-    initSession().then((u) => {
-      if (u) unsub = u;
-    });
+    initSession();
 
     return () => {
       if (unsub) unsub();
@@ -301,7 +299,7 @@ export default function ConnectTVView() {
   };
 
   return (
-    <div id="tv-connect-container" className="h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden relative select-none">
+    <div id="tv-connect-container" className="min-h-screen w-screen bg-[#050505] text-white font-sans overflow-y-auto overflow-x-hidden relative select-none">
       
       {/* 1. WAITING FOR CONNECTION SCREEN */}
       <AnimatePresence mode="wait">
@@ -312,7 +310,7 @@ export default function ConnectTVView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="absolute inset-0 flex flex-col justify-between p-12 md:p-16"
+            className="min-h-screen flex flex-col justify-between p-4 sm:p-8 md:p-12 lg:p-16 w-full relative z-10"
           >
             {/* Header */}
             <div className="flex justify-between items-center z-20">
@@ -406,7 +404,7 @@ export default function ConnectTVView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="absolute inset-0 flex flex-col justify-between p-12 md:p-16 z-10"
+            className="min-h-screen flex flex-col justify-between p-4 sm:p-8 md:p-12 lg:p-16 w-full relative z-10"
           >
             {/* Ambient Background Glow matching the active track metadata */}
             {!clientState?.isKaraoke && (

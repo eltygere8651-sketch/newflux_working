@@ -33,9 +33,8 @@ import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
 
-// Flux Connect Lazy Loaded Components
-const LazyConnectTVView = lazy(() => import("./components/ConnectTVView"));
-const LazyFluxConnectModal = lazy(() => import("./components/FluxConnectModal"));
+import ConnectTVView from "./components/ConnectTVView";
+import FluxConnectModal from "./components/FluxConnectModal";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
@@ -599,14 +598,7 @@ function AppContent() {
   if (isConnectPath) {
     return (
       <div id="tv-route-wrapper" className="h-screen w-screen bg-[#050505]">
-        <Suspense fallback={
-          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#050505]">
-            <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-3" />
-            <span className="text-xs font-black uppercase tracking-widest text-slate-500 font-mono">Cargando Flux Connect...</span>
-          </div>
-        }>
-          <LazyConnectTVView />
-        </Suspense>
+        <ConnectTVView />
       </div>
     );
   }
@@ -1273,12 +1265,10 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      <Suspense fallback={null}>
-        <LazyFluxConnectModal
-          isOpen={isFluxConnectOpen}
-          onClose={() => setIsFluxConnectOpen(false)}
-        />
-      </Suspense>
+      <FluxConnectModal
+        isOpen={isFluxConnectOpen}
+        onClose={() => setIsFluxConnectOpen(false)}
+      />
     </div>
   );
 }
