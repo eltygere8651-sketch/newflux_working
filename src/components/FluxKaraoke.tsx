@@ -284,12 +284,12 @@ export const FluxKaraoke = () => {
     }
   }, [currentTrack]);
     
-  // Auto-play when BOTH lyrics and player are fully prepared
+  // Auto-play when lyrics are loaded
   useEffect(() => {
-    if (currentTrack && isPlayerReady && (lyricsState === "found" || lyricsState === "not_found")) {
+    if (currentTrack && (lyricsState === "found" || lyricsState === "not_found")) {
       setIsPlaying(true);
     }
-  }, [lyricsState, isPlayerReady, currentTrack]);
+  }, [lyricsState, currentTrack]);
 
 
   // Microphone & Audio Engine
@@ -1220,7 +1220,7 @@ export const FluxKaraoke = () => {
               </div>
 
               {/* Unified Premium Sincronización / Loading Glass Screen */}
-              {(lyricsState === "loading" || !isPlayerReady || isBuffering) && (
+              {lyricsState === "loading" && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-45 flex flex-col items-center justify-center p-6 text-center">
                   <div className="relative mb-6">
                     {/* Double pulsing neon circle loader representing sync alignment */}
@@ -1230,11 +1230,15 @@ export const FluxKaraoke = () => {
                     </div>
                   </div>
                   <h3 className="text-lg font-black uppercase tracking-widest text-emerald-400 mb-2">Alineando Escenario</h3>
-                  <p className="text-xs text-slate-400 font-medium max-w-xs leading-relaxed">
-                    {lyricsState === "loading" 
-                      ? "Sincronizando pistas de karaoke y letras inteligentes..." 
-                      : "Preparando reproductor instrumental continuo..."}
+                  <p className="text-xs text-slate-400 font-medium max-w-xs leading-relaxed mb-6">
+                    Sincronizando pistas de karaoke y letras inteligentes...
                   </p>
+                  <button 
+                    onClick={() => setCurrentTrack(null)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold rounded-full transition-all backdrop-blur-md"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Cancelar
+                  </button>
                 </div>
               )}
 
