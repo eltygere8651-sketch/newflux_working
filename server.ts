@@ -78,6 +78,23 @@ const apiLimiter = rateLimit({
 app.use("/api/youtube", apiLimiter);
 app.use("/api/oembed", apiLimiter);
 
+// Specific rate limiter for VIP emails to prevent spam
+const vipMailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes de verificación. Por favor, inténtalo más tarde." },
+});
+
+const vipWelcomeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Limit each IP to 3 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes de activación. Por favor, inténtalo más tarde." },
+});
+
 const PORT = 3000;
 
 // Minimal AI Setup
@@ -1937,6 +1954,7 @@ function getFirestoreDb() {
       if (fs.existsSync(configPath)) {
         const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
         admin.initializeApp({
+          credential: process.env.FIREBASE_SERVICE_ACCOUNT ? admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) : admin.credential.applicationDefault(),
           projectId: config.projectId,
         });
         isFirebaseAdminInitialized = true;
@@ -2159,6 +2177,115 @@ app.post("/api/support/telegram", async (req, res) => {
   } catch (err) {
     console.error("Telegram support API error:", err);
     return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// VIP Landing Send Code Endpoint
+app.post("/api/vip/send-code", vipMailLimiter, async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || typeof email !== 'string' || email.length > 100) {
+    return res.status(400).json({ error: "Email no válido" });
+  }
+  if (!code || typeof code !== 'string' || code.length !== 6) {
+    return res.status(400).json({ error: "Código no válido" });
+  }
+
+  try {
+    const db = getFirestoreDb();
+    if (!db) {
+      return res.status(503).json({ error: "Base de datos no inicializada en el servidor" });
+    }
+
+    await db.collection("mail").add({
+      to: email,
+      message: {
+        subject: "Tu Pase VIP - Código de Verificación Flux",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background-color: #070708; padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); color: white;">
+            <h1 style="color: #1ED760; text-transform: uppercase; letter-spacing: 2px; font-size: 24px; text-align: center;">Acceso VIP</h1>
+            <p style="color: #a7a7a7; font-size: 16px; line-height: 1.6; text-align: center;">Has sido invitado a disfrutar de 7 días de acceso completo. Tu código de verificación es:</p>
+            <div style="background-color: rgba(30,215,96,0.1); border: 1px solid rgba(30,215,96,0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0;">
+              <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #1ED760;">${code}</span>
+            </div>
+            <p style="color: #a7a7a7; font-size: 14px; text-align: center;">Copia este código y pégalo en la aplicación para activar tu prueba gratuita.</p>
+          </div>
+        `
+      }
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error sending VIP code:", err);
+    return res.status(500).json({ error: "Error interno al enviar el correo" });
+  }
+});
+
+// VIP Landing Send Welcome Endpoint
+app.post("/api/vip/send-welcome", vipWelcomeLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string' || email.length > 100) {
+    return res.status(400).json({ error: "Email no válido" });
+  }
+
+  try {
+    const db = getFirestoreDb();
+    if (!db) {
+      return res.status(503).json({ error: "Base de datos no inicializada en el servidor" });
+    }
+
+    const { Timestamp } = await import("firebase-admin/firestore");
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    // 1. Bienvenida (Inmediato)
+    await db.collection("mail").add({
+      to: email,
+      message: {
+        subject: "¡Bienvenido a Flux Premium!",
+        html: `
+          <div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;">
+            <h1 style="color: #1ED760;">¡Pase VIP Activado!</h1>
+            <p style="color: #a7a7a7;">Disfruta de música ilimitada, Sofía DJ en Flux Radio, Karaoke y cero anuncios durante 7 días.</p>
+          </div>
+        `
+      }
+    });
+
+    // 2. Recordatorio 2 días (Enviado el día 5)
+    await db.collection("mail").add({
+      to: email,
+      delivery: { startTime: Timestamp.fromMillis(now + 5 * dayMs) },
+      message: {
+        subject: "Tu Pase VIP expira en 2 días",
+        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Tu prueba casi termina!</h1><p style="color: #a7a7a7;">Recuerda renovar por solo 5 €/mes para no perder tu acceso.</p></div>`
+      }
+    });
+
+    // 3. Recordatorio 24 horas (Enviado el día 6)
+    await db.collection("mail").add({
+      to: email,
+      delivery: { startTime: Timestamp.fromMillis(now + 6 * dayMs) },
+      message: {
+        subject: "Tu Pase VIP expira en 24 horas",
+        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">Solo quedan 24 horas</h1><p style="color: #a7a7a7;">Renueva por solo 5 €/mes.</p></div>`
+      }
+    });
+
+    // 4. Recordatorio 6 horas (Enviado el día 6 + 18h)
+    await db.collection("mail").add({
+      to: email,
+      delivery: { startTime: Timestamp.fromMillis(now + 6 * dayMs + 18 * 60 * 60 * 1000) },
+      message: {
+        subject: "Últimas 6 horas de tu Pase VIP",
+        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Últimas horas!</h1><p style="color: #a7a7a7;">Tu pase está a punto de expirar. ¡Renueva ahora!</p></div>`
+      }
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error sending VIP welcome:", err);
+    return res.status(500).json({ error: "Error interno al enviar los correos" });
   }
 });
 

@@ -139,5 +139,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['premiumConversions'])
       );
     }
+
+    // 9. Correos (Firebase Trigger Email) - Reglas Estrictas
+    match /mail/{mailId} {
+      // Colección totalmente cerrada a clientes.
+      // Únicamente el backend (Firebase Admin SDK) tiene permiso de escritura.
+      allow read, write: if false;
+    }
   }
 }

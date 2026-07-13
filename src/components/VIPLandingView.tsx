@@ -39,24 +39,19 @@ export const VIPLandingView = () => {
     try {
       const newCode = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // Enviar email vía Trigger Email (escribiendo en la colección mail)
+      // Enviar email vía backend (proxy hacia Trigger Email)
       console.log("🔐 CÓDIGO VIP DE PRUEBA (Solo en desarrollo):", newCode);
-      await addDoc(collection(db, 'mail'), {
-        to: email,
-        message: {
-          subject: "Tu Pase VIP - Código de Verificación Flux",
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background-color: #070708; padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); color: white;">
-              <h1 style="color: #1ED760; text-transform: uppercase; letter-spacing: 2px; font-size: 24px; text-align: center;">Acceso VIP</h1>
-              <p style="color: #a7a7a7; font-size: 16px; line-height: 1.6; text-align: center;">Has sido invitado a disfrutar de 7 días de acceso completo. Tu código de verificación es:</p>
-              <div style="background-color: rgba(30,215,96,0.1); border: 1px solid rgba(30,215,96,0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0;">
-                <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #1ED760;">${newCode}</span>
-              </div>
-              <p style="color: #a7a7a7; font-size: 14px; text-align: center;">Copia este código y pégalo en la aplicación para activar tu prueba gratuita.</p>
-            </div>
-          `
-        }
+      
+      const res = await fetch('/api/vip/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: newCode })
       });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al enviar el código');
+      }
 
       setGeneratedCode(newCode);
       setStep('code');
@@ -104,52 +99,12 @@ export const VIPLandingView = () => {
         updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
       }
 
-      // Programar correos automáticos (Bienvenida, Recordatorios)
-      const dayMs = 24 * 60 * 60 * 1000;
-      
-      // 1. Bienvenida (Inmediato)
-      await addDoc(collection(db, 'mail'), {
-        to: email,
-        message: {
-          subject: "¡Bienvenido a Flux Premium!",
-          html: `
-            <div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;">
-              <h1 style="color: #1ED760;">¡Pase VIP Activado!</h1>
-              <p style="color: #a7a7a7;">Disfruta de música ilimitada, Sofía DJ en Flux Radio, Karaoke y cero anuncios durante 7 días.</p>
-            </div>
-          `
-        }
-      });
-
-      // 2. Recordatorio 2 días (Enviado el día 5)
-      await addDoc(collection(db, 'mail'), {
-        to: email,
-        delivery: { startTime: new Date(now + 5 * dayMs) },
-        message: {
-          subject: "Tu Pase VIP expira en 2 días",
-          html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Tu prueba casi termina!</h1><p style="color: #a7a7a7;">Recuerda renovar por solo 5 €/mes para no perder tu acceso.</p></div>`
-        }
-      });
-
-      // 3. Recordatorio 24 horas (Enviado el día 6)
-      await addDoc(collection(db, 'mail'), {
-        to: email,
-        delivery: { startTime: new Date(now + 6 * dayMs) },
-        message: {
-          subject: "Tu Pase VIP expira en 24 horas",
-          html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">Solo quedan 24 horas</h1><p style="color: #a7a7a7;">Renueva por solo 5 €/mes.</p></div>`
-        }
-      });
-
-      // 4. Recordatorio 6 horas (Enviado el día 6 + 18h)
-      await addDoc(collection(db, 'mail'), {
-        to: email,
-        delivery: { startTime: new Date(now + 6 * dayMs + 18 * 60 * 60 * 1000) },
-        message: {
-          subject: "Últimas 6 horas de tu Pase VIP",
-          html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Últimas horas!</h1><p style="color: #a7a7a7;">Tu pase está a punto de expirar. ¡Renueva ahora!</p></div>`
-        }
-      });
+      // Programar correos automáticos (Bienvenida, Recordatorios) vía backend
+      await fetch('/api/vip/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      }).catch(e => console.error('Error al enviar correos de bienvenida:', e));
 
       // Redirigir a la app eliminando el parametro vip de la URL
       window.history.replaceState({}, '', '/');
