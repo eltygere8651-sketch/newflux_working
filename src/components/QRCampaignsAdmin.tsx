@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { QrCode, Plus, MoreVertical, Copy, Trash2, Edit2, Download, Check, X, Loader2, Play, Pause, BarChart2, Eye } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -486,20 +486,21 @@ export const QRCampaignsAdmin = () => {
                   <div style={{ marginBottom: '60px' }}>
                     <h1 style={{ 
                       color: '#ffffff', 
-                      fontSize: '52px', 
+                      fontSize: '56px', 
                       fontWeight: 900, 
-                      lineHeight: '64px', 
                       margin: 0, 
-                      fontFamily: '"Inter", sans-serif',
-                      letterSpacing: '0px'
+                      fontFamily: 'system-ui, -apple-system, Arial, sans-serif',
+                      lineHeight: 1.15,
+                      whiteSpace: 'nowrap'
                     }}>
-                      MÚSICA ILIMITADA<br/><span style={{ color: '#1ED760' }}>PASE VIP GRATIS</span>
+                      MÚSICA ILIMITADA<br/>
+                      <span style={{ color: '#1ED760' }}>PASE VIP GRATIS</span>
                     </h1>
                   </div>
                   
-                  <div style={{ display: 'inline-block', backgroundColor: '#ffffff', boxShadow: '0 0 80px rgba(30,215,96,0.5)', padding: '24px', borderRadius: '40px' }}>
-                    <QRCodeSVG 
-                      id="qr-code-svg"
+                  <div style={{ position: 'relative', display: 'inline-block', backgroundColor: '#ffffff', boxShadow: '0 0 80px rgba(30,215,96,0.5)', padding: '24px', borderRadius: '40px' }}>
+                    <QRCodeCanvas 
+                      id="qr-code-canvas"
                       value={getQRUrl(viewingCampaign.id)}
                       size={460}
                       bgColor={"#ffffff"}
@@ -507,14 +508,31 @@ export const QRCampaignsAdmin = () => {
                       level={"H"}
                       includeMargin={false}
                       imageSettings={{
-                        src: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='rgba(100,116,139,0.5)' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='38' cy='50' r='6' fill='%231ED760'/%3E%3Ccircle cx='62' cy='50' r='6' fill='%231ED760'/%3E%3C/svg%3E`,
-                        x: undefined,
-                        y: undefined,
+                        src: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='rgba(100,116,139,0.5)' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='38' cy='50' r='6' fill='%231ED760'/%3E%3Ccircle cx='62' cy='50' r='6' fill='%231ED760'/%3E%3C/svg%3E",
                         height: 100,
                         width: 100,
                         excavate: true,
                       }}
                     />
+                    <div style={{ display: 'none' }}>
+                      <QRCodeSVG 
+                        id="qr-code-svg"
+                        value={getQRUrl(viewingCampaign.id)}
+                        size={460}
+                        bgColor={"#ffffff"}
+                        fgColor={"#000000"}
+                        level={"H"}
+                        includeMargin={false}
+                        imageSettings={{
+                          src: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='rgba(100,116,139,0.5)' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23000' stroke='%231ED760' stroke-width='4'/%3E%3Ccircle cx='38' cy='50' r='6' fill='%231ED760'/%3E%3Ccircle cx='62' cy='50' r='6' fill='%231ED760'/%3E%3C/svg%3E`,
+                          x: undefined,
+                          y: undefined,
+                          height: 100,
+                          width: 100,
+                          excavate: true,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
