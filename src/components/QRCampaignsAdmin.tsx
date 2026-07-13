@@ -480,24 +480,22 @@ export const QRCampaignsAdmin = () => {
                 )}
                 
                 {/* Content */}
-                <div className="relative z-10 w-full h-full flex flex-col justify-center items-center" style={{ padding: '60px', boxSizing: 'border-box' }}>
-                  <div style={{ width: '100%', textAlign: 'center', marginBottom: '40px' }}>
+                <div className="relative z-10 w-full h-full" style={{ padding: '80px 60px', boxSizing: 'border-box', textAlign: 'center' }}>
+                  <div style={{ marginBottom: '60px' }}>
                     <h1 style={{ 
                       color: '#ffffff', 
                       fontSize: '52px', 
                       fontWeight: 900, 
-                      lineHeight: '1.1', 
+                      lineHeight: '64px', 
                       margin: 0, 
                       fontFamily: '"Inter", sans-serif',
-                      textAlign: 'center',
-                      letterSpacing: '-1px'
+                      letterSpacing: '0px'
                     }}>
                       MÚSICA ILIMITADA<br/><span style={{ color: '#1ED760' }}>PASE VIP GRATIS</span>
                     </h1>
                   </div>
                   
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                    <div style={{ backgroundColor: '#ffffff', boxShadow: '0 0 80px rgba(30,215,96,0.5)', padding: '24px', borderRadius: '40px', display: 'inline-block' }}>
+                  <div style={{ display: 'inline-block', backgroundColor: '#ffffff', boxShadow: '0 0 80px rgba(30,215,96,0.5)', padding: '24px', borderRadius: '40px' }}>
                     <QRCodeSVG 
                       id="qr-code-svg"
                       value={getQRUrl(viewingCampaign.id)}
@@ -518,7 +516,6 @@ export const QRCampaignsAdmin = () => {
                   </div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
           </div>

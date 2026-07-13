@@ -168,14 +168,14 @@ export const VIPLandingView = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-[#000] flex flex-col md:flex-row overflow-hidden font-sans">
+    <div className="min-h-screen w-full bg-[#000] flex flex-col md:flex-row font-sans relative overflow-x-hidden">
       {/* Decorative Glow */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Hero Section / Benefits */}
-      <div className="flex-1 p-8 md:p-16 flex flex-col justify-center relative z-10 bg-gradient-to-br from-black via-[#0a0a0a] to-[#121212] border-r border-white/5">
-        <div className="max-w-lg w-full mx-auto">
+      <div className="w-full md:flex-1 p-8 md:p-16 flex flex-col justify-center relative z-10 bg-gradient-to-br from-black via-[#0a0a0a] to-[#121212] md:border-r md:border-white/5 border-b border-white/5 md:border-b-0">
+        <div className="max-w-lg w-full mx-auto py-8 md:py-0">
           <div className="mb-12">
             <FluxLogo />
           </div>
@@ -231,7 +231,7 @@ export const VIPLandingView = () => {
       </div>
 
       {/* Form Section */}
-      <div className="flex-1 p-8 md:p-16 flex flex-col justify-center items-center relative z-10 bg-[#070708]">
+      <div className="w-full md:flex-1 p-8 py-16 md:p-16 flex flex-col justify-center items-center relative z-10 bg-[#070708]">
         <div className="max-w-sm w-full space-y-8">
           
           <AnimatePresence mode="wait">
