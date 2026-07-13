@@ -63,9 +63,28 @@
         "createdAt": { "type": "integer" }
       },
       "required": ["userEmail", "userName", "message", "createdAt"]
+    },
+    "QRCampaign": {
+      "title": "QR Campaign",
+      "description": "Marketing QR campaign entries",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "template": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "scans": { "type": "integer" },
+        "vipActivations": { "type": "integer" },
+        "premiumConversions": { "type": "integer" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "template", "status", "scans"]
     }
   },
   "firestore": {
+    "/qr_campaigns/{campaignId}": {
+      "schema": "QRCampaign",
+      "description": "QR campaigns for VIP trials"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles"

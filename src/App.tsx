@@ -24,6 +24,7 @@ import {
   Trash2
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
+import { VIPLandingView } from "./components/VIPLandingView";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
@@ -61,6 +62,14 @@ function AppContent() {
   const isInitialUserLoad = useRef(true);
   const adminMessageIdsRef = useRef<Set<string>>(new Set());
   const userMessageIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handleOpenSupport = () => {
+      setIsSupportModalOpen(true);
+    };
+    window.addEventListener("openSupportModal", handleOpenSupport);
+    return () => window.removeEventListener("openSupportModal", handleOpenSupport);
+  }, []);
 
   const playNotificationSound = async () => {
     try {
@@ -578,6 +587,11 @@ function AppContent() {
   }, [deferredPrompt, isIOS, isStandalone]);
 
   const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
+
+  const isVIPMode = typeof window !== 'undefined' && (window.location.pathname === '/vip' || window.location.search.includes('vip=1'));
+  if (isVIPMode && !user) {
+    return <VIPLandingView />;
+  }
 
   return (
     <div

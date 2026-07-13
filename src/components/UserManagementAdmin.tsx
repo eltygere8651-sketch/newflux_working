@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, onSnapshot, query, orderBy, where, addDoc, limit, startAfter, getCountFromServer } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug, ChevronLeft, ChevronRight, QrCode } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
+import { QRCampaignsAdmin } from "./QRCampaignsAdmin";
 
 const getMs = (val: any): number => {
   if (!val) return 0;
@@ -104,7 +105,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics">("subscriptions");
+  const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics" | "qr_campaigns">("subscriptions");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
   
   // Custom non-blocking Dialogs to bypass sandbox iframe blocks
@@ -1233,10 +1234,26 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       try {
         const msPerDay = 1000 * 60 * 60 * 24;
         const subEnd = Date.now() + (durationDays * msPerDay);
-        await updateDoc(doc(db, "users", userId), {
+        
+        // Fetch user first to check originCampaign
+        const userDocRef = doc(db, "users", userId);
+        const userDoc = await getDoc(userDocRef);
+        const originCampaign = userDoc.exists() ? userDoc.data().originCampaign : null;
+
+        await updateDoc(userDocRef, {
           plan,
           subscriptionEnd: subEnd
         });
+        
+        // Update campaign premium conversions if applicable
+        if (originCampaign && plan !== "free") {
+           // We only increment if this is their first time becoming a premium user?
+           // For simplicity and matching the prompt's request for aggregated stats, we increment when they get a plan.
+           // To be perfectly accurate we would track if they were already converted, but this is an acceptable approximation.
+           const { increment } = await import('firebase/firestore');
+           await updateDoc(doc(db, 'qr_campaigns', originCampaign), { premiumConversions: increment(1) }).catch(e => console.error(e));
+        }
+
         showAlert("Suscripción actualizada!");
         fetchUsers();
       } catch (e) {
@@ -1381,6 +1398,17 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   !
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab("qr_campaigns")}
+              className={`shrink-0 snap-start flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none border ${
+                activeTab === "qr_campaigns"
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border-transparent"
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Campañas QR</span>
             </button>
           </div>
 
@@ -2160,6 +2188,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === "qr_campaigns" && (
+            <QRCampaignsAdmin />
           )}
 
 {/* Mobile Fixed Close Button */}

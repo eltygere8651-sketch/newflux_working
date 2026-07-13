@@ -129,5 +129,15 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // 8. QR Campaigns
+    match /qr_campaigns/{campaignId} {
+      allow read, create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scans']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vipActivations']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['premiumConversions'])
+      );
+    }
   }
 }
