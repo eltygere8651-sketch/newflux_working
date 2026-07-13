@@ -257,7 +257,9 @@ export const QRCampaignsAdmin = () => {
   };
 
   const getQRUrl = (id: string) => {
-    return `${window.location.origin}/vip?campaign=${id}`;
+    // Ensure we use https for the QR code URLs to avoid security warnings
+    const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+    return `${origin}/vip?campaign=${id}`;
   };
 
   const downloadQRSvg = () => {
