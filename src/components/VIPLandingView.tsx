@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 
 const generateDeviceHash = async () => {
   const w = window.screen.width || 0;
@@ -125,64 +125,62 @@ export const VIPLandingView = () => {
           setIsLoading(false);
           return;
         } else {
-          // Continue existing trial using custom token API to avoid creating a new UID
-          const res = await fetch('/api/vip/recover', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceHash })
-          });
+          // Continue existing trial using persistent email/password to avoid creating a new UID
+          const vipEmail = `vip_${deviceHash}@flux.local`;
+          const vipPass = `${deviceHash}_fluxvip`;
           
-          if (res.ok) {
-            const { token } = await res.json();
-            const { signInWithCustomToken } = await import('firebase/auth');
-            await signInWithCustomToken(auth, token);
+          try {
+            await signInWithEmailAndPassword(auth, vipEmail, vipPass);
+            window.history.replaceState({}, '', '/');
+            window.location.reload();
+            return;
+          } catch (signInErr: any) {
+            console.error("Recovery signIn error:", signInErr);
+            // If they don't exist yet as email/pass (legacy anonymous account), we fallback to creating an email/pass account so next time they don't lose it
+            const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
+            const newUid = userCred.user.uid;
+            const now = Date.now();
+            
+            await setDoc(doc(db, 'vip_activations', newUid), {
+              uuid,
+              deviceHash,
+              createdAt: activatedAt,
+              expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
+              version: 3,
+              status: 'active',
+              campaignId: campaignId || null
+            });
+            
+            await setDoc(doc(db, "users", newUid), {
+              email: vipEmail,
+              displayName: "Socio VIP",
+              isVIPGuest: true,
+              createdAt: serverTimestamp(),
+              lastLogin: serverTimestamp(),
+              lastActiveAt: now,
+              totalUsageTime: 0,
+              plan: "free",
+              trialStart: activatedAt,
+              maxUsers: 1,
+              originCampaign: campaignId || null,
+            }, { merge: true });
+
+            await updateDoc(hashRef, {
+              uid: newUid,
+              lastRecoveredAt: now
+            });
+
             window.history.replaceState({}, '', '/');
             window.location.reload();
             return;
           }
-
-          // Fallback if the token generation fails for any reason
-          const userCred = await signInAnonymously(auth);
-          const newUid = userCred.user.uid;
-          const now = Date.now();
-          
-          await setDoc(doc(db, 'vip_activations', newUid), {
-            uuid,
-            deviceHash,
-            createdAt: activatedAt,
-            expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
-            version: 3,
-            status: 'active',
-            campaignId: campaignId || null
-          });
-          
-          await setDoc(doc(db, "users", newUid), {
-            email: `vip_${newUid.substring(0, 8)}@flux.local`,
-            displayName: "Socio VIP",
-            isVIPGuest: true,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            lastActiveAt: now,
-            totalUsageTime: 0,
-            plan: "free",
-            trialStart: activatedAt,
-            maxUsers: 1,
-            originCampaign: campaignId || null,
-          }, { merge: true });
-
-          await updateDoc(hashRef, {
-            uid: newUid,
-            lastRecoveredAt: now
-          });
-
-          window.history.replaceState({}, '', '/');
-          window.location.reload();
-          return;
         }
       }
       
       // New activation
-      const userCred = await signInAnonymously(auth);
+      const vipEmail = `vip_${deviceHash}@flux.local`;
+      const vipPass = `${deviceHash}_fluxvip`;
+      const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
       const uid = userCred.user.uid;
       const now = Date.now();
       
@@ -206,7 +204,7 @@ export const VIPLandingView = () => {
       }
       
       await setDoc(doc(db, "users", uid), {
-        email: `vip_${uid.substring(0, 8)}@flux.local`,
+        email: vipEmail,
         displayName: "Socio VIP",
         isVIPGuest: true,
         createdAt: serverTimestamp(),
@@ -234,23 +232,31 @@ export const VIPLandingView = () => {
     try {
       setIsLoading(true);
       if (!auth.currentUser) {
-        const userCred = await signInAnonymously(auth);
-        const uid = userCred.user.uid;
-        const now = Date.now();
-        // Create an expired user record so they see "Fin de la Prueba VIP" in the background
-        await setDoc(doc(db, "users", uid), {
-          email: `vip_${uid.substring(0, 8)}@flux.local`,
-          displayName: "Socio VIP",
-          isVIPGuest: true,
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
-          lastActiveAt: now,
-          totalUsageTime: 0,
-          plan: "free",
-          trialStart: now - (8 * 24 * 60 * 60 * 1000), // explicitly expired (8 days ago)
-          maxUsers: 1,
-          originCampaign: campaignId || null,
-        }, { merge: true });
+        const deviceHash = await generateDeviceHash();
+        const vipEmail = `vip_${deviceHash}@flux.local`;
+        const vipPass = `${deviceHash}_fluxvip`;
+        
+        try {
+          await signInWithEmailAndPassword(auth, vipEmail, vipPass);
+        } catch (signInErr) {
+          const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
+          const uid = userCred.user.uid;
+          const now = Date.now();
+          // Create an expired user record so they see "Fin de la Prueba VIP" in the background
+          await setDoc(doc(db, "users", uid), {
+            email: vipEmail,
+            displayName: "Socio VIP",
+            isVIPGuest: true,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp(),
+            lastActiveAt: now,
+            totalUsageTime: 0,
+            plan: "free",
+            trialStart: now - (8 * 24 * 60 * 60 * 1000), // explicitly expired (8 days ago)
+            maxUsers: 1,
+            originCampaign: campaignId || null,
+          }, { merge: true });
+        }
       }
       window.history.replaceState({}, '', '/');
       setTimeout(() => {

@@ -2308,7 +2308,7 @@ app.post("/api/vip/recover", async (req, res) => {
     res.json({ token: customToken });
   } catch (error) {
     console.error("Recover VIP Error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
