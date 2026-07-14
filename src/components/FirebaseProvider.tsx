@@ -37,6 +37,53 @@ const FirebaseContext = createContext<FirebaseContextType>({
 
 export const useFirebase = () => useContext(FirebaseContext);
 
+
+const generateDeviceHash = async () => {
+  const w = window.screen.width || 0;
+  const h = window.screen.height || 0;
+  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
+  
+  const ua = navigator.userAgent;
+  let os = 'Unknown';
+  if (ua.indexOf('Win') !== -1) os = 'Windows';
+  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
+  if (ua.indexOf('Linux') !== -1) os = 'Linux';
+  if (ua.indexOf('Android') !== -1) os = 'Android';
+  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
+  
+  let canvasFingerprint = '';
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText('flux,music,vip', 2, 15);
+      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+      ctx.fillText('flux,music,vip', 4, 17);
+      canvasFingerprint = canvas.toDataURL();
+    }
+  } catch (e) {}
+  
+  const components = [
+    os,
+    screenRes,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.hardwareConcurrency || 'unknown',
+    (navigator as any).deviceMemory || 'unknown',
+    canvasFingerprint
+  ].join('|');
+  
+  const msgBuffer = new TextEncoder().encode(components);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
 export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -74,8 +121,28 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
         
-        const fetchUserData = () => {
-          getDoc(userRef).then((snapshot) => {
+        const fetchUserData = async () => {
+          try {
+            const snapshot = await getDoc(userRef);
+            let deviceHasTrial = false;
+            let deviceTrialActive = false;
+            let deviceTrialStart = 0;
+            try {
+              const hash = await generateDeviceHash();
+              const hashRef = doc(db, 'vip_devices', hash);
+              const hashDoc = await getDoc(hashRef);
+              if (hashDoc.exists()) {
+                deviceHasTrial = true;
+                const hd = hashDoc.data();
+                deviceTrialStart = hd.activatedAt || 0;
+                if (Date.now() <= deviceTrialStart + 7 * 24 * 60 * 60 * 1000) {
+                  deviceTrialActive = true;
+                }
+              }
+            } catch (e) {
+              console.error("Device hash check failed", e);
+            }
+            
             if (snapshot.exists()) {
               const data = snapshot.data();
               setDbUserProfile({
@@ -106,20 +173,37 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                   daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
                 }
               }
+              
+              let finalIsValid = isValid;
+              let finalPlan = planType;
+              let finalTStart = tStart;
+              
+              if (deviceHasTrial && u.email !== "eltygere8651@gmail.com" && !(subEnd && subEnd > now)) {
+                if (deviceTrialActive) {
+                  finalIsValid = true;
+                  finalPlan = "free";
+                  finalTStart = deviceTrialStart;
+                  daysRemaining = Math.max(0, Math.ceil(((deviceTrialStart + 7 * msPerDay) - now) / msPerDay));
+                } else {
+                  finalIsValid = false;
+                  finalPlan = "free";
+                  finalTStart = 1; // Force truthy so GymMusicPlayer considers it expired
+                }
+              }
 
               setAccessData({
-                trialStart: tStart,
+                trialStart: finalTStart,
                 subscriptionEnd: subEnd,
-                plan: planType,
-                isValid,
+                plan: finalPlan,
+                isValid: finalIsValid,
                 daysRemaining,
                 maxUsers: allowedUsers,
                 activeSessionId: data.activeSessionId || null
               });
             }
-          }).catch((err) => {
+          } catch(err) {
             console.error("Firestore getDoc error:", err);
-          });
+          }
         };
 
         fetchUserData();
