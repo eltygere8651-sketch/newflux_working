@@ -658,7 +658,7 @@ function AppContent() {
           </div>
           
           {/* RIGHT: PREMIUM BELL NOTIFICATIONS */}
-          <div className="flex items-center justify-end">
+          <div className="flex flex-col items-end justify-center relative">
             <button
               type="button"
               onClick={() => {
@@ -676,6 +676,24 @@ function AppContent() {
                 </>
               )}
             </button>
+            <AnimatePresence>
+              {canShowInstallHelper && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="absolute top-[calc(100%+10px)] right-0 z-[100]"
+                >
+                  <button
+                    onClick={handleInstallPress}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black px-3 py-1.5 rounded-lg font-black uppercase text-[9px] tracking-wider shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-all border border-amber-300/40 whitespace-nowrap"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Instalar</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

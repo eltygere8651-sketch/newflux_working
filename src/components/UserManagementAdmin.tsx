@@ -1292,6 +1292,37 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     });
   };
 
+  const adjustSubDays = async (user: any, daysToAdjust: number) => {
+    askConfirm(`¿Confirmar ${daysToAdjust > 0 ? '+' : ''}${daysToAdjust} día(s) para este usuario?`, async () => {
+      try {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        let newEnd = user.subscriptionEnd;
+        
+        if (!newEnd || newEnd <= Date.now()) {
+            if (user.trialStart && (user.trialStart + 7 * msPerDay) > Date.now()) {
+                newEnd = user.trialStart + 7 * msPerDay;
+            } else {
+                newEnd = Date.now();
+            }
+        }
+        
+        newEnd += (daysToAdjust * msPerDay);
+        
+        
+        await updateDoc(doc(db, "users", user.id), {
+          subscriptionEnd: newEnd,
+          plan: "premium"
+        });
+        
+        showAlert(`Días ajustados correctamente.`);
+        fetchUsers();
+      } catch (e) {
+        console.error(e);
+        showAlert("Error al ajustar días.");
+      }
+    });
+  };
+
   const removeSub = async (userId: string) => {
     askConfirm("¿Remover suscripción y prueba de este usuario?", async () => {
       try {
@@ -1916,48 +1947,25 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                          {/* Fila de Pruebas Gratis en 2 columnas */}
                          <div className="grid grid-cols-2 gap-2">
                            <button 
-                             onClick={() => grantTrial(u.id, 7)} 
-                             className="py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-[0.98] text-emerald-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-emerald-500/20 cursor-pointer text-center"
-                           >
-                             Prueba 7 Días
-                           </button>
-                           <button 
-                             onClick={() => grantTrial(u.id, 14)} 
-                             className="py-2.5 bg-teal-500/10 hover:bg-teal-500/20 active:scale-[0.98] text-teal-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-teal-500/20 cursor-pointer text-center"
-                           >
-                             Prueba 14 Días
-                           </button>
-                         </div>
-
-                         {/* Fila de Suscripciones Premium en 4 columnas */}
-                         <div className="grid grid-cols-4 gap-1.5">
-                           <button 
-                             onClick={() => updateSub(u.id, "1mo", 31)} 
-                             className="py-2.5 bg-purple-500/10 hover:bg-purple-500/20 active:scale-[0.98] text-purple-300 text-[10px] font-black rounded-xl transition-all border border-purple-500/20 cursor-pointer text-center"
-                             title="Activar por 31 Días"
-                           >
-                             31D
-                           </button>
-                           <button 
-                             onClick={() => updateSub(u.id, "3mo", 90)} 
-                             className="py-2.5 bg-blue-500/10 hover:bg-blue-500/20 active:scale-[0.98] text-blue-300 text-[10px] font-black rounded-xl transition-all border border-blue-500/20 cursor-pointer text-center"
-                             title="Activar por 3 Meses"
-                           >
-                             3M
-                           </button>
-                           <button 
-                             onClick={() => updateSub(u.id, "6mo", 180)} 
-                             className="py-2.5 bg-green-500/10 hover:bg-green-500/20 active:scale-[0.98] text-green-300 text-[10px] font-black rounded-xl transition-all border border-green-500/20 cursor-pointer text-center"
-                             title="Activar por 6 Meses"
-                           >
-                             6M
-                           </button>
-                           <button 
                              onClick={() => updateSub(u.id, "12mo", 365)} 
                              className="py-2.5 bg-amber-500/10 hover:bg-amber-500/20 active:scale-[0.98] text-amber-300 text-[10px] font-black rounded-xl transition-all border border-amber-500/20 cursor-pointer text-center"
                              title="Activar por 12 Meses"
                            >
                              12M
+                           </button>
+                         </div>
+                         <div className="grid grid-cols-2 gap-2 mt-2">
+                           <button 
+                             onClick={() => adjustSubDays(u, -1)} 
+                             className="py-2.5 bg-gray-500/10 hover:bg-gray-500/20 active:scale-[0.98] text-gray-300 text-[10px] font-black rounded-xl transition-all border border-gray-500/20 cursor-pointer text-center"
+                           >
+                             - 1 DÍA
+                           </button>
+                           <button 
+                             onClick={() => adjustSubDays(u, 1)} 
+                             className="py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-[0.98] text-emerald-300 text-[10px] font-black rounded-xl transition-all border border-emerald-500/20 cursor-pointer text-center"
+                           >
+                             + 1 DÍA
                            </button>
                          </div>
 

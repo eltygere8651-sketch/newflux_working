@@ -156,8 +156,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 displayName: data.displayName,
                 photoURL: data.photoURL
               });
-              tStart = data.trialStart || null;
-              subEnd = data.subscriptionEnd || null;
+              tStart = data.trialStart !== undefined ? data.trialStart : null;
+              subEnd = data.subscriptionEnd !== undefined ? data.subscriptionEnd : null;
               planType = data.plan || (isVipAccount ? "free" : "none");
               allowedUsers = data.maxUsers || 1;
               activeSessionId = data.activeSessionId || null;
