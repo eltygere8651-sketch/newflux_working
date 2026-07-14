@@ -2274,6 +2274,44 @@ app.get("/api/system/health", async (req, res) => {
   });
 });
 
+app.post("/api/vip/recover", async (req, res) => {
+  const { deviceHash } = req.body;
+  if (!deviceHash) {
+    return res.status(400).json({ error: "Missing deviceHash" });
+  }
+
+  try {
+    const db = getFirestoreDb();
+    if (!db) {
+      return res.status(500).json({ error: "Database not initialized" });
+    }
+
+    const docSnap = await db.collection("vip_devices").doc(deviceHash).get();
+    
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "No active trial found" });
+    }
+    
+    const data = docSnap.data();
+    if (!data || !data.uid) {
+      return res.status(404).json({ error: "Invalid trial data" });
+    }
+
+    const activatedAt = data.activatedAt || 0;
+    const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+    
+    if (isExpired) {
+      return res.status(403).json({ error: "Trial expired" });
+    }
+
+    const customToken = await admin.auth().createCustomToken(data.uid);
+    res.json({ token: customToken });
+  } catch (error) {
+    console.error("Recover VIP Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
