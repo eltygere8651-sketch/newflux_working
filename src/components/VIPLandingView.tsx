@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Star, Headphones, Music, Shield, Loader2, ArrowRight } from 'lucide-react';
-import { doc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { signInWithCustomToken } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 import { FluxLogo } from './FluxLogo';
 
 const generateDeviceHash = async () => {
@@ -53,29 +53,64 @@ export const VIPLandingView = () => {
   const handleActivateVIP = async () => {
     setError('');
     setIsLoading(true);
-
     try {
       const uuid = getOrCreateDeviceId();
       const deviceHash = await generateDeviceHash();
       
-      const res = await fetch('/api/vip/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uuid, deviceHash, campaignId })
+      // 1. Anti-abuse Check using device hash
+      const hashRef = doc(db, 'vip_devices', deviceHash);
+      const hashDoc = await getDoc(hashRef);
+      
+      let riskScore = 0;
+      if (hashDoc.exists()) {
+        const activations = hashDoc.data()?.activations || 0;
+        riskScore += activations * 40;
+      }
+      
+      if (riskScore >= 100) {
+        await setDoc(doc(db, 'vip_blocked', deviceHash), { timestamp: Date.now() });
+        throw new Error("Se ha alcanzado el límite de activaciones para este dispositivo.");
+      }
+      
+      // 2. Anonymous Sign In
+      const userCred = await signInAnonymously(auth);
+      const uid = userCred.user.uid;
+      const now = Date.now();
+      
+      // 3. Register activation hash
+      await setDoc(hashRef, { activations: increment(1), lastUsed: now }, { merge: true });
+      
+      // 4. Register VIP activation for stats
+      await setDoc(doc(db, 'vip_activations', uid), {
+        uuid,
+        deviceHash,
+        createdAt: now,
+        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+        version: 3,
+        status: 'active',
+        campaignId: campaignId || null
       });
       
-      const data = await res.json();
+      // 5. Update Campaign stats
+      if (campaignId) {
+        updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
+      }
       
-      if (!res.ok) {
-        throw new Error(data.error || 'Error al activar VIP');
-      }
-
-      if (data.customToken) {
-        await signInWithCustomToken(auth, data.customToken);
-      } else {
-         throw new Error("No se recibió el token de acceso");
-      }
-
+      // 6. Set User Profile
+      await setDoc(doc(db, "users", uid), {
+        email: `vip_${uid.substring(0, 8)}@flux.local`,
+        displayName: "Socio VIP",
+        isVIPGuest: true,
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        lastActiveAt: now,
+        totalUsageTime: 0,
+        plan: "free",
+        trialStart: now,
+        maxUsers: 1,
+        originCampaign: campaignId || null,
+      }, { merge: true });
+      
       // Limpiar URL e ir a home
       window.history.replaceState({}, '', '/');
       window.location.reload();

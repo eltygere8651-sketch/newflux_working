@@ -35,8 +35,16 @@ service cloud.firestore {
       // Permitir que el usuario actualice su perfil, protegiendo campos sensibles
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == userId &&
-        (!request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['trialStart', 'subscriptionEnd', 'plan', 'role']))
+        (
+          (!request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['trialStart', 'subscriptionEnd', 'plan', 'role']))
+          ||
+          (
+            existing().plan == "none" &&
+            incoming().plan == "free" &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscriptionEnd', 'role'])
+          )
+        )
       );
       
       allow delete: if isAdmin() && (request.auth.uid == userId);
@@ -93,7 +101,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 4. Trial Requests (Solicitudes de Prueba)
+        // 4. Trial Requests (Solicitudes de Prueba)
     match /trial_requests/{requestId} {
       // El Administrador tiene control total
       allow read, write: if isAdmin();
@@ -140,11 +148,24 @@ service cloud.firestore {
       );
     }
 
-    // 9. Correos (Firebase Trigger Email) - Reglas Estrictas
-    match /mail/{mailId} {
-      // Colección totalmente cerrada a clientes.
-      // Únicamente el backend (Firebase Admin SDK) tiene permiso de escritura.
-      allow read, write: if false;
+    // 9. VIP System (Client-side)
+    match /vip_devices/{deviceHash} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activations', 'lastUsed']);
+      allow delete: if isAdmin();
+    }
+
+    match /vip_activations/{activationId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == activationId);
+      allow create: if isSignedIn() && request.auth.uid == activationId;
+      allow update, delete: if isAdmin();
+    }
+    
+    match /vip_blocked/{blockedId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
   }
 }

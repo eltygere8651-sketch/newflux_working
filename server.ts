@@ -2172,87 +2172,8 @@ app.post("/api/support/telegram", async (req, res) => {
   }
 });
 
-// VIP Landing Send Code Endpoint
-app.post("/api/vip/activate", vipActivateLimiter, async (req, res) => {
-  const { uuid, deviceHash, campaignId } = req.body || {};
-  
-  if (!uuid || typeof uuid !== 'string' || uuid.length > 100) {
-    return res.status(400).json({ error: "UUID no válido" });
-  }
-  if (!deviceHash || typeof deviceHash !== 'string' || deviceHash.length > 100) {
-    return res.status(400).json({ error: "Hash no válido" });
-  }
 
-  try {
-    const db = getFirestoreDb();
-    if (!db) {
-      return res.status(503).json({ error: "Base de datos no inicializada en el servidor" });
-    }
-
-    const { FieldValue } = await import("firebase-admin/firestore");
-    const { getAuth } = await import("firebase-admin/auth");
-
-    // Anti-abuse Check
-    let riskScore = 0;
-    
-    // Check if device hash has been used before
-    const hashRef = db.collection('vip_devices').doc(deviceHash);
-    const hashDoc = await hashRef.get();
-    
-    if (hashDoc.exists) {
-       const activations = hashDoc.data()?.activations || 0;
-       riskScore += activations * 40;
-    }
-
-    if (riskScore >= 100) {
-       await db.collection('vip_blocked').add({ deviceHash, timestamp: Date.now() });
-       return res.status(403).json({ error: "Risk score too high, trial denied." });
-    }
-
-    const now = Date.now();
-    await hashRef.set({ activations: FieldValue.increment(1), lastUsed: now }, { merge: true });
-
-    const trialDoc = db.collection('vip_activations').doc(uuid);
-    await trialDoc.set({
-      uuid,
-      deviceHash,
-      createdAt: now,
-      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-      version: 2,
-      status: 'active',
-      campaignId: campaignId || null
-    });
-
-    // Generate Custom Token
-    const customToken = await getAuth().createCustomToken(uuid, { vip: true });
-
-    // Pre-create the user document so they have the Premium status immediately
-    await db.collection('users').doc(uuid).set({
-      email: `vip_${uuid.substring(0, 8)}@flux.local`,
-      displayName: "Socio VIP",
-      isVIPGuest: true,
-      createdAt: FieldValue.serverTimestamp(),
-      lastLogin: FieldValue.serverTimestamp(),
-      lastActiveAt: now,
-      totalUsageTime: 0,
-      plan: "free",
-      trialStart: now,
-      maxUsers: 1,
-      originCampaign: campaignId || null,
-    }, { merge: true });
-
-    if (campaignId) {
-      await db.collection('qr_campaigns').doc(campaignId).update({ vipActivations: FieldValue.increment(1) }).catch(e => console.error(e));
-    }
-
-    return res.json({ success: true, customToken });
-  } catch (err) {
-    console.error("Error activating VIP:", err);
-    return res.status(500).json({ error: "Error interno al activar VIP" });
-  }
-});
-
-// Telegram Trial Request Endpoint
+  // Telegram Trial Request Endpoint
 app.post("/api/support/telegram-trial", async (req, res) => {
   const { userEmail, userName, botTokenOverride, chatIdOverride } = req.body;
   try {
