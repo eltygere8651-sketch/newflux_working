@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Star, Headphones, Music, Shield, Loader2, ArrowRight } from 'lucide-react';
+import { Check, Loader2, ArrowRight, MessageSquare } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
-import { FluxLogo } from './FluxLogo';
 
 const generateDeviceHash = async () => {
   const w = window.screen.width || 0;
   const h = window.screen.height || 0;
   const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
   
-  // Extract basic OS, ignoring versions
   const ua = navigator.userAgent;
   let os = 'Unknown';
   if (ua.indexOf('Win') !== -1) os = 'Windows';
@@ -20,7 +17,6 @@ const generateDeviceHash = async () => {
   if (ua.indexOf('Android') !== -1) os = 'Android';
   if (ua.indexOf('like Mac') !== -1) os = 'iOS';
   
-  // Generate canvas fingerprint
   let canvasFingerprint = '';
   try {
     const canvas = document.createElement('canvas');
@@ -36,9 +32,7 @@ const generateDeviceHash = async () => {
       ctx.fillText('flux,music,vip', 4, 17);
       canvasFingerprint = canvas.toDataURL();
     }
-  } catch (e) {
-    // Ignore canvas errors
-  }
+  } catch (e) {}
   
   const components = [
     os,
@@ -65,51 +59,90 @@ const getOrCreateDeviceId = () => {
   return id;
 };
 
+type TrialState = 'loading' | 'new' | 'active' | 'expired';
+
 export const VIPLandingView = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [trialState, setTrialState] = useState<TrialState>('loading');
   const [campaignId, setCampaignId] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const campId = params.get('campaign');
-    if (campId) {
-      setCampaignId(campId);
-      // Increment scans only once per session
-      if (!sessionStorage.getItem(`scanned_${campId}`)) {
-        sessionStorage.setItem(`scanned_${campId}`, 'true');
-        updateDoc(doc(db, 'qr_campaigns', campId), { scans: increment(1) }).catch(e => console.error(e));
+    let mounted = true;
+    const init = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const campId = params.get('campaign');
+      if (campId) {
+        setCampaignId(campId);
+        if (!sessionStorage.getItem(`scanned_${campId}`)) {
+          sessionStorage.setItem(`scanned_${campId}`, 'true');
+          updateDoc(doc(db, 'qr_campaigns', campId), { scans: increment(1) }).catch(e => console.error(e));
+        }
       }
-    }
+
+      try {
+        const hash = await generateDeviceHash();
+        const hashRef = doc(db, 'vip_devices', hash);
+        const hashDoc = await getDoc(hashRef);
+
+        if (mounted) {
+          if (hashDoc.exists()) {
+            const data = hashDoc.data();
+            const activatedAt = data.activatedAt || 0;
+            const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+            if (isExpired) {
+              setTrialState('expired');
+            } else {
+              setTrialState('active');
+            }
+          } else {
+            setTrialState('new');
+          }
+        }
+      } catch (e) {
+        if (mounted) setTrialState('new');
+      }
+    };
+    init();
+    return () => { mounted = false; };
   }, []);
 
-  const handleActivateVIP = async () => {
-    setError('');
+  const handleActivateOrContinue = async () => {
     setIsLoading(true);
     try {
       const uuid = getOrCreateDeviceId();
       const deviceHash = await generateDeviceHash();
       
-      // 1. Anti-abuse Check using device hash
       const hashRef = doc(db, 'vip_devices', deviceHash);
       const hashDoc = await getDoc(hashRef);
       
       if (hashDoc.exists()) {
-        throw new Error("Este dispositivo ya ha utilizado su prueba gratuita de 7 días.");
+        const data = hashDoc.data();
+        const activatedAt = data.activatedAt || 0;
+        const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+        
+        if (isExpired) {
+          setTrialState('expired');
+          setIsLoading(false);
+          return;
+        } else {
+          // Continue existing trial
+          await signInAnonymously(auth);
+          window.history.replaceState({}, '', '/');
+          window.location.reload();
+          return;
+        }
       }
       
-      // 2. Anonymous Sign In
+      // New activation
       const userCred = await signInAnonymously(auth);
       const uid = userCred.user.uid;
       const now = Date.now();
       
-      // 3. Register activation hash (permanent lock)
       await setDoc(hashRef, { 
         activatedAt: now,
         uid: uid 
       });
       
-      // 4. Register VIP activation for stats
       await setDoc(doc(db, 'vip_activations', uid), {
         uuid,
         deviceHash,
@@ -120,12 +153,10 @@ export const VIPLandingView = () => {
         campaignId: campaignId || null
       });
       
-      // 5. Update Campaign stats
       if (campaignId) {
         updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
       }
       
-      // 6. Set User Profile
       await setDoc(doc(db, "users", uid), {
         email: `vip_${uid.substring(0, 8)}@flux.local`,
         displayName: "Socio VIP",
@@ -140,120 +171,112 @@ export const VIPLandingView = () => {
         originCampaign: campaignId || null,
       }, { merge: true });
       
-      // Limpiar URL e ir a home
       window.history.replaceState({}, '', '/');
       window.location.reload();
 
     } catch (e: any) {
       console.error(e);
-      setError(e.message || 'Error al activar el Pase VIP.');
+      setTrialState('new');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleContactSupport = async () => {
+    try {
+      setIsLoading(true);
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      window.history.replaceState({}, '', '/');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('open-support', {
+          detail: {
+            message: "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente."
+          }
+        }));
+      }, 800);
+    } catch(e) {
+      console.error("Error signing in for support:", e);
+      setIsLoading(false);
+    }
+  };
+
+  if (trialState === 'loading') {
+    return (
+      <div className="min-h-screen w-full bg-black flex items-center justify-center">
+         <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (trialState === 'expired') {
+    return (
+      <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
+        <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+        <span className="text-6xl mb-6 block z-10">🎵</span>
+        <h1 className="text-2xl md:text-3xl font-black text-white mb-2 z-10">Ya disfrutaste de tu prueba gratuita.</h1>
+        <p className="text-slate-300 text-lg mb-6 z-10">Gracias por probar Flux Music.</p>
+        <p className="text-slate-400 font-medium mb-10 max-w-sm z-10">Continúa disfrutando de toda la música sin anuncios por solo <br/><span className="text-white font-bold text-xl">5 € al mes</span>.</p>
+        <button
+          onClick={handleContactSupport}
+          disabled={isLoading}
+          className="w-full max-w-sm bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors z-10 disabled:opacity-50"
+        >
+          {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+            <><MessageSquare className="w-5 h-5" /> CONTACTAR PARA ACTIVAR PREMIUM</>
+          )}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen w-full bg-[#000] flex flex-col md:flex-row font-sans relative overflow-x-hidden">
-      {/* Decorative Glow */}
-      <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-      {/* Hero Section / Benefits */}
-      <div className="w-full md:flex-1 p-8 md:p-16 flex flex-col justify-center relative z-10 bg-gradient-to-br from-black via-[#0a0a0a] to-[#121212] md:border-r md:border-white/5 border-b border-white/5 md:border-b-0">
-        <div className="max-w-lg w-full mx-auto py-8 md:py-0">
-          <div className="mb-12">
-            <FluxLogo />
-          </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4 leading-tight">
-            Has recibido un <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-600">Pase VIP Exclusivo.</span>
-          </h1>
-          <p className="text-slate-400 text-lg md:text-xl font-medium mb-12 leading-relaxed">
-            Activa tus 7 días de acceso Premium y descubre el ecosistema musical definitivo sin interrupciones.
-          </p>
-
-          <div className="space-y-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/10 rounded-2xl shrink-0">
-                <Music className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-lg">Música Ilimitada</h3>
-                <p className="text-slate-500 text-sm mt-1">Millones de canciones en alta fidelidad y playlists curadas.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/10 rounded-2xl shrink-0">
-                <Headphones className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-lg">Flux Radio con Sofía DJ</h3>
-                <p className="text-slate-500 text-sm mt-1">Tu emisora personal conducida por nuestra locutora de IA.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/10 rounded-2xl shrink-0">
-                <Star className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-lg">Karaoke Flux</h3>
-                <p className="text-slate-500 text-sm mt-1">Canta tus canciones favoritas con letras sincronizadas reales.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/10 rounded-2xl shrink-0">
-                <Shield className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-lg">Sin Anuncios</h3>
-                <p className="text-slate-500 text-sm mt-1">Experiencia pura. Cero interrupciones comerciales.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Section */}
-      <div className="w-full md:flex-1 p-8 py-16 md:p-16 flex flex-col justify-center items-center relative z-10 bg-[#070708]">
-        <div className="max-w-sm w-full space-y-8">
+    <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
+       <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
+       
+       <div className="w-full max-w-sm flex flex-col items-center z-10">
+          <span className="text-6xl mb-4 block">🎵</span>
+          <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Flux Music Premium</h1>
+          <h2 className="text-xl text-emerald-400 font-bold mb-6">7 días gratis</h2>
           
-          <AnimatePresence mode="wait">
-              <motion.div
-                key="activate-step"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6 flex flex-col items-center text-center"
-              >
-                <div>
-                  <h2 className="text-3xl font-black text-white mb-4">Acceso Inmediato</h2>
-                  <p className="text-slate-400 text-sm font-medium mb-8">Comienza a disfrutar de todas las ventajas ahora mismo, sin registros ni tarjetas de crédito.</p>
-                </div>
+          <div className="flex flex-col gap-1 items-center mb-10 text-slate-300 font-medium text-lg">
+             <p>Sin registro</p>
+             <p>Sin anuncios</p>
+             <p>Miles de canciones</p>
+             <p>Todo el contenido desbloqueado</p>
+          </div>
 
-                {error && <p className="text-red-400 text-xs font-semibold text-center bg-red-400/10 py-3 px-4 rounded-xl w-full">{error}</p>}
+          <div className="space-y-4 mb-10 text-left w-full pl-4 md:pl-8">
+            <p className="text-white font-bold flex items-center gap-3"><Check className="w-5 h-5 text-emerald-400 shrink-0"/> Música ilimitada</p>
+            <p className="text-white font-bold flex items-center gap-3"><Check className="w-5 h-5 text-emerald-400 shrink-0"/> Sin anuncios</p>
+            <p className="text-white font-bold flex items-center gap-3"><Check className="w-5 h-5 text-emerald-400 shrink-0"/> Karaoke Premium</p>
+            <p className="text-white font-bold flex items-center gap-3"><Check className="w-5 h-5 text-emerald-400 shrink-0"/> Flux Radio IA</p>
+          </div>
 
-                <button
-                  onClick={handleActivateVIP}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-black uppercase tracking-widest py-5 px-6 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_30px_rgba(30,215,96,0.2)]"
-                >
-                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-                    <>
-                      <span>Probar Gratis 7 días</span>
-                      <ArrowRight className="w-5 h-5" />
-                    </>
-                  )}
-                </button>
-                
-                <p className="text-slate-600 text-[10px] text-center font-semibold mt-4">
-                  Activación anónima basada en dispositivo. Válido solo para usuarios nuevos.
-                </p>
-              </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+          <button
+            onClick={handleActivateOrContinue}
+            disabled={isLoading}
+            className="w-full bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors disabled:opacity-50"
+          >
+            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+              <>
+                <ArrowRight className="w-5 h-5" /> 
+                {trialState === 'active' ? 'CONTINUAR MI PRUEBA' : 'PROBAR GRATIS DURANTE 7 DÍAS'}
+              </>
+            )}
+          </button>
+
+          {trialState === 'new' && (
+             <button 
+               onClick={handleActivateOrContinue}
+               disabled={isLoading}
+               className="mt-6 text-emerald-400 font-bold underline decoration-emerald-400/30 underline-offset-4 hover:text-emerald-300 text-sm disabled:opacity-50"
+             >
+               Ya tengo una prueba activa
+             </button>
+          )}
+       </div>
     </div>
   );
 };

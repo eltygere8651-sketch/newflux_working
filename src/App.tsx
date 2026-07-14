@@ -148,7 +148,12 @@ function AppContent() {
   }, [supportChatMessages, isSupportModalOpen]);
 
   useEffect(() => {
-    const handleOpenSupport = () => setIsSupportModalOpen(true);
+    const handleOpenSupport = (e: any) => {
+      setIsSupportModalOpen(true);
+      if (e.detail && e.detail.message) {
+        setSupportMessage(e.detail.message);
+      }
+    };
     window.addEventListener("open-support", handleOpenSupport);
     return () => window.removeEventListener("open-support", handleOpenSupport);
   }, []);
