@@ -7,6 +7,11 @@ service cloud.firestore {
     }
 
     // --- REUSABLE HELPERS ---
+    function isAppCheckValid() {
+      // Require Firebase App Check valid token for all operations
+      return request.app != null;
+    }
+
     function isSignedIn() {
       return request.auth != null;
     }

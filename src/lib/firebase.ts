@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -19,6 +20,28 @@ import firebaseConfig from '../../firebase-applet-config.json';
 setLogLevel('silent');
 
 const app = initializeApp(firebaseConfig);
+
+// Initialize App Check (Safe execution that won't break existing flows)
+if (typeof window !== 'undefined') {
+  // Allow local/dev testing safely
+  if ((import.meta as any).env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  
+  // Use the ReCAPTCHA v3 provider (Firebase default and free)
+  const recaptchaKey = (import.meta as any).env.VITE_RECAPTCHA_SITE_KEY;
+  
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaKey || 'dummy-key-for-dev'),
+      // Automatically refresh tokens to prevent interruption (e.g. VIP reproductor sessions)
+      isTokenAutoRefreshEnabled: true
+    });
+  } catch (err) {
+    console.warn("App Check initialization skipped/failed:", err);
+  }
+}
+
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
 }, (firebaseConfig as any).firestoreDatabaseId);
