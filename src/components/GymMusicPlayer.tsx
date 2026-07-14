@@ -6085,21 +6085,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       </button>
                     )}
 
-                    {deferredPrompt && (
-                      <button
-                        onClick={() => {
-                          handleInstallClick();
-                          setIsMembershipDropdownOpen(false);
-                        }}
-                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 transition-colors cursor-pointer text-[11px] font-bold"
-                      >
-                        <Download className="w-4 h-4 text-yellow-400" />
-                        <span>Instalar App en el Móvil</span>
-                      </button>
-                    )}
-
-                    <div className="border-t border-white/5 my-1" />
-
                     <button
                       onClick={() => {
                         logout();
@@ -10061,6 +10046,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase mb-1 font-sans">
                   {accessData.plan === "none" && !accessData.trialStart
                     ? "Acceso Restringido"
+                    : accessData.plan !== "none" && accessData.plan !== "free"
+                    ? "Suscripción Finalizada"
                     : "Gracias por probar Flux Music."}
                 </h1>
 
@@ -10073,11 +10060,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 <p className="text-[#a7a7a7] max-w-xs mx-auto mb-4 sm:mb-6 text-[10.5px] sm:text-xs font-medium leading-relaxed">
                   {accessData.plan === "none" && !accessData.trialStart
                     ? "Para garantizar máxima estabilidad y baja latencia, controlamos manualmente el aforo. Adquiere o solicita tu prueba."
+                    : accessData.plan !== "none" && accessData.plan !== "free"
+                    ? "Tu suscripción ya finalizó. Continúa escuchando sin anuncios por solo 5 €/mes."
                     : "Tu prueba gratuita ya finalizó. Continúa escuchando sin anuncios por solo 5 €/mes."}
                 </p>
 
                 <div className="flex flex-col gap-3 w-full">
-                  {(accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart ? (
+                  {((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart) || (accessData.plan !== "none" && accessData.plan !== "free") ? (
                     <button
                       onClick={async () => {
                         try {
