@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Star, Headphones, Music, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { doc, updateDoc, increment } from 'firebase/firestore';
@@ -43,8 +45,8 @@ export const VIPLandingView = () => {
     if (campId) {
       setCampaignId(campId);
       // Increment scans only once per session
-      if (!sessionStorage.getItem(`scanned_${campId}`)) {
-        sessionStorage.setItem(`scanned_${campId}`, 'true');
+      if (!sessionStorage.getItem(\`scanned_\${campId}\`)) {
+        sessionStorage.setItem(\`scanned_\${campId}\`, 'true');
         updateDoc(doc(db, 'qr_campaigns', campId), { scans: increment(1) }).catch(e => console.error(e));
       }
     }
@@ -193,3 +195,6 @@ export const VIPLandingView = () => {
     </div>
   );
 };
+`;
+
+fs.writeFileSync('src/components/VIPLandingView.tsx', code);

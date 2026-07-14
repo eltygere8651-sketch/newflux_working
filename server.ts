@@ -79,15 +79,7 @@ app.use("/api/youtube", apiLimiter);
 app.use("/api/oembed", apiLimiter);
 
 // Specific rate limiter for VIP emails to prevent spam
-const vipMailLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Demasiadas solicitudes de verificación. Por favor, inténtalo más tarde." },
-});
-
-const vipWelcomeLimiter = rateLimit({
+const vipActivateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 3, // Limit each IP to 3 requests per windowMs
   standardHeaders: true,
@@ -2181,50 +2173,14 @@ app.post("/api/support/telegram", async (req, res) => {
 });
 
 // VIP Landing Send Code Endpoint
-app.post("/api/vip/send-code", vipMailLimiter, async (req, res) => {
-  const { email, code } = req.body;
-  if (!email || typeof email !== 'string' || email.length > 100) {
-    return res.status(400).json({ error: "Email no válido" });
+app.post("/api/vip/activate", vipActivateLimiter, async (req, res) => {
+  const { uuid, deviceHash, campaignId } = req.body || {};
+  
+  if (!uuid || typeof uuid !== 'string' || uuid.length > 100) {
+    return res.status(400).json({ error: "UUID no válido" });
   }
-  if (!code || typeof code !== 'string' || code.length !== 6) {
-    return res.status(400).json({ error: "Código no válido" });
-  }
-
-  try {
-    const db = getFirestoreDb();
-    if (!db) {
-      return res.status(503).json({ error: "Base de datos no inicializada en el servidor" });
-    }
-
-    await db.collection("mail").add({
-      to: email,
-      message: {
-        subject: "Tu Pase VIP - Código de Verificación Flux",
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background-color: #070708; padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); color: white;">
-            <h1 style="color: #1ED760; text-transform: uppercase; letter-spacing: 2px; font-size: 24px; text-align: center;">Acceso VIP</h1>
-            <p style="color: #a7a7a7; font-size: 16px; line-height: 1.6; text-align: center;">Has sido invitado a disfrutar de 7 días de acceso completo. Tu código de verificación es:</p>
-            <div style="background-color: rgba(30,215,96,0.1); border: 1px solid rgba(30,215,96,0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0;">
-              <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #1ED760;">${code}</span>
-            </div>
-            <p style="color: #a7a7a7; font-size: 14px; text-align: center;">Copia este código y pégalo en la aplicación para activar tu prueba gratuita.</p>
-          </div>
-        `
-      }
-    });
-
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("Error sending VIP code:", err);
-    return res.status(500).json({ error: "Error interno al enviar el correo" });
-  }
-});
-
-// VIP Landing Send Welcome Endpoint
-app.post("/api/vip/send-welcome", vipWelcomeLimiter, async (req, res) => {
-  const { email } = req.body;
-  if (!email || typeof email !== 'string' || email.length > 100) {
-    return res.status(400).json({ error: "Email no válido" });
+  if (!deviceHash || typeof deviceHash !== 'string' || deviceHash.length > 100) {
+    return res.status(400).json({ error: "Hash no válido" });
   }
 
   try {
@@ -2233,59 +2189,66 @@ app.post("/api/vip/send-welcome", vipWelcomeLimiter, async (req, res) => {
       return res.status(503).json({ error: "Base de datos no inicializada en el servidor" });
     }
 
-    const { Timestamp } = await import("firebase-admin/firestore");
+    const { FieldValue } = await import("firebase-admin/firestore");
+    const { getAuth } = await import("firebase-admin/auth");
+
+    // Anti-abuse Check
+    let riskScore = 0;
+    
+    // Check if device hash has been used before
+    const hashRef = db.collection('vip_devices').doc(deviceHash);
+    const hashDoc = await hashRef.get();
+    
+    if (hashDoc.exists) {
+       const activations = hashDoc.data()?.activations || 0;
+       riskScore += activations * 40;
+    }
+
+    if (riskScore >= 100) {
+       await db.collection('vip_blocked').add({ deviceHash, timestamp: Date.now() });
+       return res.status(403).json({ error: "Risk score too high, trial denied." });
+    }
 
     const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
+    await hashRef.set({ activations: FieldValue.increment(1), lastUsed: now }, { merge: true });
 
-    // 1. Bienvenida (Inmediato)
-    await db.collection("mail").add({
-      to: email,
-      message: {
-        subject: "¡Bienvenido a Flux Premium!",
-        html: `
-          <div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;">
-            <h1 style="color: #1ED760;">¡Pase VIP Activado!</h1>
-            <p style="color: #a7a7a7;">Disfruta de música ilimitada, Sofía DJ en Flux Radio, Karaoke y cero anuncios durante 7 días.</p>
-          </div>
-        `
-      }
+    const trialDoc = db.collection('vip_activations').doc(uuid);
+    await trialDoc.set({
+      uuid,
+      deviceHash,
+      createdAt: now,
+      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+      version: 2,
+      status: 'active',
+      campaignId: campaignId || null
     });
 
-    // 2. Recordatorio 2 días (Enviado el día 5)
-    await db.collection("mail").add({
-      to: email,
-      delivery: { startTime: Timestamp.fromMillis(now + 5 * dayMs) },
-      message: {
-        subject: "Tu Pase VIP expira en 2 días",
-        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Tu prueba casi termina!</h1><p style="color: #a7a7a7;">Recuerda renovar por solo 5 €/mes para no perder tu acceso.</p></div>`
-      }
-    });
+    // Generate Custom Token
+    const customToken = await getAuth().createCustomToken(uuid, { vip: true });
 
-    // 3. Recordatorio 24 horas (Enviado el día 6)
-    await db.collection("mail").add({
-      to: email,
-      delivery: { startTime: Timestamp.fromMillis(now + 6 * dayMs) },
-      message: {
-        subject: "Tu Pase VIP expira en 24 horas",
-        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">Solo quedan 24 horas</h1><p style="color: #a7a7a7;">Renueva por solo 5 €/mes.</p></div>`
-      }
-    });
+    // Pre-create the user document so they have the Premium status immediately
+    await db.collection('users').doc(uuid).set({
+      email: `vip_${uuid.substring(0, 8)}@flux.local`,
+      displayName: "Socio VIP",
+      isVIPGuest: true,
+      createdAt: FieldValue.serverTimestamp(),
+      lastLogin: FieldValue.serverTimestamp(),
+      lastActiveAt: now,
+      totalUsageTime: 0,
+      plan: "free",
+      trialStart: now,
+      maxUsers: 1,
+      originCampaign: campaignId || null,
+    }, { merge: true });
 
-    // 4. Recordatorio 6 horas (Enviado el día 6 + 18h)
-    await db.collection("mail").add({
-      to: email,
-      delivery: { startTime: Timestamp.fromMillis(now + 6 * dayMs + 18 * 60 * 60 * 1000) },
-      message: {
-        subject: "Últimas 6 horas de tu Pase VIP",
-        html: `<div style="font-family: sans-serif; background-color: #070708; padding: 40px; color: white;"><h1 style="color: #1ED760;">¡Últimas horas!</h1><p style="color: #a7a7a7;">Tu pase está a punto de expirar. ¡Renueva ahora!</p></div>`
-      }
-    });
+    if (campaignId) {
+      await db.collection('qr_campaigns').doc(campaignId).update({ vipActivations: FieldValue.increment(1) }).catch(e => console.error(e));
+    }
 
-    return res.json({ success: true });
+    return res.json({ success: true, customToken });
   } catch (err) {
-    console.error("Error sending VIP welcome:", err);
-    return res.status(500).json({ error: "Error interno al enviar los correos" });
+    console.error("Error activating VIP:", err);
+    return res.status(500).json({ error: "Error interno al activar VIP" });
   }
 });
 

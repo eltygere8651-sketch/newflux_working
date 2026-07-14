@@ -206,6 +206,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 plan: "none",
                 maxUsers: 1
               });
+              fetchUserData();
             } else {
               // Update last login & active
               await setDoc(userRef, { 
