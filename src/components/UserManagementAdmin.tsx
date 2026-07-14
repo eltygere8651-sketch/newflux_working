@@ -1157,16 +1157,12 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           activatedSnap,
           activeSnap,
           expiredSnap,
-          conversionsSnap,
-          blockedSnap,
-          suspiciousSnap
+          conversionsSnap
         ] = await Promise.all([
           getCountFromServer(collection(db, "vip_activations")),
           getCountFromServer(query(collection(db, "vip_activations"), where("expiresAt", ">=", now))),
           getCountFromServer(query(collection(db, "vip_activations"), where("expiresAt", "<", now))),
-          getCountFromServer(query(collection(db, "users"), where("isVIPGuest", "==", true), where("plan", "==", "premium"))),
-          getCountFromServer(query(collection(db, "vip_devices"), where("activations", ">=", 3))),
-          getCountFromServer(collection(db, "vip_blocked"))
+          getCountFromServer(query(collection(db, "users"), where("isVIPGuest", "==", true), where("plan", "==", "premium")))
         ]);
         
         setVipStats({
@@ -1174,8 +1170,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           active: activeSnap.data().count,
           expired: expiredSnap.data().count,
           conversions: conversionsSnap.data().count,
-          blocked: blockedSnap.data().count,
-          suspicious: suspiciousSnap.data().count
+          blocked: 0,
+          suspicious: 0
         });
       } catch (e) {
         console.error("Error fetching VIP stats:", e);

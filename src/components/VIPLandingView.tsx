@@ -7,13 +7,46 @@ import { signInAnonymously } from 'firebase/auth';
 import { FluxLogo } from './FluxLogo';
 
 const generateDeviceHash = async () => {
+  const w = window.screen.width || 0;
+  const h = window.screen.height || 0;
+  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
+  
+  // Extract basic OS, ignoring versions
+  const ua = navigator.userAgent;
+  let os = 'Unknown';
+  if (ua.indexOf('Win') !== -1) os = 'Windows';
+  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
+  if (ua.indexOf('Linux') !== -1) os = 'Linux';
+  if (ua.indexOf('Android') !== -1) os = 'Android';
+  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
+  
+  // Generate canvas fingerprint
+  let canvasFingerprint = '';
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText('flux,music,vip', 2, 15);
+      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+      ctx.fillText('flux,music,vip', 4, 17);
+      canvasFingerprint = canvas.toDataURL();
+    }
+  } catch (e) {
+    // Ignore canvas errors
+  }
+  
   const components = [
-    navigator.userAgent,
-    navigator.language,
-    window.screen.width + 'x' + window.screen.height,
+    os,
+    screenRes,
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     navigator.hardwareConcurrency || 'unknown',
     (navigator as any).deviceMemory || 'unknown',
+    canvasFingerprint
   ].join('|');
   
   const msgBuffer = new TextEncoder().encode(components);
@@ -61,15 +94,8 @@ export const VIPLandingView = () => {
       const hashRef = doc(db, 'vip_devices', deviceHash);
       const hashDoc = await getDoc(hashRef);
       
-      let riskScore = 0;
       if (hashDoc.exists()) {
-        const activations = hashDoc.data()?.activations || 0;
-        riskScore += activations * 40;
-      }
-      
-      if (riskScore >= 100) {
-        await setDoc(doc(db, 'vip_blocked', deviceHash), { timestamp: Date.now() });
-        throw new Error("Se ha alcanzado el límite de activaciones para este dispositivo.");
+        throw new Error("Este dispositivo ya ha utilizado su prueba gratuita de 7 días.");
       }
       
       // 2. Anonymous Sign In
@@ -77,8 +103,11 @@ export const VIPLandingView = () => {
       const uid = userCred.user.uid;
       const now = Date.now();
       
-      // 3. Register activation hash
-      await setDoc(hashRef, { activations: increment(1), lastUsed: now }, { merge: true });
+      // 3. Register activation hash (permanent lock)
+      await setDoc(hashRef, { 
+        activatedAt: now,
+        uid: uid 
+      });
       
       // 4. Register VIP activation for stats
       await setDoc(doc(db, 'vip_activations', uid), {

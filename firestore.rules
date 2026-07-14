@@ -29,8 +29,9 @@ service cloud.firestore {
       // El usuario puede leer su propio perfil, admin puede leer todos
       allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       
-      // Permitir que el usuario cree su propio perfil inicial
-      allow create: if isSignedIn() && (request.auth.uid == userId);
+      // Permitir que el usuario cree su propio perfil inicial, protegiendo campos sensibles
+      allow create: if isSignedIn() && (request.auth.uid == userId) &&
+                    (!request.resource.data.keys().hasAny(['role', 'subscriptionEnd']));
       
       // Permitir que el usuario actualice su perfil, protegiendo campos sensibles
       allow update: if isAdmin() || (
@@ -150,21 +151,20 @@ service cloud.firestore {
 
     // 9. VIP System (Client-side)
     match /vip_devices/{deviceHash} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activations', 'lastUsed']);
-      allow delete: if isAdmin();
+      // Allow checking if a device hash exists, but prevent listing all devices
+      allow get: if true;
+      allow list: if isAdmin();
+      
+      // Allow creation only if the document does not exist, and enforce immutability
+      allow create: if request.resource.data.keys().hasAll(['activatedAt', 'uid']);
+      
+      // Prevent any client-side modifications after creation
+      allow update, delete: if isAdmin();
     }
 
     match /vip_activations/{activationId} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == activationId);
       allow create: if isSignedIn() && request.auth.uid == activationId;
-      allow update, delete: if isAdmin();
-    }
-    
-    match /vip_blocked/{blockedId} {
-      allow read: if true;
-      allow create: if true;
       allow update, delete: if isAdmin();
     }
   }
