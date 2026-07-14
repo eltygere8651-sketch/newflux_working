@@ -590,11 +590,7 @@ function AppContent() {
 
   const isVIPMode = typeof window !== 'undefined' && (window.location.pathname === '/vip' || window.location.search.includes('vip=1'));
   if (isVIPMode && !user) {
-    if (authLoading) return null; // Avoid flashing landing before provider knows user
-    return <VIPLandingView onOpenSupport={(msg) => {
-      setIsSupportModalOpen(true);
-      if (msg) setSupportMessage(msg);
-    }} />;
+    return <VIPLandingView />;
   }
 
   return (
