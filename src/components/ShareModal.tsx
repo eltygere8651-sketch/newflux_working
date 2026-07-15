@@ -20,7 +20,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
 
   const shareTitle = "FluxPlay";
   const shareText = "🎵 Estoy usando FluxPlay y me está encantando.\n\nDisfruta de música en streaming sin anuncios y pruébalo gratis durante 7 días.";
-  const shareUrl = typeof window !== 'undefined' ? window.location.origin.replace(/^http:\/\//i, 'https://') + "/vip" : "https://fluxplay.cc/vip";
+  const shareUrl = "https://www.fluxplay.cc/vip";
 
   const handleNativeShare = async () => {
     try {
