@@ -755,6 +755,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     "idle" | "sent" | "already_claimed"
   >("idle");
   const [isCheckingTrialRequest, setIsCheckingTrialRequest] = useState(false);
+  const [showSupportChoice, setShowSupportChoice] = useState(false);
   const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
 
   const getBrowserFingerprint = () => {
@@ -10080,31 +10081,19 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       >
                         <span>⚡ Pedir Acceso Gratis de 7 Días</span>
                       </button>
-                    ) : (
+                    ) : trialRequestStatus === "sent" ? (
                       <div
-                        className={`p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center ${
-                          trialRequestStatus === "sent"
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                            : "bg-red-500/10 border-red-500/10 text-red-400"
-                        }`}
+                        className="p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                       >
                         {trialRequestMsg}
                       </div>
-                    )
+                    ) : null
                   )}
 
                   {/* Siempre mostramos el boton de contactar si ya probaron, si expiró su subs, o si fueron declinados/pendientes */}
                   {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
                     <button
-                      onClick={() => {
-                        let defaultMessage = "";
-                        if (accessData.plan !== "none" && accessData.plan !== "free") {
-                          defaultMessage = "Mi suscripción a Flux Music ha finalizado y quiero volver a disfrutar de todas las ventajas Premium. ¿Podéis ayudarme a reactivarla?";
-                        } else {
-                          defaultMessage = "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.";
-                        }
-                        window.dispatchEvent(new CustomEvent("open-support", { detail: { message: defaultMessage } }));
-                      }}
+                      onClick={() => setShowSupportChoice(true)}
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
                     >
                       <span>💬 CONTACTAR PARA ACTIVAR PREMIUM</span>

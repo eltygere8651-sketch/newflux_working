@@ -126,8 +126,8 @@ export const VIPLandingView = () => {
           return;
         } else {
           // Continue existing trial using persistent email/password to avoid creating a new UID
-          const vipEmail = `vip_${deviceHash}@flux.local`;
-          const vipPass = `${deviceHash}_fluxvip`;
+          const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
+          const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
           
           try {
             await signInWithEmailAndPassword(auth, vipEmail, vipPass);
@@ -178,8 +178,8 @@ export const VIPLandingView = () => {
       }
       
       // New activation
-      const vipEmail = `vip_${deviceHash}@flux.local`;
-      const vipPass = `${deviceHash}_fluxvip`;
+      const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
+      const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
       const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
       const uid = userCred.user.uid;
       const now = Date.now();
@@ -233,8 +233,8 @@ export const VIPLandingView = () => {
       setIsLoading(true);
       if (!auth.currentUser) {
         const deviceHash = await generateDeviceHash();
-        const vipEmail = `vip_${deviceHash}@flux.local`;
-        const vipPass = `${deviceHash}_fluxvip`;
+        const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
+        const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
         
         try {
           await signInWithEmailAndPassword(auth, vipEmail, vipPass);

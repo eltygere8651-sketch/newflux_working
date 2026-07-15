@@ -1,2 +1,4 @@
-const { execSync } = require('child_process');
-execSync('npm run restart-dev', { stdio: 'inherit' });
+const { exec } = require('child_process');
+exec('killall node', (err) => {
+  console.log('restarted');
+});
