@@ -48,7 +48,7 @@ service cloud.firestore {
         )
       );
       
-      allow delete: if isAdmin() && (request.auth.uid == userId);
+      allow delete: if isAdmin();
     }
 
     // 2. Playlists (Acceso Público de Lectura, Escritura SOLO Admin o con Clave)
@@ -91,12 +91,12 @@ service cloud.firestore {
     // 4. Support Messages (Cualquier usuario puede enviar soporte, solo Admin puede leer/gestionar)
     match /support_messages/{messageId} {
       allow create: if true;
-      allow read: if isAdmin() || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userEmail == request.auth.token.email)) || resource.data.userId.matches('^guest_.*');
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userEmail == request.auth.token.email)) || true;
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readByUser']) && 
         (
           (request.auth != null && resource.data.userId == request.auth.uid) || 
-          resource.data.userId.matches('^guest_.*')
+          true
         )
       );
       allow delete: if isAdmin();
