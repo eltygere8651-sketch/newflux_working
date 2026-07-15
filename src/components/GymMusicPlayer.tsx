@@ -10004,7 +10004,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       </AnimatePresence>
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
-        <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
+        <div className="absolute inset-0 z-[99999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
           {/* Authentic Spotify premium subtle ambient green glow */}
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[#1ED760]/10 blur-[120px] pointer-events-none animate-pulse" />
 
@@ -10096,37 +10096,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   {/* Siempre mostramos el boton de contactar si ya probaron, si expiró su subs, o si fueron declinados/pendientes */}
                   {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
                     <button
-                      onClick={async () => {
-                        try {
-                          const emailVal = user?.email || "Anónimo";
-                          const nameVal = user?.displayName || "Socio Contigo";
-                          const currentUserId = user?.uid || "guest_uid";
-                          
-                          let defaultMessage = "";
-                          if (accessData.plan !== "none" && accessData.plan !== "free") {
-                            defaultMessage = "Mi suscripción a Flux Music ha finalizado y quiero volver a disfrutar de todas las ventajas Premium. ¿Podéis ayudarme a reactivarla?";
-                          } else {
-                            defaultMessage = "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.";
-                          }
-                          
-                          const newMsgObj = {
-                            userId: currentUserId,
-                            userEmail: emailVal,
-                            userName: nameVal,
-                            message: defaultMessage,
-                            createdAt: Date.now(),
-                            isAdminReply: false,
-                            readByAdmin: false,
-                            readByUser: true,
-                          };
-                          const { addDoc, collection } = await import("firebase/firestore");
-                          const { db } = await import("../lib/firebase");
-                          await addDoc(collection(db, "support_messages"), newMsgObj);
-                          
-                          window.dispatchEvent(new Event("openSupportModal"));
-                        } catch (e) {
-                          console.error(e);
+                      onClick={() => {
+                        let defaultMessage = "";
+                        if (accessData.plan !== "none" && accessData.plan !== "free") {
+                          defaultMessage = "Mi suscripción a Flux Music ha finalizado y quiero volver a disfrutar de todas las ventajas Premium. ¿Podéis ayudarme a reactivarla?";
+                        } else {
+                          defaultMessage = "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.";
                         }
+                        window.dispatchEvent(new CustomEvent("open-support", { detail: { message: defaultMessage } }));
                       }}
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
                     >

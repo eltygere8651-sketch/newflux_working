@@ -63,14 +63,6 @@ function AppContent() {
   const adminMessageIdsRef = useRef<Set<string>>(new Set());
   const userMessageIdsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    const handleOpenSupport = () => {
-      setIsSupportModalOpen(true);
-    };
-    window.addEventListener("openSupportModal", handleOpenSupport);
-    return () => window.removeEventListener("openSupportModal", handleOpenSupport);
-  }, []);
-
   const playNotificationSound = async () => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -704,7 +696,7 @@ function AppContent() {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="absolute top-[calc(100%+5px)] left-4 sm:left-6 z-50 origin-top-left"
             >
-              <div className="flex flex-col p-1 gap-0.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 rounded-lg w-44 bg-[#121212]/95 backdrop-blur-2xl">
+              <div className="flex flex-col p-1 gap-0.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 rounded-lg w-auto min-w-[120px] pr-2 bg-[#121212]/95 backdrop-blur-2xl">
                 {user && (
                   <button
                     type="button"
@@ -779,26 +771,7 @@ function AppContent() {
         </section>
       </main>
 
-      {/* --- PWA ONE-CLICK INSTALL FLOAT --- */}
-      <AnimatePresence>
-        {canShowInstallHelper && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="fixed bottom-36 right-4 sm:bottom-10 sm:right-10 z-[90] flex justify-end pointer-events-none"
-          >
-            <button
-              onClick={handleInstallPress}
-              title="Instalar App"
-              className="pointer-events-auto bg-black/60 backdrop-blur-md border border-[#1ED760]/30 hover:border-[#1ED760]/60 hover:bg-[#1ED760]/10 text-white w-9 h-9 sm:w-auto sm:h-auto sm:px-4 sm:py-2.5 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_20px_rgba(30,215,96,0.2)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 group"
-            >
-              <Download className="w-4 h-4 text-[#1ED760] group-hover:scale-110 transition-transform" />
-              <span className="hidden sm:block text-[10px] font-black uppercase tracking-wider text-[#1ED760]">Instalar App</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+{/* --- PWA ONE-CLICK INSTALL FLOAT REMOVED --- */}
 
       {/* --- IOS INSTALL INSTRUCTION (FOOLPROOF) --- */}
       <AnimatePresence>
@@ -869,14 +842,18 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+            className={`fixed z-[999999] ${
+              isAdmin 
+                ? "inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
+                : "bottom-4 right-4 sm:bottom-8 sm:right-8 flex items-end justify-end p-0 pointer-events-none"
+            }`}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className={`w-full ${
-                isAdmin ? "max-w-4xl h-[600px]" : "max-w-md h-[520px]"
+              className={`pointer-events-auto w-full ${
+                isAdmin ? "max-w-4xl h-[600px]" : "max-w-[380px] h-[500px]"
               } bg-[#0d0d0f] border border-white/10 rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col`}
             >
               {/* Header */}
