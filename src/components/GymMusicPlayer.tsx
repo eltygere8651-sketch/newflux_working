@@ -820,7 +820,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           );
         } else if (
           reqDoc.status === "approved" ||
-          (accessData && accessData.trialStart)
+          (accessData && accessData.trialStart !== null)
         ) {
           setTrialRequestStatus("already_claimed");
           setTrialRequestMsg(
@@ -10045,7 +10045,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             ) : (
               <>
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase mb-1 font-sans">
-                  {accessData.plan === "none" && !accessData.trialStart
+                  {accessData.plan === "none" && accessData.trialStart === null
                     ? "Acceso Restringido"
                     : accessData.plan !== "none" && accessData.plan !== "free"
                     ? "Suscripción Finalizada"
@@ -10053,13 +10053,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 </h1>
 
                 <p className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-3 sm:mb-5 px-3 bg-[#1ED760]/10 py-0.5 rounded-full border border-[#1ED760]/20">
-                  {accessData.plan === "none" && !accessData.trialStart
+                  {accessData.plan === "none" && accessData.trialStart === null
                     ? "Privado • Pendiente de Alta"
                     : "Membresía Expirada"}
                 </p>
 
                 <p className="text-[#a7a7a7] max-w-xs mx-auto mb-4 sm:mb-6 text-[10.5px] sm:text-xs font-medium leading-relaxed">
-                  {accessData.plan === "none" && !accessData.trialStart
+                  {accessData.plan === "none" && accessData.trialStart === null
                     ? "Para garantizar máxima estabilidad y baja latencia, controlamos manualmente el aforo. Adquiere o solicita tu prueba."
                     : accessData.plan !== "none" && accessData.plan !== "free"
                     ? "Tu suscripción ya finalizó. Continúa escuchando sin anuncios por solo 5 €/mes."
@@ -10068,7 +10068,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
                 <div className="flex flex-col gap-3 w-full">
                   {/* Si NO tienen plan (o es free sin trialStart) pueden pedir prueba. Si ya la pidieron ven mensaje */}
-                  {!((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart) && !(accessData.plan !== "none" && accessData.plan !== "free") && (
+                  {!((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart !== null) && !(accessData.plan !== "none" && accessData.plan !== "free") && (
                     isCheckingTrialRequest ? (
                       <div className="flex items-center justify-center p-3 text-blue-400 font-bold text-xs gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -10091,9 +10091,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   )}
 
                   {/* Siempre mostramos el boton de contactar si ya probaron, si expiró su subs, o si fueron declinados/pendientes */}
-                  {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
+                  {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart !== null) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
                     <button
-                      onClick={() => setShowSupportChoice(true)}
+                      onClick={() => window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }))}
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
                     >
                       <span>💬 CONTACTAR PARA ACTIVAR PREMIUM</span>
