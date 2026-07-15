@@ -1850,14 +1850,18 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 } else if (u.subscriptionEnd && u.subscriptionEnd > now) {
                    isActive = true;
                    statusText = `Plan ${u.plan} activo (${Math.ceil((u.subscriptionEnd - now)/msPerDay)} días)`;
-                } else if (u.plan === "free" && u.trialStart) {
-                   const trialDuration = u.trialDuration || 7;
-                   const trialEnd = u.trialStart + trialDuration * msPerDay;
-                   if (trialEnd > now) {
-                     isActive = true;
-                     statusText = `Prueba ${trialDuration} días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
-                   } else {
+                } else if (u.plan === "free" && u.trialStart !== undefined && u.trialStart !== null) {
+                   if (u.trialStart === 0) {
                      statusText = "Prueba finalizada";
+                   } else {
+                     const trialDuration = u.trialDuration || 7;
+                     const trialEnd = u.trialStart + trialDuration * msPerDay;
+                     if (trialEnd > now) {
+                       isActive = true;
+                       statusText = `Prueba ${trialDuration} días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
+                     } else {
+                       statusText = "Prueba finalizada";
+                     }
                    }
                 } else if (u.subscriptionEnd && u.subscriptionEnd < now) {
                    statusText = "Suscripción expirada";

@@ -37,8 +37,8 @@ function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
 
   const isAdmin = user?.email === "eltygere8651@gmail.com";
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [globalBanner, setGlobalBanner] = useState<{title: string, content: string, category?: string} | null>(null);
@@ -611,10 +611,7 @@ function AppContent() {
           <div className="flex items-center gap-2">
              <button
                 type="button"
-                onClick={() => {
-                  if (window.innerWidth < 640) setIsMobileMenuOpen(!isMobileMenuOpen);
-                  else setIsDesktopMenuOpen(!isDesktopMenuOpen);
-                }}
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="flex items-center justify-center p-1.5 sm:p-2 pr-3.5 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
                 title="Menú"
              >
@@ -686,7 +683,7 @@ function AppContent() {
                 >
                   <button
                     onClick={handleInstallPress}
-                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-black px-3 py-1.5 rounded-lg font-black uppercase text-[9px] tracking-wider shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-all border border-amber-300/40 whitespace-nowrap"
+                    className="flex items-center gap-1.5 bg-[#080809] text-[#1ED760] px-3 py-1.5 rounded-lg font-black uppercase text-[9px] tracking-wider shadow-[0_4px_15px_rgba(30,215,96,0.2)] hover:scale-105 active:scale-95 transition-all border border-[#1ED760]/30 whitespace-nowrap"
                   >
                     <Download className="w-3 h-3" />
                     <span>Instalar</span>
@@ -697,28 +694,27 @@ function AppContent() {
           </div>
         </div>
 
-        {/* MOBILE MENU */}
+        {/* UNIFIED MENU */}
         <AnimatePresence>
-          {isMobileMenuOpen && (
+          {isMenuOpen && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="sm:hidden overflow-hidden w-full border-t border-white/5 bg-[#090b0a]"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="absolute top-[calc(100%+5px)] left-4 sm:left-6 z-50 origin-top-left"
             >
-              <div className="px-3.5 py-2.5 flex flex-wrap items-center justify-center gap-2 bg-[#090b0a]">
-
+              <div className="flex flex-col p-1 gap-0.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 rounded-lg w-44 bg-[#121212]/95 backdrop-blur-2xl">
                 {user && (
                   <button
                     type="button"
-                    onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
-                    className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-emerald-500/20 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                    onClick={() => { setIsMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
+                    className="w-full h-9 bg-transparent hover:bg-white/5 text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
                   >
                     <img 
                       src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
                       alt="Perfil" 
-                      className="w-4 h-4 rounded-full object-cover border border-[#1ED760]/30" 
+                      className="w-4 h-4 rounded-full object-cover border border-white/10" 
                       referrerPolicy="no-referrer"
                     />
                     <span>Perfil</span>
@@ -727,29 +723,29 @@ function AppContent() {
                 {isAdmin && (
                   <button
                     type="button"
-                    onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-admin-panel')); }}
-                    className="flex-1 min-w-[90px] h-8 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    onClick={() => { setIsMenuOpen(false); window.dispatchEvent(new Event('open-admin-panel')); }}
+                    className="w-full h-9 bg-transparent hover:bg-emerald-500/10 text-emerald-400 font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
                   >
-                    <Shield className="w-3 h-3 stroke-[2.5px]" />
+                    <Shield className="w-4 h-4 stroke-[2px]" />
                     <span>Admin</span>
                   </button>
                 )}
                 {user ? (
                   <button
                     type="button"
-                    onClick={() => { setIsMobileMenuOpen(false); logout(); }}
-                    className="flex-1 min-w-[90px] h-8 bg-emerald-950/25 border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    onClick={() => { setIsMenuOpen(false); logout(); }}
+                    className="w-full h-9 bg-transparent hover:bg-white/5 text-white/70 hover:text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
                   >
-                    <LogOut className="w-3 h-3 stroke-[2.5px]" />
+                    <LogOut className="w-4 h-4 stroke-[2px]" />
                     <span>Salir</span>
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => { setIsMobileMenuOpen(false); setAuthModalOpen(true); }}
-                    className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    onClick={() => { setIsMenuOpen(false); setAuthModalOpen(true); }}
+                    className="w-full h-9 bg-transparent hover:bg-white/5 text-white/90 hover:text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
                   >
-                    <LogIn className="w-3 h-3 stroke-[2.5px]" />
+                    <LogIn className="w-4 h-4 stroke-[2px]" />
                     <span>Entrar</span>
                   </button>
                 )}
@@ -771,65 +767,7 @@ function AppContent() {
         )}
       </nav>
 
-      {/* Desktop Menu Dropdown */}
-      <AnimatePresence>
-        {isDesktopMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="hidden sm:block absolute top-16 left-4 bg-[#090b0a] border border-white/10 rounded-xl p-2 w-48 z-[100] shadow-2xl"
-          >
-            <div className="flex flex-col gap-2">
-
-              {user && (
-                <button
-                  type="button"
-                  onClick={() => { setIsDesktopMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
-                  className="h-8 bg-[#121212] border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <img 
-                    src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
-                    alt="Perfil" 
-                    className="w-4.5 h-4.5 rounded-full object-cover border border-[#1ED760]/30 shrink-0" 
-                    referrerPolicy="no-referrer"
-                  />
-                  <span>Mi Perfil</span>
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => { setIsDesktopMenuOpen(false); window.dispatchEvent(new Event('open-admin-panel')); }}
-                  className="h-8 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <Shield className="w-3.5 h-3.5 stroke-[2.5px]" />
-                  <span>Admin</span>
-                </button>
-              )}
-              {user ? (
-                <button
-                  type="button"
-                  onClick={() => { setIsDesktopMenuOpen(false); logout(); }}
-                  className="h-8 bg-emerald-950/25 border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <LogOut className="w-3.5 h-3.5 stroke-[2.5px]" />
-                  <span>Salir</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setIsDesktopMenuOpen(false); setAuthModalOpen(true); }}
-                  className="h-8 bg-[#121212] border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <LogIn className="w-3.5 h-3.5 stroke-[2.5px]" />
-                  <span>Entrar</span>
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      
 
       <main className="w-full mx-auto px-0 sm:px-2 md:px-4 flex-1 min-h-0 overflow-hidden py-2 sm:py-2 flex flex-col gap-6">
         <section className="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
