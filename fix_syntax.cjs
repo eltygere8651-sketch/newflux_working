@@ -1,10 +1,8 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/components/FluxKaraoke.tsx', 'utf8');
+let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
-code = code.replace(
-    '\\n  // Microphone & Audio Engine',
-    '  // Microphone & Audio Engine'
-);
+const oldStr = ') : null)}\\n                      {supportChatMessages.map((msg: any) => {';
+const newStr = ') : null}\n                      {supportChatMessages.map((msg: any) => {';
+code = code.replace(') : null)}\n                      {supportChatMessages.map((msg: any) => {', newStr);
 
-fs.writeFileSync('src/components/FluxKaraoke.tsx', code);
-console.log("Syntax fixed");
+fs.writeFileSync('src/App.tsx', code);

@@ -195,16 +195,19 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             const isPlanNone = planType === 'none';
 
             if (deviceHasTrial && u.email !== "eltygere8651@gmail.com") {
-              const shouldApplyDeviceTrial = !isSubExpired && !isTrialExpired && !isPlanNone;
+              // If the user has a valid subscription, don't override it.
+              // Otherwise, we enforce the device's trial status.
+              const hasActiveSub = hasExplicitSub && !isSubExpired;
               
-              if (shouldApplyDeviceTrial) {
+              if (!hasActiveSub) {
                 if (deviceTrialActive) {
                   finalIsValid = true;
                   finalPlan = "free";
                   finalTStart = deviceTrialStart;
                   daysRemaining = Math.max(0, Math.ceil(((deviceTrialStart + 7 * msPerDay) - now) / msPerDay));
-                } else if (!hasExplicitSub && !hasExplicitTrial) {
-                  // Only force expiration from device trial if the user has no explicit trial/sub themselves
+                } else {
+                  // Device trial is EXPIRED!
+                  // Enforce expiration so they can't request again.
                   finalIsValid = false;
                   finalPlan = "free";
                   finalTStart = 1; 

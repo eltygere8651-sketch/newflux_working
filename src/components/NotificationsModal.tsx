@@ -21,14 +21,14 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.9.0",
     title: "✨ Gran Actualización Flux v1.9.0 - Karaoke Beta y Nueva Exploración",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-14T23:54:39.691Z"),
     content: "• Modo Karaoke Beta: Disfruta de la nueva integración del karaoke en modo beta, con letras dinámicas y vista a pantalla completa.\n• Explorador Reimaginado: Hemos rediseñado por completo el funcionamiento del explorador para que descubrir nueva música sea más rápido, inteligente y visual.\n• Rediseño de Pestañas: Hemos pulido y modernizado el diseño de las pestañas en toda la app (como la pestaña de Artistas) ofreciendo una navegación más fluida e intuitiva.\n• Estabilidad y Errores: Mejoras internas masivas de rendimiento (ECO), correcciones de múltiples errores de sincronización y mejor manejo de la radio infinita inteligente estilo Spotify."
   },
   {
     id: "update-v1.8.6",
     title: "✨ Actualización Flux v1.8.6 - Modo Karaoke ECO",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-13T23:54:39.692Z"),
     content: "• Nueva Experiencia Inmersiva: Se ha añadido el nuevo 'Modo Karaoke ECO' al reproductor. Disfruta de una vista de pantalla completa con animaciones suaves, letras dinámicas y soporte nativo para efectos de eco de micrófono en tiempo real.\n• Arquitectura Desacoplada & ECO-Friendly: El karaoke funciona completamente aislado utilizando la Web Audio API del navegador de forma nativa sin consumir recursos de Firebase o servidores, garantizando un impacto cero en tu batería y rendimiento."
   },
 
@@ -36,7 +36,7 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.8.4",
     title: "✨ Actualización Flux v1.8.4 - Rediseño del Botón de Ajustes",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-12T23:54:39.692Z"),
     content: "• Ajustes Visibles y Llamativos: El botón de Configuración de Mezcla FLX ha sido rediseñado completamente. Ahora destaca con una estética vibrante y estructurada (color esmeralda con iluminación neón) que combina perfectamente con los acentos del reproductor principal, haciéndolo mucho más fácil de localizar y de usar."
   },
 
@@ -44,7 +44,7 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.8.3",
     title: "✨ Actualización Flux v1.8.3 - Reparación Profunda: Algoritmo de Mezcla FLX y Descubrimiento Infinito",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-11T23:54:39.692Z"),
     content: "• Solución del Algoritmo de Novedades: Reparado el fallo crítico en la sección 'Ajuste de Mezcla FLX' que causaba que la radio reprodujera las mismas 4 canciones repetidas o saltara canciones rotas cuando se aumentaba la barra de 'Descubrimiento nuevo' a más del 50%.\n• Descubrimiento Infinito Real: Ahora, cuando ajustas tu mezcla para priorizar el descubrimiento, el algoritmo de Flux Radio no se limita a una base local pequeña, sino que utiliza una inteligencia de búsqueda masiva hacia toda la red para ofrecer una cola de reproducción verdaderamente infinita, sin pistas rotas ni bucles repetitivos.\n• Integridad del Ecosistema: Los ajustes fueron inyectados quirúrgicamente solo en el motor de descubrimiento DJ, asegurando que ninguna otra funcionalidad de tu radio o tus demás controles se vea afectada. Las listas de la comunidad, búsqueda, favoritos y tus preferencias actuales siguen funcionando perfectamente."
   },
 
@@ -52,7 +52,7 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.8.2",
     title: "✨ Actualización Flux v1.8.2 - Nueva Radio, Comunidad y Persistencia",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-10T23:54:39.692Z"),
     content: "• Rebrand y Rediseño de Radio: Nueva estética inmersiva en la pestaña de radio eliminando etiquetas técnicas excesivas.\n• Experiencia de Radio Directa: Eliminamos las alocuciones forzadas de Sofía para priorizar la reproducción musical.\n• Mix de Sofía Libre: 'La mezcla de Sofia' ahora está disponible para todos los usuarios.\n• Memoria Inteligente: La app ahora guarda tu último género y canción escuchada en la radio para que retomes justo donde lo dejaste.\n• Visibilidad en Comunidad: Ahora los nombres de los creadores de playlists son claramente visibles incluso en pantallas de teléfonos móviles.\n• Correcciones generales: Mejoras de estabilidad, transiciones y rendimiento en toda la plataforma."
   },
 
@@ -60,7 +60,7 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.8.1",
     title: "✨ Actualización Flux v1.8.1 - Nueva Radio Flux, Retorno de Sofia y Estado Persistente",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-09T23:54:39.692Z"),
     content: "• Rebrand de la Radio: Mejoramos la estética del reproductor de la radio eliminando la etiqueta de 'FLUX AI ENGINE' para una vista más inmersiva e limpia.\n• Alocuciones Simplificadas: Removidas las interrupciones forzadas y alocuciones obligatorias de bienvenida para dar paso a una experiencia musical más directa.\n• La mezcla de Sofia para todos: El exclusivo mix de Sofia se ha habilitado para que todos los usuarios puedan seleccionarlo.\n• Estado de Radio Persistente: Ahora la aplicación recuerda automáticamente la última canción y el último género que estabas escuchando, retomándolo inmediatamente cuando vuelvas.\n• Correcciones Menores y UI: Numerosas mejoras de estabilidad, manejo de colas y consistencia visual en la pestaña de radio."
   },
 
@@ -68,84 +68,84 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.8.0",
     title: "✨ Actualización Flux v1.8.0 - Sofía de Flux Radio y Frecuencia DJ",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-08T23:54:39.692Z"),
     content: "• Sofía de Flux Radio: Renovada totalmente la voz y el estilo de nuestra DJ Inteligente. Sofía estrena identidad y habla como locutora real de radio FM.\n• Repertorio Ampliado: Añadidos más de 15 guiones de actualidad, chistes y comentarios frescos para evitar repeticiones.\n• Frecuencia DJ Protegida: Optimizamos la intervención de la DJ para que ocurra de forma natural solo después de al menos 15 canciones, evitando saturar tu reproducción en producción."
   },
   {
     id: "update-v1.7.0",
     title: "✨ Actualización Flux v1.7.0 - Mejoras en el Explorador y Novedades",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-07T23:54:39.692Z"),
     content: "• Gestión Rápida de Listas: Ahora puedes reordenar listas simplemente arrastrando con el ratón, haciendo la organización mucho más fluida.\n• Edición en Vivo: Renombra categorías existentes fácilmente.\n• Limpieza Dinámica: Se pueden ocultar o eliminar listas de cualquier categoría para mantener el explorador siempre con música fresca.\n• Notificaciones Integradas: El sistema ahora cuenta con un mecanismo para resaltar y notificar de manera global los últimos lanzamientos musicales."
   },
   {
     id: "update-v1.6.6",
     title: "✨ Actualización Flux v1.6.6 - Reanudación Inteligente",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-06T23:54:39.692Z"),
     content: "• Solución Definitiva y Real: Se ha implementado un sistema inteligente real. Al cerrar la app, guardamos tu minuto exacto. Al volver a abrirla, la canción continuará exáctamente donde la dejaste. Pero si cambias de canción con 'Siguiente' o haciendo click en tu biblioteca, la pista nueva siempre empezará a reproducirse limpiamente desde el segundo 00:00.\n• Ajuste sin engaños: Hemos reprogramado el bloqueador de micro-eventos que sobreescribía la reanudación desde 0, asegurando una fluidez nativa y respetando tu batería sin sacrificar la lógica de reinicio."
   },
   {
     id: "update-v1.6.5",
     title: "✨ Actualización Flux v1.6.5 - Autonomía Total de Reproducción de Cero",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-05T23:54:39.692Z"),
     content: "• Reparación Definitiva Confirmada: Hemos ajustado la API interna del reproductor para forzar una política estricta. Si pulsas sobre cualquir nueva canción o cambias a la siguiente pista, el contador arranca SIEMPRE de cero. Ya no hereda el tiempo previo por error del sistema nativo.\n• Excepción de Reanudación Intacta: Esta lógica rigurosa no afecta a la función de reanudación. Si cierras la aplicación, al volver el reproductor seguirá reconociendo exactamente el minuto donde dejaste tu canción actual, comportándose inteligentemente según la situación."
   },
   {
     id: "update-v1.6.4",
     title: "✨ Actualización Flux v1.6.4 - Sincronía del Player Original Restaurada",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-04T23:54:39.692Z"),
     content: "• Reparación Real del Reproductor: Hemos solucionado definitivamente el error masivo introducido en los ajustes de reanudación recientes. Cuando estabas en el segundo 40 de una canción y parabas a la siguiente, esa nueva canción saltaba automáticamente al minuto 40 en lugar de empezar por el principio.\n• Lógica Restaurada sin Impacto: Las nuevas canciones vuelven a iniciar limpiamente en 00:00 como deberia ser, sin sacrificar la reanudación del historial al arrancar la app ni afectar el consumo del uso de recursos eco-friendly."
   },
   {
     id: "update-v1.6.3",
     title: "✨ Actualización Flux v1.6.3 - Reloj de Reproducción Sincronizado",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-03T23:54:39.692Z"),
     content: "• Sincronización Automática: Hemos corregido el desajuste que mantenía congelado el temporizador al cambiar de pista. Ahora, sin importar si pulsas siguiente, seleccionas a mano una canción, o buscas algo nuevo, el tiempo arranca en cero correctamente.\n• Modos Eco-Mantenidos: Esta fluidez fue lograda modificando el ciclo interno sin aumentar un milivatio extra del sistema. Reproduce al máximo y gasta al mínimo."
   },
   {
     id: "update-v1.6.2",
     title: "✨ Actualización Flux v1.6.2 - Corrección de Reanudación",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-02T23:54:39.692Z"),
     content: "• Reanudación Instantánea: Hemos solucionado el problema que causaba que la música se quedara congelada o atascada un par de segundos al volver a abrir o recargar la aplicación e intentar continuar escuchando. Ahora la reproducción se reanuda desde el punto donde la dejaste de forma fluida, directa y sin tirones, manteniendo el rendimiento eco de la batería."
   },
   {
     id: "update-v1.6.1",
     title: "✨ Actualización Flux v1.6.1 - Fix Bluetooth iOS (Brave)",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-07-01T23:54:39.692Z"),
     content: "• Solucionado un error crítico (Crash) en iOS al usar el navegador Brave conectado al coche vía Bluetooth. Ahora, al presionar 'Anterior' desde el volante, la canción simplemente se reiniciará (si lleva más de 3 segundos), previniendo que el reproductor interno se bloquee mediante cargas excesivas de red."
   },
   {
     id: "update-v1.6.0",
     title: "✨ Actualización Flux v1.6.0 - Eco-Watchdog y Solución a Cortes",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-06-30T23:54:39.692Z"),
     content: "• Sistema Eco-Friendly: Hemos optimizado el detector interno de fallos (Watchdog) para consumir un ~0% de batería y CPU.\n• Reproducción Ininterrumpida: En sesiones largas (1+ horas), el audio ya no se detendrá bruscamente si el navegador lo congela. El sistema lo reanuda automáticamente manteniendo la temperatura de tu móvil siempre baja."
   },
   {
     id: "update-v1.5.9",
     title: "✨ Actualización Flux v1.5.9 - Filtro Estricto de Biblioteca Personal",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-06-29T23:54:39.692Z"),
     content: "• Exclusividad de Playlists: Al añadir una canción a una playlist existente desde el modal de creación, ahora verás un filtro estricto que muestra exclusivamente tus propias playlists personales. Se solucionó el problema donde se mezclaban listas de la comunidad, garantizando una administración privada de tu biblioteca musical."
   },
   {
     id: "update-v1.5.8",
     title: "✨ Actualización Flux v1.5.8 - Sincronización Playlists y Mejoras Visuales",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-06-28T23:54:39.692Z"),
     content: "• Sincronización Global: Las canciones añadidas a tus listas ahora se reflejan en tiempo real en todos los módulos de la interfaz, solucionando la discrepancia donde no se veían de inmediato.\n• Interfaz Móvil y Arrastre: Se perfeccionó y depuró la vista móvil ocultando controles inactivos como el botón de arrastre, garantizando un ecosistema táctil limpio sin romper las funciones de movimiento de listas."
   },
   {
     id: "update-v1.5.7",
     title: "✨ Actualización Flux v1.5.7 - Bloqueo de Pantalla Premium en Brave (iOS/Android)",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-06-27T23:54:39.692Z"),
     content: "• Compatibilidad Extrema Móvil: Hemos logrado que la app siga reproduciendo la música con total fluidez y el volumen reactivado aún con la pantalla bloqueada desde navegadores restrictivos como Brave en iOS (iPhone) y Android.\n• Consumo Mínimo de Batería al 100%: Esta gran optimización interna se ha llevado a cabo de manera excepcionalmente eficiente manteniendo un consumo inigualable para que tu batería permanezca cuidada y no se sobrecargue."
   },
   {
@@ -166,7 +166,7 @@ export const COMPILED_UPDATES: Announcement[] = [
     id: "update-v1.5.4",
     title: "✨ Actualización Flux v1.5.4 - Mejoras UI y Seguridad Multidispositivo",
     category: "actualizacion",
-    createdAt: new Date(),
+    createdAt: new Date("2026-06-26T23:54:39.692Z"),
     content: "• Prevención de Multiconexión: Implementado un sistema estricto de control de reproducciones simultáneas. Si tu cuenta cambia de dispositivo, se pausará automáticamente para garantizar el protocolo de cuenta única.\n• Correcciones de Botones: Ajuste premium al botón de cierre móvil y centrado absoluto del botón minimizar visor en Android.\n• Reparaciones de Telegram y Bluetooth: Refuerzo integral al sistema de MediaSession para coches y alertas push conectadas al asistente directo de Telegram administrativo."
   },
   {

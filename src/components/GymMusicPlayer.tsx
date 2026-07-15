@@ -8,6 +8,8 @@ import React, {
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../lib/firebase";
 import { Play,
   Pause,
   SkipForward,
@@ -808,7 +810,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       const fp = getBrowserFingerprint();
 
       const requestsRef = collection(db, "trial_requests");
-      const q = query(requestsRef, where("uid", "==", user.uid));
+      const q = query(requestsRef, where("fingerprint", "==", fp));
       const snap = await getDocs(q);
 
       if (!snap.empty) {
@@ -10093,7 +10095,33 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   {/* Siempre mostramos el boton de contactar si ya probaron, si expiró su subs, o si fueron declinados/pendientes */}
                   {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart !== null) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
                     <button
-                      onClick={() => window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }))}
+                      onClick={async () => {
+                        if (!user) {
+                          try {
+                            const fp = getBrowserFingerprint();
+                            const vipEmail = `socio.${fp.substring(0, 6)}@fluxmusic.com`;
+                            const vipPass = `${fp.substring(0, 10)}_fluxvip`;
+                            try {
+                              await signInWithEmailAndPassword(auth, vipEmail, vipPass);
+                            } catch (e) {
+                              const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
+                              await setDoc(doc(db, "users", userCred.user.uid), {
+                                email: vipEmail,
+                                displayName: "Socio VIP",
+                                plan: "free",
+                                trialStart: Date.now() - (8 * 24 * 60 * 60 * 1000)
+                              }, { merge: true });
+                            }
+                            setTimeout(() => {
+                              window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
+                            }, 1000);
+                          } catch(err) {
+                            console.error(err);
+                          }
+                        } else {
+                          window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
+                        }
+                      }}
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
                     >
                       <span>💬 CONTACTAR PARA ACTIVAR PREMIUM</span>
