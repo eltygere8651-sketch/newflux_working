@@ -32,6 +32,7 @@ import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, 
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
+import { ShareModal } from "./components/ShareModal";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
@@ -40,6 +41,7 @@ function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [globalBanner, setGlobalBanner] = useState<{id: string, title: string, content: string, category?: string} | null>(null);
 
@@ -727,6 +729,14 @@ function AppContent() {
                     <span>Admin</span>
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => { setIsMenuOpen(false); setIsShareModalOpen(true); }}
+                  className="w-full h-9 bg-transparent hover:bg-white/5 text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
+                >
+                  <span className="text-[14px] ml-[1px]">❤️</span>
+                  <span>Invitar amigos</span>
+                </button>
                 {user ? (
                   <button
                     type="button"
@@ -848,6 +858,11 @@ function AppContent() {
         isOpen={isNotificationsOpen} 
         onClose={() => setIsNotificationsOpen(false)} 
         isAdmin={isAdmin}
+      />
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
       />
 
       {/* SUPPORT DIALOG MODAL */}
