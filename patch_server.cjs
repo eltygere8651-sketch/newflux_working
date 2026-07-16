@@ -1,35 +1,32 @@
 const fs = require('fs');
 let code = fs.readFileSync('server.ts', 'utf-8');
 
-const targetStr = `app.post("/api/vip/recover", async (req, res) => {`;
-const replaceStr = `app.delete("/api/admin/users/:userId", async (req, res) => {
-  const { userId } = req.params;
-  const adminEmail = req.headers["x-admin-email"];
-  
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    return res.status(403).json({ error: "No autorizado. Solo el administrador puede borrar usuarios." });
-  }
+const target = `      const userDoc = await db.collection("users").doc(userId).get().catch(() => null);
+      if (userDoc && userDoc.exists) {
+         const data = userDoc.data();
+         if (data && data.deviceHash) {
+            // Expire the device trial instead of deleting it, so they don't get a new one
+            await db.collection("vip_devices").doc(data.deviceHash).update({ activatedAt: 0 }).catch(() => {});
+         }
+      }`;
 
-  try {
-    try {
-      await admin.auth().deleteUser(userId);
-    } catch (authErr) {
-      console.warn("User not found in Auth, but proceeding to delete from DB", authErr);
-    }
-    const db = getFirestoreDb();
-    if (db) {
-      await db.collection("users").doc(userId).delete().catch(() => {});
-      await db.collection("trial_requests").doc(userId).delete().catch(() => {});
-      await db.collection("vip_activations").doc(userId).delete().catch(() => {});
-    }
-    return res.json({ success: true, message: "Usuario borrado correctamente" });
-  } catch (err) {
-    console.error("Error deleting user:", err);
-    return res.status(500).json({ error: "Error interno al borrar usuario" });
-  }
-});
+const replace = `      let foundHash = null;
+      const userDoc = await db.collection("users").doc(userId).get().catch(() => null);
+      if (userDoc && userDoc.exists) {
+         const data = userDoc.data();
+         if (data && data.deviceHash) foundHash = data.deviceHash;
+      }
+      
+      const vipActDoc = await db.collection("vip_activations").doc(userId).get().catch(() => null);
+      if (vipActDoc && vipActDoc.exists) {
+         const data = vipActDoc.data();
+         if (data && data.deviceHash) foundHash = data.deviceHash;
+      }
 
-app.post("/api/vip/recover", async (req, res) => {`;
+      if (foundHash) {
+          // Expire the device trial instead of deleting it, so they don't get a new one
+          await db.collection("vip_devices").doc(foundHash).update({ activatedAt: 0 }).catch(() => {});
+      }`;
 
-code = code.replace(targetStr, replaceStr);
+code = code.replace(target, replace);
 fs.writeFileSync('server.ts', code);

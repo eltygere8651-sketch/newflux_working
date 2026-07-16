@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
@@ -123,7 +123,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         
         unsubscribeFirestore = onSnapshot(userRef, async (snapshot) => {
           try {
-            const snapshot = await getDoc(userRef);
+            
             let deviceHasTrial = false;
             let deviceTrialActive = false;
             let deviceTrialStart = 0;
@@ -146,6 +146,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             const isVipAccount = u.email?.startsWith('vip_');
             let tStart = null;
             let subEnd = null;
+            let trialDurationDays = 7;
             let planType = isVipAccount ? "free" : "none";
             let allowedUsers = 1;
             let activeSessionId = null;
@@ -155,18 +156,27 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               const isNewUser = (Date.now() - creationTime) < 120000;
               if (!isNewUser) {
                 console.warn("User deleted remotely. Signing out.");
-                auth.signOut();
+                signOut(auth);
                 return;
               }
             }
             if (snapshot.exists()) {
               const data = snapshot.data();
+              if (deviceHasTrial) {
+                // Keep the deviceHash in sync with the user document so the admin can delete it if needed
+                generateDeviceHash().then(hash => {
+                  if (data.deviceHash !== hash) {
+                    setDoc(userRef, { deviceHash: hash }, { merge: true }).catch(() => {});
+                  }
+                }).catch(() => {});
+              }
               setDbUserProfile({
                 displayName: data.displayName,
                 photoURL: data.photoURL
               });
               tStart = data.trialStart !== undefined ? data.trialStart : null;
               subEnd = data.subscriptionEnd !== undefined ? data.subscriptionEnd : null;
+              trialDurationDays = data.trialDuration || 7;
               planType = data.plan || (isVipAccount ? "free" : "none");
               allowedUsers = data.maxUsers || 1;
               activeSessionId = data.activeSessionId || null;
@@ -185,7 +195,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               isValid = true;
               daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
             } else if (planType === "free" && tStart) {
-              const trialEnd = tStart + 7 * msPerDay;
+              const trialEnd = tStart + trialDurationDays * msPerDay;
               if (trialEnd > now) {
                 isValid = true;
                 daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
@@ -200,15 +210,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             const hasExplicitSub = subEnd !== null;
             const hasExplicitTrial = tStart !== null;
             const isSubExpired = hasExplicitSub && subEnd <= now;
-            const isTrialExpired = hasExplicitTrial && (tStart + 7 * msPerDay) <= now;
+            const isTrialExpired = hasExplicitTrial && (tStart === 0 || (tStart + trialDurationDays * msPerDay) <= now);
             const isPlanNone = planType === 'none';
 
             if (deviceHasTrial && u.email !== "eltygere8651@gmail.com") {
-              // If the user has a valid subscription, don't override it.
-              // Otherwise, we enforce the device's trial status.
+              // If the user already has an explicit expired subscription or explicitly expired trial on their account,
+              // the account status takes precedence (they can't use a new device trial to bypass an expired account).
+              const isAccountExpired = isSubExpired || isTrialExpired;
               const hasActiveSub = hasExplicitSub && !isSubExpired;
               
-              if (!hasActiveSub) {
+              if (!hasActiveSub && !isAccountExpired) {
                 if (deviceTrialActive) {
                   finalIsValid = true;
                   finalPlan = "free";
@@ -313,7 +324,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               if (!isNewUser) {
                  // User was deleted by admin from Firestore! Force logout.
                  console.warn("User document deleted by admin. Logging out.");
-                 auth.signOut();
+                 signOut(auth);
                  return;
               }
 

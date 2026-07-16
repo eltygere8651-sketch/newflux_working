@@ -2283,13 +2283,30 @@ app.delete("/api/admin/users/:userId", async (req, res) => {
   }
 
   try {
+    const db = getFirestoreDb(); // ensure admin is initialized
     try {
       await admin.auth().deleteUser(userId);
     } catch (authErr) {
       console.warn("User not found in Auth, but proceeding to delete from DB", authErr);
     }
-    const db = getFirestoreDb();
     if (db) {
+      let foundHash = null;
+      const userDoc = await db.collection("users").doc(userId).get().catch(() => null);
+      if (userDoc && userDoc.exists) {
+         const data = userDoc.data();
+         if (data && data.deviceHash) foundHash = data.deviceHash;
+      }
+      
+      const vipActDoc = await db.collection("vip_activations").doc(userId).get().catch(() => null);
+      if (vipActDoc && vipActDoc.exists) {
+         const data = vipActDoc.data();
+         if (data && data.deviceHash) foundHash = data.deviceHash;
+      }
+
+      if (foundHash) {
+          // Expire the device trial instead of deleting it, so they don't get a new one
+          await db.collection("vip_devices").doc(foundHash).update({ activatedAt: 0 }).catch(() => {});
+      }
       await db.collection("users").doc(userId).delete().catch(() => {});
       await db.collection("trial_requests").doc(userId).delete().catch(() => {});
       await db.collection("vip_activations").doc(userId).delete().catch(() => {});

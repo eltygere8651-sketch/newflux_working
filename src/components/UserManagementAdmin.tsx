@@ -1299,8 +1299,9 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         let newEnd = user.subscriptionEnd;
         
         if (!newEnd || newEnd <= Date.now()) {
-            if (user.trialStart && (user.trialStart + 7 * msPerDay) > Date.now()) {
-                newEnd = user.trialStart + 7 * msPerDay;
+            const currentTrialDur = user.trialDuration || 7;
+            if (user.trialStart && (user.trialStart + currentTrialDur * msPerDay) > Date.now()) {
+                newEnd = user.trialStart + currentTrialDur * msPerDay;
             } else {
                 newEnd = Date.now();
             }
