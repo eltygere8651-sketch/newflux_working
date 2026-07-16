@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Loader2, ArrowRight, MessageSquare, Info } from 'lucide-react';
+import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const generateDeviceHash = async () => {
   const w = window.screen.width || 0;
@@ -297,6 +297,18 @@ export const VIPLandingView = () => {
             <><MessageSquare className="w-5 h-5" /> CONTACTAR PARA ACTIVAR PREMIUM</>
           )}
         </button>
+        {auth.currentUser && (
+          <button
+            onClick={() => {
+              signOut(auth);
+              window.location.reload();
+            }}
+            className="mt-6 text-white/40 hover:text-white/80 transition-colors text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 z-10"
+          >
+            <LogOut className="w-4 h-4" />
+            Cerrar Sesión
+          </button>
+        )}
       </div>
     );
   }

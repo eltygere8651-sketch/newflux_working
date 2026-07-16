@@ -2284,11 +2284,9 @@ app.delete("/api/admin/users/:userId", async (req, res) => {
 
   try {
     const db = getFirestoreDb(); // ensure admin is initialized
-    try {
-      await admin.auth().deleteUser(userId);
-    } catch (authErr) {
-      console.warn("User not found in Auth, but proceeding to delete from DB", authErr);
-    }
+    // In AI Studio, we don't have admin access to the user's Firebase Auth project
+    // We only delete the user from Firestore. The client will automatically sign them out
+    // when it detects the user document is deleted.
     if (db) {
       let foundHash = null;
       const userDoc = await db.collection("users").doc(userId).get().catch(() => null);

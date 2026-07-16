@@ -8,7 +8,7 @@ import React, {
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { Play,
   Pause,
