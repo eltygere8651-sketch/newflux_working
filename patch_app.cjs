@@ -1,52 +1,45 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
-const importTarget = 'import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";';
-const importReplacement = importTarget + '\nimport { ShareModal } from "./components/ShareModal";';
-if (!code.includes('import { ShareModal }')) {
-  code = code.replace(importTarget, importReplacement);
+const target = `                    ) : supportChatMessages.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3.5">
+                        <div className="p-4 bg-emerald-500/5 rounded-full border border-emerald-500/10 animate-pulse">
+                          <MessageSquare className="w-8 h-8 text-[#1ED760]" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium en Vivo</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Canal Sincronizado</p>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
+                          👋 ¡Hola! Escribe tu consulta o duda abajo. El equipo administrativo te responderá directamente aquí en tiempo real.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {suggestedMessage ? (`;
+
+const replace = `                    ) : (
+                      <>
+                        {supportChatMessages.length === 0 && !suggestedMessage && (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3.5 mt-10 mb-6">
+                            <div className="p-4 bg-emerald-500/5 rounded-full border border-emerald-500/10 animate-pulse">
+                              <MessageSquare className="w-8 h-8 text-[#1ED760]" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium en Vivo</p>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Canal Sincronizado</p>
+                            </div>
+                            <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
+                              👋 ¡Hola! Escribe tu consulta o duda abajo. El equipo administrativo te responderá directamente aquí en tiempo real.
+                            </p>
+                          </div>
+                        )}
+                        {suggestedMessage ? (`;
+
+if (code.includes(target)) {
+  code = code.replace(target, replace);
+  fs.writeFileSync('src/App.tsx', code);
+  console.log("Patched App.tsx successfully.");
+} else {
+  console.log("Target not found.");
 }
-
-const stateTarget = '  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);';
-const stateReplacement = stateTarget + '\n  const [isShareModalOpen, setIsShareModalOpen] = useState(false);';
-if (!code.includes('isShareModalOpen')) {
-  code = code.replace(stateTarget, stateReplacement);
-}
-
-const menuTarget = `                {user ? (
-                  <button
-                    type="button"
-                    onClick={() => { setIsMenuOpen(false); logout(); }}`;
-const menuReplacement = `                <button
-                  type="button"
-                  onClick={() => { setIsMenuOpen(false); setIsShareModalOpen(true); }}
-                  className="w-full h-9 bg-transparent hover:bg-white/5 text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
-                >
-                  <span className="text-[14px] ml-[1px]">❤️</span>
-                  <span>Invitar amigos</span>
-                </button>
-                {user ? (
-                  <button
-                    type="button"
-                    onClick={() => { setIsMenuOpen(false); logout(); }}`;
-if (!code.includes('Invitar amigos')) {
-  code = code.replace(menuTarget, menuReplacement);
-}
-
-const modalTarget = `      <NotificationsModal 
-        isOpen={isNotificationsOpen} 
-        onClose={() => setIsNotificationsOpen(false)} 
-        isAdmin={isAdmin}
-      />`;
-const modalReplacement = modalTarget + `
-
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-      />`;
-if (!code.includes('<ShareModal')) {
-  code = code.replace(modalTarget, modalReplacement);
-}
-
-fs.writeFileSync('src/App.tsx', code);
-console.log('App patched');
