@@ -150,6 +150,15 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let allowedUsers = 1;
             let activeSessionId = null;
             
+            if (!snapshot.exists()) {
+              const creationTime = new Date(u.metadata.creationTime).getTime();
+              const isNewUser = (Date.now() - creationTime) < 120000;
+              if (!isNewUser) {
+                console.warn("User deleted remotely. Signing out.");
+                auth.signOut();
+                return;
+              }
+            }
             if (snapshot.exists()) {
               const data = snapshot.data();
               setDbUserProfile({
@@ -297,6 +306,17 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             const userSnap = await getDoc(userRef);
             
             if (!userSnap.exists()) {
+              // Distinguish between a new sign up and an administratively deleted user
+              const creationTime = new Date(u.metadata.creationTime).getTime();
+              const isNewUser = (Date.now() - creationTime) < 120000; // 2 minutes window
+              
+              if (!isNewUser) {
+                 // User was deleted by admin from Firestore! Force logout.
+                 console.warn("User document deleted by admin. Logging out.");
+                 auth.signOut();
+                 return;
+              }
+
               // Create user doc without trial
               const defaultAvatar = u.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.displayName || u.email || u.uid)}`;
               await setDoc(userRef, {
