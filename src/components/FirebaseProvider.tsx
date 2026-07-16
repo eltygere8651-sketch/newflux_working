@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, increment } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 export interface UserAccessData {
@@ -121,7 +121,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
         
-        const fetchUserData = async () => {
+        unsubscribeFirestore = onSnapshot(userRef, async (snapshot) => {
           try {
             const snapshot = await getDoc(userRef);
             let deviceHasTrial = false;
@@ -227,9 +227,9 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
           } catch(err) {
             console.error("Firestore getDoc error:", err);
           }
-        };
+        });
 
-        fetchUserData();
+        // fetchUserData();
 
         // High precision & low-resource session time tracking
         const lastSyncTimeRef = { current: Date.now() };
@@ -259,8 +259,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         };
 
         const pollInterval = setInterval(() => {
-          // Fetch access state & also sync general app usage stats every 5 minutes (incredibly cost efficient!)
-          fetchUserData();
           if (document.visibilityState === "visible") {
             syncUsageAndActivity();
           }
@@ -313,7 +311,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 plan: "none",
                 maxUsers: 1
               });
-              fetchUserData();
+              // fetchUserData();
             } else {
               // Update last login & active
               await setDoc(userRef, { 
