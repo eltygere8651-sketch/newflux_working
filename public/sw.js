@@ -1,12 +1,18 @@
-const CACHE_NAME = "flux-player-v2";
+const CACHE_NAME = "flux-player-v3";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/manifest.json",
   "/icon-512.svg",
+  "/icon-152.png",
+  "/icon-167.png",
   "/icon-180.png",
   "/icon-192.png",
+  "/icon-256.png",
+  "/icon-384.png",
   "/icon-512.png",
+  "/icon-1024.png",
+  "/favicon.png",
   "/apple-touch-icon.png",
   "/apple-touch-icon-precomposed.png"
 ];
