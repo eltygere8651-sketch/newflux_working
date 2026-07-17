@@ -32,6 +32,7 @@ import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, 
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
+import { APP_UPDATES_VERSION } from "./config/appVersion";
 import { ShareModal } from "./components/ShareModal";
 
 function AppContent() {
@@ -461,65 +462,58 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Check for unread announcements using getDocs (replaces onSnapshot for scale)
-    const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+    // 1. Verificación local eficiente y síncrona (SIN Firebase)
     const checkUnread = async () => {
+      const installedVersionRaw = localStorage.getItem("flux_app_installed_version");
+      const seenVersionRaw = localStorage.getItem("flux_updates_version_seen");
+      if (!installedVersionRaw || !seenVersionRaw) {
+        // Instalación nueva: marcamos la versión global actual como instalada y vista para no molestar,
+        // y NO mostramos punto rojo.
+        localStorage.setItem("flux_app_installed_version", APP_UPDATES_VERSION.toString());
+        localStorage.setItem("flux_updates_version_seen", APP_UPDATES_VERSION.toString());
+        setHasUnread(false);
+      } else {
+        const seenVersion = parseInt(seenVersionRaw, 10);
+        setHasUnread(APP_UPDATES_VERSION > seenVersion);
+      }
+
+      // 2. Comprobación del banner global (1 única vez al iniciar)
       try {
+        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
         const snapshot = await getDocs(q);
-        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
-        let hasUnreadDb = false;
-
-        let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
-        let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
-
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
           const data = newestDoc.data();
           const createdAt = data.createdAt;
           const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
-          
-          if (dbDate > staticDate) {
-            newestId = newestDoc.id;
-          }
 
+          // Si el anuncio tiene menos de 24 horas y no ha sido desactivado ni descartado
           if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
-             const dismissedId = localStorage.getItem("flux_dismissed_banner");
-             if (dismissedId !== newestDoc.id) {
-               setGlobalBanner({ id: newestDoc.id, title: data.title, content: data.content, category: data.category });
-             } else {
-               setGlobalBanner(null);
-             }
+            const dismissedId = localStorage.getItem("flux_dismissed_banner");
+            if (dismissedId !== newestDoc.id) {
+              setGlobalBanner({ id: newestDoc.id, title: data.title, content: data.content, category: data.category });
+            } else {
+              setGlobalBanner(null);
+            }
           } else {
-             setGlobalBanner(null);
+            setGlobalBanner(null);
           }
         } else {
-           setGlobalBanner(null);
+          setGlobalBanner(null);
         }
-
-        if (newestId && newestId !== lastViewed) {
-          hasUnreadDb = true;
-        }
-
-        setHasUnread(hasUnreadDb);
       } catch (err) {
-        console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
-        // Fallback to local compiled updates
-        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
-        if (COMPILED_UPDATES.length > 0 && COMPILED_UPDATES[0].id !== lastViewed) {
-          setHasUnread(true);
-        }
+        // Fallo de red normal, no mostramos banner global
+        console.warn("No se pudo cargar el banner global:", err);
       }
     };
 
     checkUnread();
-    const interval = setInterval(checkUnread, 15 * 60 * 1000);
 
     const handleRead = () => {
       setHasUnread(false);
     };
     window.addEventListener("notifications-read", handleRead);
     return () => {
-      clearInterval(interval);
       window.removeEventListener("notifications-read", handleRead);
     };
   }, []);

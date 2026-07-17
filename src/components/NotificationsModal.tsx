@@ -15,6 +15,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { collection, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
+// Incrementa este número cada vez que agregues una nueva actualización a COMPILED_UPDATES.
+// Esto controla el punto rojo de notificaciones de forma global y eficiente.
+import { APP_UPDATES_VERSION } from "../config/appVersion";
+
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
@@ -351,11 +355,27 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
   // Handle marking as read whenever the modal is open and we have announcements
   useEffect(() => {
-    if (isOpen && announcements.length > 0) {
-      localStorage.setItem("flux_last_viewed_announcement_id", announcements[0].id);
-      window.dispatchEvent(new Event("notifications-read"));
+    if (isOpen) {
+      const currentVersionStr = APP_UPDATES_VERSION.toString();
+      const seenVersion = localStorage.getItem("flux_updates_version_seen");
+      const installedVersion = localStorage.getItem("flux_app_installed_version");
+      
+      let changed = false;
+      
+      if (seenVersion !== currentVersionStr) {
+        localStorage.setItem("flux_updates_version_seen", currentVersionStr);
+        changed = true;
+      }
+      
+      if (installedVersion !== currentVersionStr) {
+        localStorage.setItem("flux_app_installed_version", currentVersionStr);
+      }
+      
+      if (changed) {
+        window.dispatchEvent(new Event("notifications-read"));
+      }
     }
-  }, [isOpen, announcements]);
+  }, [isOpen]);
 
   const handleDeleteAnnouncement = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
