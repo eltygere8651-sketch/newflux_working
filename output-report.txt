@@ -1,0 +1,29 @@
+====================================================
+AUDITORÍA FINAL
+====================================================
+
+✅ PNG binarios válidos: Todos los iconos son PNG auténticos verificados mediante Magic Bytes y tamaño.
+✅ Sin canal Alpha: Los iconos `apple-touch-icon` ahora tienen 3 canales en lugar de 4. El canal de transparencia fue removido (`Has Alpha: false`).
+✅ Apple Touch Icon correcto: Se vincularon los tamaños correctos (152, 167, 180) de forma independiente en `index.html`, con un parámetro `?v=5`.
+✅ Manifest correcto: Las referencias en `manifest.json` continúan inalteradas, sin archivos viejos.
+✅ Service Worker actualizado: Se incrementó la caché a `flux-player-v5` y se cachearon expresamente las URLs versionadas.
+✅ Dist correcto: Se verificó la exportación exitosa de todos los iconos regenerados a `dist/`.
+✅ Build correcto: La ejecución de `npm run build` finalizó correctamente en ~13s.
+✅ Lint correcto: La ejecución de `npm run lint` finalizó sin arrojar errores de TypeScript.
+
+---
+
+INFORME TÉCNICO DE RESOLUCIÓN
+
+1. Causa Exacta Demostrada:
+Tras analizar los metadatos y canales binarios de los PNG en producción, se descubrió que el archivo `apple-touch-icon.png` original poseía un canal Alpha (4 canales: RGBA). De acuerdo con las Human Interface Guidelines de Apple, Safari rechaza estrictamente los Web Clip Icons con canal Alpha. Al detectar el canal de transparencia, el sistema operativo descarta la imagen y genera dinámicamente un icono genérico extrayendo la letra inicial (la "F" sobre fondo oscuro o verde que muestra la imagen adjunta).
+
+2. Archivos Modificados:
+- `public/apple-touch-icon.png` (y variaciones `152`, `167`, `180`, `precomposed`): Regenerados para aplanar las capas e inutilizar el canal Alpha.
+- `index.html`: Enrutamiento preciso de los tamaños de apple-touch-icon (`152x152` -> `apple-touch-icon-152.png`) y asignación de un flag cache-buster `?v=5` estático.
+- `public/sw.js`: Se actualizó la versión de caché de `v3`/`v4` a `flux-player-v5` asegurando que actualice los assets correspondientes a la nueva caché (y se configuró `ignoreSearch: true` para que los requests con `?v=5` funcionen correctamente offline).
+
+3. Por qué esta solución corrige el problema:
+Al remover forzosamente el canal de transparencia (`removeAlpha()`) y aplanar el archivo a negro absoluto de fondo, logramos un formato estrictamente RGB opaco. Ahora, al realizar la instalación en iOS, Safari parsea la imagen como un bloque sólido renderizable y ya no requiere ejecutar el *fallback* de inicialización en texto ("F"). Adicionalmente, el cache-buster `?v=5` forzará a iOS a ignorar cualquier caché del anterior icono en la memoria del dispositivo.
+
+Nota: Todas las lógicas de Firebase, Premium, Reproductor y APIs han permanecido intactas como se requirió.

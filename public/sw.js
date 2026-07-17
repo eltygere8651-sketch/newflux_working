@@ -1,4 +1,4 @@
-const CACHE_NAME = "flux-player-v3";
+const CACHE_NAME = "flux-player-v5";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -13,14 +13,19 @@ const ASSETS_TO_CACHE = [
   "/icon-512.png",
   "/icon-1024.png",
   "/favicon.png",
-  "/apple-touch-icon.png",
-  "/apple-touch-icon-precomposed.png"
+  "/apple-touch-icon.png?v=5",
+  "/apple-touch-icon-152.png?v=5",
+  "/apple-touch-icon-167.png?v=5",
+  "/apple-touch-icon-180.png?v=5",
+  "/apple-touch-icon-precomposed.png?v=5"
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => {});
+      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
+        console.error("Cache addAll error", err);
+      });
     })
   );
   self.skipWaiting();
@@ -57,7 +62,8 @@ self.addEventListener("fetch", (event) => {
       });
       return networkResponse;
     }).catch(() => {
-      return caches.match(event.request);
+      // Ignore query string when matching from cache
+      return caches.match(event.request, { ignoreSearch: true });
     })
   );
 });
