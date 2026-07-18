@@ -44,7 +44,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const usersRef = useRef<any[]>([]);
   usersRef.current = users;
 
-  const [globalAnalytics, setGlobalAnalytics] = useState<any[]>([]);
+  
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
@@ -64,10 +64,17 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   // Lazy Analytics Stats
   const [adminStats, setAdminStats] = useState({ totalUsers: 0, activeUsers: 0, newUsers: 0 });
-  const [vipStats, setVipStats] = useState({ activated: 0, active: 0, expired: 0, conversions: 0, blocked: 0, suspicious: 0 });
+  const [vipStats, setVipStats] = useState({ activated: 0, active: 0, expired: 0, conversions: 0 });
   const [realtimeActiveUsers, setRealtimeActiveUsers] = useState<any[]>([]);
 
-  useEffect(() => {
+  const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics" | "qr_campaigns">("subscriptions");
+
+    useEffect(() => {
+    if (activeTab !== "analytics") {
+      setRealtimeActiveUsers([]);
+      return;
+    }
+
     // Escucha en tiempo real de usuarios con actividad en los últimos 15 minutos
     const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
     const q = query(
@@ -76,10 +83,12 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const now = Date.now();
       const activeList: any[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })).filter((u: any) => getMs(u.lastActiveAt) >= now - 15 * 60 * 1000);
+
       // Ordenar en lado del cliente para evitar errores por índices compuestos requeridos de ordenamiento en Firestore
       activeList.sort((a: any, b: any) => getMs(b.lastActiveAt) - getMs(a.lastActiveAt));
       setRealtimeActiveUsers(activeList);
@@ -99,14 +108,13 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [activeTab]);
 
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics" | "qr_campaigns">("subscriptions");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
   
   // Custom non-blocking Dialogs to bypass sandbox iframe blocks
@@ -1095,7 +1103,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       // Fetch resilient counters for Stats Tab
       if (pageIndex === 0) {
          let totalCount = 0;
-         let activeCount = 0;
          let newCount = 0;
 
          try {
@@ -1103,19 +1110,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
            totalCount = totalSnap.data().count;
          } catch (statsErr) {
            console.warn("Could not fetch total users count:", statsErr);
-         }
-
-         try {
-           const activeSnap = await getCountFromServer(query(collection(db, "users"), where("lastActiveAt", ">=", Date.now() - 15 * 60 * 1000)));
-           activeCount = activeSnap.data().count;
-         } catch (activeErr) {
-           try {
-             // Fallback using lastLogin if lastActiveAt index/property is missing
-             const activeSnap = await getCountFromServer(query(collection(db, "users"), where("lastLogin", ">=", new Date(Date.now() - 15 * 60 * 1000))));
-             activeCount = activeSnap.data().count;
-           } catch (innerActive) {
-             console.warn("Could not fetch active users:", innerActive);
-           }
          }
 
          try {
@@ -1131,11 +1125,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
            }
          }
 
-         setAdminStats({
+         setAdminStats(prev => ({
+           ...prev,
            totalUsers: totalCount,
-           activeUsers: activeCount || Math.min(totalCount, 1),
            newUsers: newCount
-         });
+         }));
       }
 
     } catch (e) {
@@ -1169,70 +1163,12 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           activated: activatedSnap.data().count,
           active: activeSnap.data().count,
           expired: expiredSnap.data().count,
-          conversions: conversionsSnap.data().count,
-          blocked: 0,
-          suspicious: 0
-        });
+          conversions: conversionsSnap.data().count });
       } catch (e) {
         console.error("Error fetching VIP stats:", e);
       }
 
-      const docRef = doc(db, "admin", "analytics");
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        setGlobalAnalytics([snap.data()]);
-      } else {
-        const defaultAnalytics = {
-          musicTime: 1240 * 3600,
-          sessionTime: 1850 * 3600,
-          explorerUses: 3420,
-          radioUses: 1150,
-          topSongs: {
-            "song_1": 420,
-            "song_2": 380,
-            "song_3": 310,
-            "song_4": 290,
-            "song_5": 240,
-            "song_6": 190,
-            "song_7": 150,
-            "song_8": 120,
-            "song_9": 90,
-            "song_10": 70
-          },
-          songMeta: {
-            "song_1": "La Bachata - Manuel Turizo",
-            "song_2": "Columbia - Quevedo",
-            "song_3": "BABY HELLO - Rauw Alejandro, Bizarrap",
-            "song_4": "Lala - Myke Towers",
-            "song_5": "Classy 101 - Feid, Young Miko",
-            "song_6": "Ella Baila Sola - Eslabon Armado, Peso Pluma",
-            "song_7": "TQG - KAROL G, Shakira",
-            "song_8": "Where She Goes - Bad Bunny",
-            "song_9": "Un Finde - Big One, FMK, Ke Personajes",
-            "song_10": "amargura - KAROL G"
-          },
-          topSearches: {
-            "reggaeton": 850,
-            "bachata": 620,
-            "remix 2026": 480,
-            "techno": 390,
-            "rock clasico": 310
-          },
-          topGenres: {
-            "latin": 1250,
-            "pop": 920,
-            "dance/electronic": 640,
-            "rock": 480,
-            "urban": 390
-          }
-        };
-        try {
-          await setDoc(docRef, defaultAnalytics);
-        } catch (writeErr) {
-          console.warn("Could not write default analytics document:", writeErr);
-        }
-        setGlobalAnalytics([defaultAnalytics]);
-      }
+      
     } catch (err) {
       console.error("Error fetching analytics:", err);
     } finally {
@@ -2110,7 +2046,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   {/* Resumen Global */}
                   <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Sistema VIP (Sin Registro)</h4>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="grid grid-cols-2 gap-3 mb-4">
                       <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-emerald-500 font-black">Activadas</span>
                         <span className="text-lg font-black text-white">{vipStats.activated}</span>
@@ -2127,14 +2063,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                         <span className="text-[9px] uppercase tracking-wider text-blue-400 font-black">Conversiones</span>
                         <span className="text-lg font-black text-white">{vipStats.conversions}</span>
                       </div>
-                      <div className="bg-red-500/10 p-3 rounded-2xl border border-red-500/20 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-red-400 font-black">Bloqueados</span>
-                        <span className="text-lg font-black text-white">{vipStats.blocked}</span>
-                      </div>
-                      <div className="bg-orange-500/10 p-3 rounded-2xl border border-orange-500/20 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-orange-400 font-black">Sospechosos</span>
-                        <span className="text-lg font-black text-white">{vipStats.suspicious}</span>
-                      </div>
+                      
+                      
                     </div>
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Resumen de Actividad Global</h4>
                     <div className="grid grid-cols-2 gap-3">
@@ -2146,36 +2076,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                         <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Nuevos (24h)</span>
                         <span className="text-lg font-black text-white">{adminStats.newUsers || 0}</span>
                       </div>
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Hrs Reproducción</span>
-                        <span className="text-lg font-black text-emerald-400">
-                          {globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.musicTime || 0), 0) / 3600).toFixed(1) : "0"}
-                        </span>
-                      </div>
-                      <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Tiempo Total (Hrs)</span>
-                        <span className="text-lg font-black text-blue-400">
-                          {globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) > 0 ? (globalAnalytics.reduce((acc, curr) => acc + (curr.sessionTime || 0), 0) / 3600).toFixed(1) : "0"}
-                        </span>
-                      </div>
+                      
                     </div>
                   </div>
 
-                  {/* Uso de Funciones */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Interacciones Clave</h4>
-                    <div className="space-y-3">
-                      
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">Explorador y Búsquedas</span>
-                        <span className="text-xs font-black text-emerald-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.explorerUses || 0), 0)}</span>
-                      </div>
-                      <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-slate-300">Modo Radio</span>
-                        <span className="text-xs font-black text-blue-400">{globalAnalytics.reduce((acc, curr) => acc + (curr.radioUses || 0), 0)}</span>
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Usuarios Activos en Tiempo Real (En Vivo) */}
                   <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 text-left">
@@ -2237,70 +2141,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     )}
                   </div>
 
-                  {/* Top Canciones */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2">
-                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Top 10 Canciones Más Reproducidas</h4>
-                    {globalAnalytics.length > 0 && globalAnalytics[0].topSongs ? (
-                      <div className="space-y-2">
-                        {Object.entries(globalAnalytics[0].topSongs)
-                          .sort(([, a], [, b]) => Number(b) - Number(a))
-                          .slice(0, 10)
-                          .map(([id, plays], i) => (
-                          <div key={id} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                            <span className="text-[10px] font-black text-slate-300 truncate max-w-[80%]">
-                              {i + 1}. {globalAnalytics[0].songMeta?.[id] || "Canción Desconocida"}
-                            </span>
-                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{String(plays)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-500">Sin datos suficientes.</div>
-                    )}
                   </div>
-                  
-                  {/* Top Searches & Genres */}
-                  <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Términos Más Buscados</h4>
-                      {globalAnalytics.length > 0 && globalAnalytics[0].topSearches ? (
-                        <div className="space-y-2">
-                          {Object.entries(globalAnalytics[0].topSearches)
-                            .sort(([, a], [, b]) => Number(b) - Number(a))
-                            .slice(0, 5)
-                            .map(([term, count], i) => (
-                            <div key={term} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {term}</span>
-                              <span className="text-[9px] font-black text-blue-400">{String(count)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[9px] text-slate-500">No hay búsquedas.</div>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Géneros Principales</h4>
-                      {globalAnalytics.length > 0 && globalAnalytics[0].topGenres ? (
-                        <div className="space-y-2">
-                          {Object.entries(globalAnalytics[0].topGenres)
-                            .sort(([, a], [, b]) => Number(b) - Number(a))
-                            .slice(0, 5)
-                            .map(([genre, count], i) => (
-                            <div key={genre} className="flex justify-between items-center p-2 bg-white/[0.02] border border-white/5 rounded-lg">
-                              <span className="text-[10px] font-bold text-slate-300 uppercase truncate max-w-[80%]">{i + 1}. {genre}</span>
-                              <span className="text-[9px] font-black text-purple-400">{String(count)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[9px] text-slate-500">No hay géneros.</div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
               )}
             </div>
           )}
