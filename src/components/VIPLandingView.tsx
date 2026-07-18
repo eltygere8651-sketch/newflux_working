@@ -1,65 +1,14 @@
+import { recoverOrSignInGuest, getOrCreateDeviceId } from "../lib/guestAuth";
 import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
-const generateDeviceHash = async () => {
-  const w = window.screen.width || 0;
-  const h = window.screen.height || 0;
-  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
-  
-  const ua = navigator.userAgent;
-  let os = 'Unknown';
-  if (ua.indexOf('Win') !== -1) os = 'Windows';
-  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
-  if (ua.indexOf('Linux') !== -1) os = 'Linux';
-  if (ua.indexOf('Android') !== -1) os = 'Android';
-  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
-  
-  let canvasFingerprint = '';
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.textBaseline = 'top';
-      ctx.font = '14px Arial';
-      ctx.fillStyle = '#f60';
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = '#069';
-      ctx.fillText('flux,music,vip', 2, 15);
-      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('flux,music,vip', 4, 17);
-      canvasFingerprint = canvas.toDataURL();
-    }
-  } catch (e) {}
-  
-  const components = [
-    os,
-    screenRes,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.hardwareConcurrency || 'unknown',
-    (navigator as any).deviceMemory || 'unknown',
-    canvasFingerprint
-  ].join('|');
-  
-  const msgBuffer = new TextEncoder().encode(components);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
-
-const getOrCreateDeviceId = () => {
-  let id = localStorage.getItem('flux_vip_device_id');
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem('flux_vip_device_id', id);
-  }
-  return id;
-};
 
 type TrialState = 'loading' | 'new' | 'active' | 'expired';
+
+
 
 export const VIPLandingView = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -80,7 +29,7 @@ export const VIPLandingView = () => {
       }
 
       try {
-        const hash = await generateDeviceHash();
+        const hash = getOrCreateDeviceId();
         const hashRef = doc(db, 'vip_devices', hash);
         const hashDoc = await getDoc(hashRef);
 
@@ -110,116 +59,59 @@ export const VIPLandingView = () => {
     setIsLoading(true);
     try {
       const uuid = getOrCreateDeviceId();
-      const deviceHash = await generateDeviceHash();
-      
-      const hashRef = doc(db, 'vip_devices', deviceHash);
+      const hashRef = doc(db, 'vip_devices', uuid);
       const hashDoc = await getDoc(hashRef);
+      
+      let activatedAt = Date.now();
       
       if (hashDoc.exists()) {
         const data = hashDoc.data();
-        const activatedAt = data.activatedAt || 0;
+        activatedAt = data.activatedAt || Date.now();
         const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
         
         if (isExpired) {
           setTrialState('expired');
           setIsLoading(false);
           return;
-        } else {
-          // Continue existing trial using persistent email/password to avoid creating a new UID
-          const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-          const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-          
-          try {
-            await signInWithEmailAndPassword(auth, vipEmail, vipPass);
-            window.history.replaceState({}, '', '/');
-            window.location.reload();
-            return;
-          } catch (signInErr: any) {
-            console.error("Recovery signIn error:", signInErr);
-            // If they don't exist yet as email/pass (legacy anonymous account), we fallback to creating an email/pass account so next time they don't lose it
-            const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
-            const newUid = userCred.user.uid;
-            const now = Date.now();
-            
-            await setDoc(doc(db, 'vip_activations', newUid), {
-              uuid,
-              deviceHash,
-              createdAt: activatedAt,
-              expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
-              version: 3,
-              status: 'active',
-              campaignId: campaignId || null
-            });
-            
-            await setDoc(doc(db, "users", newUid), {
-              email: vipEmail,
-              displayName: "Socio VIP",
-              isVIPGuest: true,
-              createdAt: serverTimestamp(),
-              lastLogin: serverTimestamp(),
-              lastActiveAt: now,
-              totalUsageTime: 0,
-              plan: "free",
-              trialStart: activatedAt,
-              maxUsers: 1,
-              originCampaign: campaignId || null,
-            }, { merge: true });
-
-            await updateDoc(hashRef, {
-              uid: newUid,
-              lastRecoveredAt: now
-            });
-
-            window.history.replaceState({}, '', '/');
-            window.location.reload();
-            return;
-          }
         }
+      } else {
+        await setDoc(hashRef, { 
+          activatedAt: activatedAt,
+        });
       }
-      
-      // New activation
-      const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-      const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-      const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
-      const uid = userCred.user.uid;
-      const now = Date.now();
-      
-      await setDoc(hashRef, { 
-        activatedAt: now,
-        uid: uid 
-      });
+
+      let uid = auth.currentUser?.uid;
+      if (!uid) {
+        const userCred = await recoverOrSignInGuest();
+        uid = userCred.user.uid;
+      }
       
       await setDoc(doc(db, 'vip_activations', uid), {
         uuid,
-        deviceHash,
-        createdAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-        version: 3,
+        createdAt: activatedAt,
+        expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
+        version: 5,
         status: 'active',
         campaignId: campaignId || null
       });
       
-      if (campaignId) {
+      if (campaignId && !hashDoc.exists()) {
         updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
       }
       
       await setDoc(doc(db, "users", uid), {
-        email: vipEmail,
         displayName: "Socio VIP",
         isVIPGuest: true,
-        createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
-        lastActiveAt: now,
-        totalUsageTime: 0,
+        lastActiveAt: Date.now(),
         plan: "free",
-        trialStart: now,
+        trialStart: activatedAt,
         maxUsers: 1,
         originCampaign: campaignId || null,
       }, { merge: true });
       
       window.history.replaceState({}, '', '/');
       window.location.reload();
-
     } catch (e: any) {
       console.error(e);
       setTrialState('new');
@@ -232,31 +124,21 @@ export const VIPLandingView = () => {
     try {
       setIsLoading(true);
       if (!auth.currentUser) {
-        const deviceHash = await generateDeviceHash();
-        const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-        const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-        
-        try {
-          await signInWithEmailAndPassword(auth, vipEmail, vipPass);
-        } catch (signInErr) {
-          const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
-          const uid = userCred.user.uid;
-          const now = Date.now();
-          // Create an expired user record so they see "Fin de la Prueba VIP" in the background
-          await setDoc(doc(db, "users", uid), {
-            email: vipEmail,
-            displayName: "Socio VIP",
-            isVIPGuest: true,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            lastActiveAt: now,
-            totalUsageTime: 0,
-            plan: "free",
-            trialStart: now - (8 * 24 * 60 * 60 * 1000), // explicitly expired (8 days ago)
-            maxUsers: 1,
-            originCampaign: campaignId || null,
-          }, { merge: true });
-        }
+        const userCred = await recoverOrSignInGuest();
+        const uid = userCred.user.uid;
+        const now = Date.now();
+        await setDoc(doc(db, "users", uid), {
+          displayName: "Socio VIP",
+          isVIPGuest: true,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+          lastActiveAt: now,
+          totalUsageTime: 0,
+          plan: "free",
+          trialStart: now - (8 * 24 * 60 * 60 * 1000),
+          maxUsers: 1,
+          originCampaign: campaignId || null,
+        }, { merge: true });
       }
       window.history.replaceState({}, '', '/');
       setTimeout(() => {

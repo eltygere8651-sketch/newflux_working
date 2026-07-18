@@ -71,7 +71,7 @@ const getTrackImage = (track?: any): string | null => {
 
 
 const cleanUrl = (url: string) => {
-  if (!url) return "";
+  if (!url) return undefined;
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
     if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {

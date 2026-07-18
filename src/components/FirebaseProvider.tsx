@@ -1,6 +1,7 @@
+import { recoverOrSignInGuest, getOrCreateDeviceId } from "../lib/guestAuth";
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
-import { onAuthStateChanged, User, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, signInAnonymously } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 export interface UserAccessData {
@@ -117,6 +118,19 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         unsubscribeFirestore = null;
       }
 
+      if (!u) {
+        // Recover or create deterministic guest session
+        try {
+          await recoverOrSignInGuest();
+        } catch (e) {
+          console.error("Failed guest sign-in:", e);
+          setDbUserProfile(null);
+          setAccessData(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       if (u) {
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
@@ -128,7 +142,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let deviceTrialActive = false;
             let deviceTrialStart = 0;
             try {
-              const hash = await generateDeviceHash();
+              const hash = await getOrCreateDeviceId();
               const hashRef = doc(db, 'vip_devices', hash);
               const hashDoc = await getDoc(hashRef);
               if (hashDoc.exists()) {
@@ -164,11 +178,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               const data = snapshot.data();
               if (deviceHasTrial) {
                 // Keep the deviceHash in sync with the user document so the admin can delete it if needed
-                generateDeviceHash().then(hash => {
-                  if (data.deviceHash !== hash) {
-                    setDoc(userRef, { deviceHash: hash }, { merge: true }).catch(() => {});
-                  }
-                }).catch(() => {});
+
               }
               setDbUserProfile({
                 displayName: data.displayName,

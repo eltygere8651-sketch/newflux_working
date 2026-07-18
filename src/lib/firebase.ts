@@ -10,7 +10,9 @@ import {
   createUserWithEmailAndPassword,
   signInAnonymously,
   updateProfile,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -23,6 +25,7 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
 }, (firebaseConfig as any).firestoreDatabaseId);
 export const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(console.error);
 export const googleProvider = new GoogleAuthProvider();
 
 // Custom global error storage/callback to let UI know about redirect/popup errors
