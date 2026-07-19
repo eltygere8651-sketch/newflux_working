@@ -700,7 +700,7 @@ function AppContent() {
               className="absolute top-[calc(100%+5px)] left-4 sm:left-6 z-50 origin-top-left"
             >
               <div className="flex flex-col p-1 gap-0.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 rounded-lg w-auto min-w-[120px] pr-2 bg-[#121212]/95 backdrop-blur-2xl">
-                {user && (
+                {user && !user.isAnonymous && (
                   <button
                     type="button"
                     onClick={() => { setIsMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
@@ -733,7 +733,7 @@ function AppContent() {
                   <span className="text-[14px] ml-[1px]">❤️</span>
                   <span>Invitar amigos</span>
                 </button>
-                {user ? (
+                {user && !user.isAnonymous ? (
                   <button
                     type="button"
                     onClick={() => { setIsMenuOpen(false); logout(); }}
@@ -749,7 +749,7 @@ function AppContent() {
                     className="w-full h-9 bg-transparent hover:bg-white/5 text-white/90 hover:text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-start px-2.5 gap-2.5"
                   >
                     <LogIn className="w-4 h-4 stroke-[2px]" />
-                    <span>Entrar</span>
+                    <span>Iniciar sesión o Regístrate</span>
                   </button>
                 )}
               </div>

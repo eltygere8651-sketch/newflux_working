@@ -93,9 +93,7 @@ export const signupWithEmail = async (email: string, pass: string, nickname?: st
 
 export const resetPassword = async (email: string) => {
   try {
-    await sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence(auth, email);
+    await sendPasswordResetEmail(auth, email);
   } catch (error: any) {
     console.warn("Password reset error:", error.code || error.message);
     if (onAuthErrorCallback) {
