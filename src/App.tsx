@@ -65,11 +65,6 @@ function AppContent() {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const adminChatEndRef = useRef<HTMLDivElement>(null);
 
-  const isInitialAdminLoad = useRef(true);
-  const isInitialUserLoad = useRef(true);
-  const adminMessageIdsRef = useRef<Set<string>>(new Set());
-  const userMessageIdsRef = useRef<Set<string>>(new Set());
-  
   const isSupportModalOpenRef = useRef(isSupportModalOpen);
   useEffect(() => {
     isSupportModalOpenRef.current = isSupportModalOpen;
@@ -188,38 +183,24 @@ function AppContent() {
 
   const currentUserId = user?.uid || guestId;
   
-  // Admin Support messages listener (only active when modal is open to save reads/overhead)
+  // Fetch admin support messages once when support modal is opened (Admins only)
   useEffect(() => {
     if (!isAdmin || !isSupportModalOpen) return;
 
-    isInitialAdminLoad.current = true;
-    adminMessageIdsRef.current.clear();
+    let active = true;
+    const fetchAdminMessages = async () => {
+      try {
+        const q = query(
+          collection(db, "support_messages"),
+          orderBy("createdAt", "asc")
+        );
+        const snapshot = await getDocs(q);
+        if (!active) return;
 
-    const q = query(
-      collection(db, "support_messages"),
-      orderBy("createdAt", "asc")
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
         const msgs = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data() as any),
         }));
-
-        // Check if there is any new message sent by a user (not admin reply)
-        const hasNewIncoming = msgs.some(
-          (m: any) => !m.isAdminReply && !adminMessageIdsRef.current.has(m.id)
-        );
-
-        // Update cache of seen IDs
-        msgs.forEach((m: any) => adminMessageIdsRef.current.add(m.id));
-
-        // If it is not the initial snapshot load, play the notification sound
-        if (hasNewIncoming && !isInitialAdminLoad.current) {
-          playNotificationSound();
-        }
-        isInitialAdminLoad.current = false;
 
         setAllSupportMessages(msgs);
 
@@ -227,71 +208,201 @@ function AppContent() {
           (m: any) => !m.isAdminReply && !m.readByAdmin
         ).length;
         setUnreadRepliesCount(unreadCount);
-      },
-      (error) => {
-        console.warn("Error in admin support messages listener:", error);
+      } catch (err) {
+        console.warn("Error fetching admin support messages:", err);
       }
-    );
-    return () => unsubscribe();
+    };
+
+    fetchAdminMessages();
+
+    return () => {
+      active = false;
+    };
   }, [isAdmin, isSupportModalOpen]);
 
-  // User Support messages listener (always active to capture admin replies in real-time, even when modal/menu are closed)
+  // Fetch standard user support messages once when support modal is opened
   useEffect(() => {
-    if (isAdmin) return;
+    if (isAdmin || !isSupportModalOpen || !currentUserId) return;
 
-    isInitialUserLoad.current = true;
-    userMessageIdsRef.current.clear();
+    let active = true;
+    const fetchUserMessages = async () => {
+      try {
+        const q = query(
+          collection(db, "support_messages"),
+          where("userId", "==", currentUserId)
+        );
+        const snapshot = await getDocs(q);
+        if (!active) return;
 
-    const q = query(
-      collection(db, "support_messages"),
-      where("userId", "==", currentUserId)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
         const msgs = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data() as any),
         })).sort((a: any, b: any) => a.createdAt - b.createdAt);
 
-        // Check if there is any new message sent by support/admin
-        const hasNewIncoming = msgs.some(
-          (m: any) => m.isAdminReply && !userMessageIdsRef.current.has(m.id)
-        );
-
-        // Update cache of seen IDs
-        msgs.forEach((m: any) => userMessageIdsRef.current.add(m.id));
-
-        // If it is not the initial snapshot load, play the notification sound and show the toast
-        if (hasNewIncoming && !isInitialUserLoad.current) {
-          playNotificationSound();
-          if (!isSupportModalOpenRef.current) {
-            const latestAdminMsg = [...msgs].reverse().find((m: any) => m.isAdminReply);
-            setSupportToast({
-              message: latestAdminMsg ? latestAdminMsg.message : "Tu solicitud de soporte ha sido respondida.",
-              visible: true
-            });
-          }
-        }
-        isInitialUserLoad.current = false;
-
         setSupportChatMessages(msgs);
 
-        const unreadCount = msgs.filter(
-          (m: any) => m.isAdminReply && !m.readByUser
-        ).length;
-        setUnreadRepliesCount(unreadCount);
-      },
-      (error) => {
-        console.warn("Error in user support messages listener:", error);
+        // Mark unread admin replies as read in Firestore
+        const unreadReplies = msgs.filter(
+          (m) => m.isAdminReply && !m.readByUser
+        );
+        unreadReplies.forEach(async (m) => {
+          try {
+            await updateDoc(doc(db, "support_messages", m.id), {
+              readByUser: true,
+            });
+          } catch (e) {
+            console.warn("Could not mark support message as read:", e);
+          }
+        });
+
+        // Clear the visual badge/dot immediately
+        setUnreadRepliesCount(0);
+      } catch (err) {
+        console.warn("Error fetching user support messages:", err);
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [isAdmin, currentUserId]);
+    fetchUserMessages();
 
-  // Auto-dismiss support response toast after 8 seconds to ensure no resources or timers leak
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, isSupportModalOpen, currentUserId]);
+
+  // Check for new support replies on start, visibilitychange (going visible), and focus.
+  // This executes a single cheap getCountFromServer() and only fetches the latest message if there are unread replies.
+  useEffect(() => {
+    if (isAdmin || !currentUserId || !user) return;
+
+    // Use a throttle variable to avoid multiple rapid executions (e.g. from both visibilitychange and focus firing together)
+    let lastCheckTime = 0;
+
+    const checkSupportReplies = async () => {
+      const now = Date.now();
+      if (now - lastCheckTime < 10000) return; // limit to at most once per 10 seconds
+      lastCheckTime = now;
+
+      console.log("[SUPPORT] checkSupportReplies ejecutado");
+
+      try {
+        const qCount = query(
+          collection(db, "support_messages"),
+          where("userId", "==", currentUserId),
+          where("isAdminReply", "==", true),
+          where("readByUser", "==", false)
+        );
+        const countSnapshot = await getCountFromServer(qCount);
+        const count = countSnapshot.data().count;
+
+        console.log("[SUPPORT] respuestas sin leer:", count);
+
+        console.log("[SUPPORT] contador actualizado:", count);
+        setUnreadRepliesCount(count);
+
+        if (count > 0) {
+          console.log("[SUPPORT] obteniendo último mensaje");
+          // Fetch up to 5 unread responses to compare IDs (prevents sticking on the same alphabetical ID)
+          const qLatest = query(qCount, limit(5));
+          const latestSnapshot = await getDocs(qLatest);
+          if (!latestSnapshot.empty) {
+            const notifiedIdsStr = localStorage.getItem("flux_notified_support_ids") || "[]";
+            let notifiedIds: string[] = [];
+            try {
+              notifiedIds = JSON.parse(notifiedIdsStr);
+            } catch (e) {
+              console.warn("Error parsing notified IDs:", e);
+            }
+
+            console.log("[SUPPORT] últimos notificados:", notifiedIds);
+
+            // Filter out any documents that we have NOT notified the user about yet
+            const newDocs = latestSnapshot.docs.filter(doc => !notifiedIds.includes(doc.id));
+
+            if (newDocs.length > 0) {
+              console.log("[SUPPORT] NUEVA RESPUESTA DETECTADA");
+              
+              // Get the message text of the newest unread message among the new ones
+              const latestNewDoc = newDocs[0];
+              const latestMsgText = latestNewDoc.data().message || "Tu solicitud de soporte ha sido respondida.";
+
+              // Update notified IDs list with all current unread doc IDs
+              const allCurrentIds = latestSnapshot.docs.map(doc => doc.id);
+              const updatedNotifiedIds = Array.from(new Set([...notifiedIds, ...allCurrentIds])).slice(-50); // Prune to last 50
+              localStorage.setItem("flux_notified_support_ids", JSON.stringify(updatedNotifiedIds));
+
+              console.log("[SUPPORT] reproduciendo sonido");
+              playNotificationSound();
+              
+              if (!isSupportModalOpenRef.current) {
+                console.log("[SUPPORT] mostrando toast");
+                setSupportToast({
+                  message: latestMsgText,
+                  visible: true
+                });
+              }
+            } else {
+              console.log("[SUPPORT] todas las respuestas ya fueron notificadas");
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Error checking support replies:", err);
+      }
+    };
+
+    // 1. Initial run on mount/auth loaded
+    checkSupportReplies();
+
+    // 2. Setup non-permanent listeners for window/tab focus & visibility
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkSupportReplies();
+      }
+    };
+
+    const handleFocus = () => {
+      checkSupportReplies();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [isAdmin, currentUserId, user]);
+
+  // Fetch unread support count for Admins only when menu is opened or support modal closed
+  useEffect(() => {
+    if (!isAdmin || !user) return;
+    let active = true;
+    const fetchAdminUnreadCount = async () => {
+      try {
+        const q = query(
+          collection(db, "support_messages"),
+          where("isAdminReply", "==", false),
+          where("readByAdmin", "==", false)
+        );
+        const snapshot = await getCountFromServer(q);
+        if (active) {
+          setUnreadRepliesCount(snapshot.data().count);
+        }
+      } catch (e) {
+        console.warn("Error loading admin unread count:", e);
+      }
+    };
+
+    if (!isSupportModalOpen || isMenuOpen) {
+      fetchAdminUnreadCount();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, user, isMenuOpen, isSupportModalOpen]);
+
+  // Auto-dismiss support response toast after 8 seconds
   useEffect(() => {
     if (supportToast.visible) {
       const timer = setTimeout(() => {
@@ -300,48 +411,6 @@ function AppContent() {
       return () => clearTimeout(timer);
     }
   }, [supportToast.visible]);
-
-  // Fetch unread support count on-demand (on mount, when menu is opened, or when support modal is closed)
-  useEffect(() => {
-    let active = true;
-    const fetchUnreadCount = async () => {
-      if (!user) return;
-      try {
-        if (isAdmin) {
-          const q = query(
-            collection(db, "support_messages"),
-            where("isAdminReply", "==", false),
-            where("readByAdmin", "==", false)
-          );
-          const snapshot = await getCountFromServer(q);
-          if (active) {
-            setUnreadRepliesCount(snapshot.data().count);
-          }
-        } else {
-          const q = query(
-            collection(db, "support_messages"),
-            where("userId", "==", currentUserId),
-            where("isAdminReply", "==", true),
-            where("readByUser", "==", false)
-          );
-          const snapshot = await getCountFromServer(q);
-          if (active) {
-            setUnreadRepliesCount(snapshot.data().count);
-          }
-        }
-      } catch (e) {
-        console.warn("Error loading unread support count:", e);
-      }
-    };
-
-    if (user && (!isSupportModalOpen || isMenuOpen)) {
-      fetchUnreadCount();
-    }
-
-    return () => {
-      active = false;
-    };
-  }, [isAdmin, currentUserId, user, isMenuOpen, isSupportModalOpen]);
 
   useEffect(() => {
     if (!isAdmin && isSupportModalOpen) {
@@ -712,21 +781,42 @@ function AppContent() {
              <button
                 type="button"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="flex items-center justify-center p-1.5 sm:p-2 pr-3.5 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
+                className="relative flex items-center justify-center p-1.5 sm:p-2 pr-3.5 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
                 title="Menú"
              >
                 {user ? (
-                  <img 
-                    src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
-                    alt="Perfil" 
-                    className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full object-cover border border-[#1ED760]/30 shrink-0 shadow-md" 
-                    referrerPolicy="no-referrer"
-                  />
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <img 
+                      src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
+                      alt="Perfil" 
+                      className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full object-cover border border-[#1ED760]/30 shadow-md" 
+                      referrerPolicy="no-referrer"
+                    />
+                    {unreadRepliesCount > 0 && (
+                      <>
+                        <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping opacity-75 ${isAdmin ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                        <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#080809] ${isAdmin ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                      </>
+                    )}
+                  </div>
                 ) : (
-                  <Menu className="w-4 h-4 group-hover:text-emerald-400 transition-colors shrink-0" />
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <Menu className="w-4 h-4 group-hover:text-emerald-400 transition-colors" />
+                    {unreadRepliesCount > 0 && (
+                      <>
+                        <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping opacity-75 ${isAdmin ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                        <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#080809] ${isAdmin ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                      </>
+                    )}
+                  </div>
                 )}
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-300 transition-colors">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-300 transition-colors relative">
                   Menú
+                  {unreadRepliesCount > 0 && (
+                    <span className={`absolute -top-1.5 -right-5 px-1.5 py-0.5 text-[8px] font-black text-white rounded-full leading-none shadow-md ${isAdmin ? 'bg-amber-500 shadow-amber-500/50' : 'bg-rose-500 shadow-rose-500/50'}`}>
+                      {unreadRepliesCount}
+                    </span>
+                  )}
                 </span>
              </button>
           </div>
@@ -1007,6 +1097,7 @@ function AppContent() {
               </button>
               <button
                 onClick={() => {
+                  console.log("[SUPPORT] abriendo Centro de Soporte");
                   setSupportToast(prev => ({ ...prev, visible: false }));
                   setIsSupportModalOpen(true);
                 }}

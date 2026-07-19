@@ -37,24 +37,16 @@ service cloud.firestore {
       
       // Permitir que el usuario cree su propio perfil inicial, protegiendo campos sensibles
       allow create: if isSignedIn() && (request.auth.uid == userId) &&
-                    (!request.resource.data.keys().hasAny(['role', 'subscriptionEnd']));
+                    (!request.resource.data.keys().hasAny(['role', 'subscriptionEnd', 'plan', 'trialStart', 'trialDuration']));
       
-      // Permitir que el usuario actualice su perfil, protegiendo campos sensibles
+      // Permitir que el usuario actualice su perfil, protegiendo estrictamente campos de membresía y roles
       allow update: if isAdmin() || (
         isSignedIn() && request.auth.uid == userId &&
-        (
-          (!request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['trialStart', 'subscriptionEnd', 'plan', 'role']))
-          ||
-          (
-            existing().plan == "none" &&
-            incoming().plan == "free" &&
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscriptionEnd', 'role'])
-          )
-        )
+        (!request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['trialStart', 'trialDuration', 'subscriptionEnd', 'plan', 'role', 'maxUsers']))
       );
       
-      allow delete: if isAdmin() || (isSignedIn() && resource != null && (!("plan" in resource.data) || resource.data.plan == "none" || resource.data.plan == "free"));
+      allow delete: if isAdmin();
     }
 
     // 2. Playlists (Acceso Público de Lectura, Escritura SOLO Admin o con Clave)
@@ -108,23 +100,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-        // 4. Trial Requests (Solicitudes de Prueba)
+    // 4. Trial Requests (Solicitudes de Prueba)
     match /trial_requests/{requestId} {
-      // El Administrador tiene control total
-      allow read, write: if isAdmin();
-
-      // Los usuarios autenticados pueden obtener su propia solicitud
-      allow get: if isSignedIn(); // Allow reading for migration
-
-      // Los usuarios autenticados pueden listar/buscar sus propias solicitudes o comprobar por huella digital / IP
-      allow list: if isSignedIn() && (
-        resource.data.uid == request.auth.uid ||
-        resource.data.fingerprint != null ||
-        resource.data.ip != null
-      );
-
-      // Crear solicitud de prueba para su propia cuenta
-      allow create: if isSignedIn() && (request.auth.uid == requestId) && (incoming().uid == request.auth.uid);
+      // El Administrador tiene control total vía Admin SDK (bypasses rules)
+      // Clientes no tienen permiso para leer ni escribir nada aquí.
+      allow read, write: if false;
     }
 
     // 5. Public Announcements
@@ -155,25 +135,29 @@ service cloud.firestore {
       );
     }
 
-    // 9. VIP System (Client-side)
+    // 9. VIP System (Server-side enforced only)
     match /vip_devices/{deviceHash} {
       // Allow checking if a device hash exists, but prevent listing all devices
       allow get: if true;
       allow list: if isAdmin();
       
-      // Allow creation only if the document does not exist, and enforce immutability
-      allow create: if request.resource.data.keys().hasAll(['activatedAt', 'uid']);
-      
-      // Prevent any client-side modifications after creation
-      allow update: if isAdmin();
-      allow delete: if isAdmin() || isSignedIn();
+      // Allow creation/modification ONLY via server Admin SDK
+      allow create, update, delete: if isAdmin();
     }
 
     match /vip_activations/{activationId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == activationId;
-      allow update: if isAdmin();
-      allow delete: if isAdmin() || isSignedIn();
+      allow read: if isSignedIn() && request.auth.uid == activationId;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 10. Devices System (Server-side enforced only)
+    match /devices/{deviceId} {
+      // Permitir comprobar si el dispositivo ya usó la prueba gratuita
+      allow get: if true;
+      allow list: if isAdmin();
+      
+      // Permitir creación e inicialización de la prueba únicamente al Admin (servidor)
+      allow create, update, delete: if isAdmin();
     }
   }
 }

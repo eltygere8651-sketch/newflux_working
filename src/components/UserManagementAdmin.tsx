@@ -107,8 +107,15 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [vipStats, setVipStats] = useState({
     activated: 0,
     active: 0,
+    activeToday: 0,
     expired: 0,
     conversions: 0,
+  });
+  const [analyticsStats, setAnalyticsStats] = useState({
+    totalUsers: 0,
+    pendingRequests: 0,
+    activeTrials: 0,
+    activePaid: 0,
   });
   const [realtimeActiveUsers, setRealtimeActiveUsers] = useState<any[]>([]);
 
@@ -1043,26 +1050,32 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleApproveRequest = async (req: any) => {
     askConfirm(`¿Aprobar prueba de 7 días para ${req.email}?`, async () => {
       try {
-        await updateDoc(doc(db, "users", req.uid), {
-          plan: "free",
-          trialStart: Date.now(),
-          trialDuration: 7,
-          subscriptionEnd: null,
+        const response = await fetch("/api/trial/approve-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reqId: req.id,
+            uid: req.uid,
+            email: req.email,
+            fingerprint: req.fingerprint || null,
+            adminEmail: "eltygere8651@gmail.com"
+          })
         });
 
-        await updateDoc(doc(db, "trial_requests", req.id), {
-          status: "approved",
-        });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Error en el servidor al aprobar.");
+        }
 
         showAlert(
           "Acceso de prueba de 7 días activado y solicitud aprobada con éxito!",
         );
         fetchUsers();
         fetchRequests();
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
         showAlert(
-          "Error al aprobar la solicitud. Revisa si el usuario existe.",
+          `Error al aprobar la solicitud: ${err.message}`,
         );
       }
     });
@@ -1248,42 +1261,123 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     try {
       setLoadingAnalytics(true);
 
-      // Fetch VIP stats using efficient getCountFromServer
-      try {
-        const now = Date.now();
-        const [activatedSnap, activeSnap, expiredSnap, conversionsSnap] =
-          await Promise.all([
-            getCountFromServer(collection(db, "vip_activations")),
-            getCountFromServer(
-              query(
-                collection(db, "vip_activations"),
-                where("expiresAt", ">=", now),
-              ),
-            ),
-            getCountFromServer(
-              query(
-                collection(db, "vip_activations"),
-                where("expiresAt", "<", now),
-              ),
-            ),
-            getCountFromServer(
-              query(
-                collection(db, "users"),
-                where("isVIPGuest", "==", true),
-                where("plan", "==", "premium"),
-              ),
-            ),
-          ]);
+      const now = Date.now();
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+      const oneDayAgoDate = new Date(oneDayAgo);
 
-        setVipStats({
-          activated: activatedSnap.data().count,
-          active: activeSnap.data().count,
-          expired: expiredSnap.data().count,
-          conversions: conversionsSnap.data().count,
-        });
-      } catch (e) {
-        console.error("Error fetching VIP stats:", e);
-      }
+      const getCountSafe = async (q: any) => {
+        try {
+          const snap = await getCountFromServer(q);
+          return snap.data().count;
+        } catch (e) {
+          console.warn("safeCount error for query:", e);
+          return 0;
+        }
+      };
+
+      // Fetch VIP, User, and Request stats in a highly efficient, parallelized, eco-friendly way (1 read per count request)
+      const [
+        activatedCount,
+        activeCount,
+        activeTodayCount,
+        expiredCount,
+        conversionsCount,
+        totalUsersCount,
+        newUsersNormalCount,
+        newUsersVipCount,
+        pendingRequestsCount,
+        activeTrialsCount,
+        activePaidCount,
+      ] = await Promise.all([
+        // 1. VIP Guest Activations
+        getCountSafe(collection(db, "vip_activations")),
+        getCountSafe(
+          query(
+            collection(db, "vip_activations"),
+            where("expiresAt", ">=", now),
+          ),
+        ),
+        getCountSafe(
+          query(
+            collection(db, "vip_activations"),
+            where("createdAt", ">=", oneDayAgo),
+          ),
+        ),
+        getCountSafe(
+          query(
+            collection(db, "vip_activations"),
+            where("expiresAt", "<", now),
+          ),
+        ),
+        // 2. VIP Conversions: Users registered as VIP guests who upgraded to paid/premium plans
+        getCountSafe(
+          query(
+            collection(db, "users"),
+            where("isVIPGuest", "==", true),
+            where("plan", "in", ["premium", "1 Usuario", "2 Usuarios", "5 Usuarios"]),
+          ),
+        ),
+        // 3. User stats (Global)
+        getCountSafe(collection(db, "users")),
+        // 4. Normal Users created in last 24h (storing createdAt as serverTimestamp/Date object)
+        getCountSafe(
+          query(
+            collection(db, "users"),
+            where("createdAt", ">=", oneDayAgoDate),
+          ),
+        ),
+        // 5. VIP Guest Users created in last 24h (storing createdAt as number of milliseconds)
+        getCountSafe(
+          query(
+            collection(db, "users"),
+            where("createdAt", ">=", oneDayAgo),
+          ),
+        ),
+        // 6. Trial requests
+        getCountSafe(
+          query(
+            collection(db, "trial_requests"),
+            where("status", "==", "pending"),
+          ),
+        ),
+        // 7. Active free trial users
+        getCountSafe(
+          query(
+            collection(db, "users"),
+            where("plan", "==", "free"),
+          ),
+        ),
+        // 8. Active paid subscriber plans
+        getCountSafe(
+          query(
+            collection(db, "users"),
+            where("plan", "in", ["premium", "1 Usuario", "2 Usuarios", "5 Usuarios"]),
+          ),
+        ),
+      ]);
+
+      const resolvedNewUsers = newUsersNormalCount + newUsersVipCount;
+
+      setVipStats({
+        activated: activatedCount,
+        active: activeCount,
+        activeToday: activeTodayCount,
+        expired: expiredCount,
+        conversions: conversionsCount,
+      });
+
+      setAdminStats((prev) => ({
+        ...prev,
+        totalUsers: totalUsersCount,
+        newUsers: resolvedNewUsers,
+      }));
+
+      setAnalyticsStats({
+        totalUsers: totalUsersCount,
+        pendingRequests: pendingRequestsCount,
+        activeTrials: activeTrialsCount,
+        activePaid: activePaidCount,
+      });
     } catch (err) {
       console.error("Error fetching analytics:", err);
     } finally {
@@ -1442,7 +1536,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
             }).catch(() => {});
           }
 
-          await deleteDoc(userDocRef);
+          try {
+            await deleteDoc(userDocRef);
+          } catch (delErr) {
+            console.error("No se pudo eliminar el documento del usuario directamente:", delErr);
+          }
           await deleteDoc(doc(db, "trial_requests", userId)).catch(() => {});
           await deleteDoc(vipActDocRef).catch(() => {});
 
@@ -2490,36 +2588,56 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                         Sistema VIP (Sin Registro)
                       </h4>
                       <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-emerald-500 font-black">
-                            Activadas
-                          </span>
-                          <span className="text-lg font-black text-white">
-                            {vipStats.activated}
-                          </span>
-                        </div>
-                        <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-emerald-500 font-black">
-                            Activas Hoy
-                          </span>
-                          <span className="text-lg font-black text-white">
-                            {vipStats.active}
+                        <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col justify-between min-h-[72px]">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-wider text-emerald-500 font-black">
+                              Activadas
+                            </span>
+                            <span className="text-lg font-black text-white">
+                              {vipStats.activated}
+                            </span>
+                          </div>
+                          <span className="text-[8px] text-emerald-400/50 font-bold uppercase mt-1">
+                            Histórico
                           </span>
                         </div>
-                        <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">
-                            Caducadas
-                          </span>
-                          <span className="text-lg font-black text-white">
-                            {vipStats.expired}
+                        <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col justify-between min-h-[72px]">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-wider text-emerald-500 font-black">
+                              Activas Hoy
+                            </span>
+                            <span className="text-lg font-black text-white">
+                              {vipStats.activeToday}
+                            </span>
+                          </div>
+                          <span className="text-[8px] text-emerald-400/70 font-bold uppercase mt-1">
+                            {vipStats.active} Vigentes
                           </span>
                         </div>
-                        <div className="bg-blue-500/10 p-3 rounded-2xl border border-blue-500/20 flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-blue-400 font-black">
-                            Conversiones
+                        <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col justify-between min-h-[72px]">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">
+                              Caducadas
+                            </span>
+                            <span className="text-lg font-black text-white">
+                              {vipStats.expired}
+                            </span>
+                          </div>
+                          <span className="text-[8px] text-slate-500/50 font-bold uppercase mt-1">
+                            Expiradas
                           </span>
-                          <span className="text-lg font-black text-white">
-                            {vipStats.conversions}
+                        </div>
+                        <div className="bg-blue-500/10 p-3 rounded-2xl border border-blue-500/20 flex flex-col justify-between min-h-[72px]">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-wider text-blue-400 font-black">
+                              Conversiones
+                            </span>
+                            <span className="text-lg font-black text-white">
+                              {vipStats.conversions}
+                            </span>
+                          </div>
+                          <span className="text-[8px] text-blue-400/50 font-bold uppercase mt-1">
+                            A Premium
                           </span>
                         </div>
                       </div>
@@ -2543,6 +2661,56 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                             {adminStats.newUsers || 0}
                           </span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Suscripciones y Solicitudes */}
+                    <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 space-y-4 text-left">
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Suscripciones y Solicitudes
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-amber-500 font-black">
+                            Sols. Pendientes
+                          </span>
+                          <span className="text-lg font-black text-white">
+                            {analyticsStats.pendingRequests}
+                          </span>
+                        </div>
+                        <div className="bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20 flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-purple-400 font-black">
+                            Planes Activos
+                          </span>
+                          <span className="text-lg font-black text-white">
+                            {analyticsStats.activePaid}
+                          </span>
+                        </div>
+                        <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20 flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-black">
+                            Pruebas Activas
+                          </span>
+                          <span className="text-lg font-black text-white">
+                            {analyticsStats.activeTrials}
+                          </span>
+                        </div>
+                        <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5 flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">
+                            Total Socios
+                          </span>
+                          <span className="text-lg font-black text-white">
+                            {analyticsStats.totalUsers}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-white/[0.01] border border-white/5 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          Modo Económico
+                        </span>
+                        <span className="text-[9px] bg-[#1ED760]/10 text-[#1ED760] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
+                          Flux Eco Activo
+                        </span>
                       </div>
                     </div>
 

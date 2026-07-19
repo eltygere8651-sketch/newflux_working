@@ -109,7 +109,7 @@ import { collection,
   limit,
   onSnapshot,
 } from "firebase/firestore";
-import { db, loginWithGoogle, logout } from "../lib/firebase";
+import { db, loginWithGoogle, logout, generateDeviceHash, generateHardwareSignature } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
 import { recordTrackPlay,
@@ -761,43 +761,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [showSupportChoice, setShowSupportChoice] = useState(false);
   const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
 
-  const getBrowserFingerprint = () => {
-    let token = localStorage.getItem("flux_device_token");
-    if (!token) {
-      // Create a stable local device ID since Brave/Safari can randomize or block canvas fingerprinting
-      token =
-        "dev_" +
-        Date.now().toString(36) +
-        "_" +
-        Math.random().toString(36).substring(2);
-      localStorage.setItem("flux_device_token", token);
-    }
-
-    try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return token;
-      ctx.textBaseline = "top";
-      ctx.font = "14px 'Arial'";
-      ctx.textBaseline = "alphabetic";
-      ctx.fillStyle = "#f60";
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = "#069";
-      ctx.fillText("FluxPlayer!_Fingerprint", 2, 15);
-      ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
-      ctx.fillText("FluxPlayer!_Fingerprint", 4, 17);
-      const res = canvas.toDataURL();
-      let hash = 0;
-      for (let i = 0; i < res.length; i++) {
-        hash = (hash << 5) - hash + res.charCodeAt(i);
-        hash |= 0;
-      }
-      return "fp_" + Math.abs(hash).toString(36) + "_" + token;
-    } catch (e) {
-      return token;
-    }
-  };
-
   useEffect(() => {
     if (user) {
       checkTrialStatus();
@@ -808,44 +771,55 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     if (!user) return;
     try {
       setIsCheckingTrialRequest(true);
-      const fp = getBrowserFingerprint();
+      const fp = await generateDeviceHash();
+      const hardwareSignature = await generateHardwareSignature();
 
-      const requestsRef = collection(db, "trial_requests");
-      const q = query(requestsRef, where("fingerprint", "==", fp));
-      const snap = await getDocs(q);
+      // Consultar el estado del dispositivo de forma segura en el servidor
+      const response = await fetch('/api/trial/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint: fp, hardwareSignature })
+      });
 
-      if (!snap.empty) {
-        const reqDoc = snap.docs[0].data();
-        if (reqDoc.status === "pending") {
+      if (!response.ok) {
+        throw new Error('No se pudo verificar el estado de la prueba');
+      }
+
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (_) {
+        throw new Error('Respuesta del servidor no válida');
+      }
+
+      if (data.success) {
+        if (data.trialUsed) {
+          setTrialRequestStatus("already_claimed");
+          setTrialRequestMsg(
+            "Acceso Denegado: Este dispositivo físico ya ha disfrutado de su prueba gratuita única de 7 días."
+          );
+          setIsCheckingTrialRequest(false);
+          return;
+        }
+        
+        // Status checks are now fully handled by the backend API call.
+        // We no longer query trial_requests directly from the client.
+        if (data.status === "pending") {
           setTrialRequestStatus("sent");
           setTrialRequestMsg(
             "Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador.",
           );
-        } else if (
-          reqDoc.status === "approved" ||
-          (accessData && accessData.trialStart !== null)
-        ) {
+        } else if (data.status === "approved" || (accessData && accessData.trialStart !== null)) {
           setTrialRequestStatus("already_claimed");
           setTrialRequestMsg(
             "Ya has disfrutado de tu prueba gratuita de 7 días.",
           );
-        } else if (reqDoc.status === "rejected") {
+        } else if (data.status === "rejected") {
           setTrialRequestStatus("already_claimed");
           setTrialRequestMsg(
             "Tu solicitud de prueba de 7 días fue declinada por el administrador.",
           );
         }
-        setIsCheckingTrialRequest(false);
-        return;
-      }
-
-      const fpQuery = query(requestsRef, where("fingerprint", "==", fp));
-      const fpSnap = await getDocs(fpQuery);
-      if (!fpSnap.empty) {
-        setTrialRequestStatus("already_claimed");
-        setTrialRequestMsg(
-          "Acceso Denegado: Ya se ha solicitado una prueba de 7 días desde este dispositivo.",
-        );
         setIsCheckingTrialRequest(false);
         return;
       }
@@ -862,8 +836,36 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     if (!user) return;
     try {
       setIsCheckingTrialRequest(true);
-      const fp = getBrowserFingerprint();
+      const fp = await generateDeviceHash();
+      const hardwareSignature = await generateHardwareSignature();
 
+      // 1. Verificar si el dispositivo ya utilizó la prueba gratuita de forma segura en el servidor
+      const response = await fetch('/api/trial/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint: fp, hardwareSignature })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al verificar el estado del dispositivo');
+      }
+
+      let checkData: any;
+      try {
+        checkData = await response.json();
+      } catch (_) {
+        throw new Error('Respuesta del servidor no válida al comprobar dispositivo');
+      }
+      if (checkData.success && checkData.trialUsed) {
+        setTrialRequestStatus("already_claimed");
+        setTrialRequestMsg(
+          "Acceso Denegado: Este dispositivo físico ya ha disfrutado de su prueba gratuita única de 7 días."
+        );
+        setIsCheckingTrialRequest(false);
+        return;
+      }
+
+      // 2. Enviar la solicitud de prueba de forma segura al servidor
       const apiRes = await fetch("/api/trial/request", {
         method: "POST",
         headers: {
@@ -874,85 +876,32 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           email: user.email,
           displayName: user.displayName || "Socio Premium",
           fingerprint: fp,
+          hardwareSignature
         }),
       });
 
-      let clientIp = "IP_DETECTOR_FAILED";
-      if (apiRes.ok) {
-        const json = await apiRes.json();
-        clientIp = json.clientIp || "N/A";
-      }
-
-      if (
-        clientIp !== "IP_DETECTOR_FAILED" &&
-        clientIp !== "127.0.0.1" &&
-        clientIp !== "::1"
-      ) {
-        const ipQuery = query(
-          collection(db, "trial_requests"),
-          where("ip", "==", clientIp),
-        );
-        const ipSnap = await getDocs(ipQuery);
-        if (!ipSnap.empty) {
-          setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg(
-            "Acceso Denegado: Su dirección IP ya ha sido utilizada para activar una cuenta de prueba.",
-          );
-          setIsCheckingTrialRequest(false);
-          return;
-        }
-      }
-
-      const reqId = user.uid;
-      await setDoc(doc(db, "trial_requests", reqId), {
-        uid: user.uid,
-        email: user.email || "anon",
-        displayName: user.displayName || "Socio Premium",
-        fingerprint: fp,
-        ip: clientIp,
-        status: "pending",
-        createdAt: Date.now(),
-      });
-
-      // Notify Admin via Telegram
-      try {
-        const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
-        const _tgData = _tgDoc.data();
-        if (_tgData?.botToken && _tgData?.chatId) {
-            const title = `🎁 Nueva Solicitud de Prueba de 7 Días (Desde Player) 🎁`;
-            const text = `${title}\n\n👤 Usuario: ${user.displayName || user.email}\n📧 Email: ${user.email}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
-            
-            await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: _tgData.chatId, text: text }),
-            }).catch(() => {});
-        } else {
-            await fetch("/api/support/telegram-trial", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                userEmail: user.email,
-                userName: user.displayName,
-              }),
-            });
-        }
-      } catch (e) {
-        console.error("Failed to notify admin via telegram:", e);
+      if (!apiRes.ok) {
+        let errMessage = "Acceso Denegado: No se pudo registrar la solicitud de prueba.";
+        try {
+          const errData = await apiRes.json();
+          if (errData && errData.error) errMessage = errData.error;
+        } catch (_) {}
+        setTrialRequestStatus("already_claimed");
+        setTrialRequestMsg(errMessage);
+        setIsCheckingTrialRequest(false);
+        return;
       }
 
       setTrialRequestStatus("sent");
       setTrialRequestMsg(
-        "¡Solicitud enviada! El administrador ha sido notificado y la aprobará manualmente pronto.",
+        "Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador."
       );
       setIsCheckingTrialRequest(false);
     } catch (err) {
       console.error("Error requesting trial:", err);
-      alert("No se pudo enviar la solicitud. Inténtalo de nuevo.");
       setIsCheckingTrialRequest(false);
     }
   };
-
   const isEcoMode = true;
 
   const isAdmin = user?.email === "eltygere8651@gmail.com";
@@ -10066,7 +10015,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       onClick={async () => {
                         if (!user) {
                           try {
-                            const fp = getBrowserFingerprint();
+                            const fp = await generateDeviceHash();
                             const vipEmail = `socio.${fp.substring(0, 6)}@fluxmusic.com`;
                             const vipPass = `${fp.substring(0, 10)}_fluxvip`;
                             try {

@@ -366,6 +366,7 @@ export const FluxKaraoke = () => {
   const [micEnabled, setMicEnabled] = useState(false);
   const [micVolume, setMicVolume] = useState(80);
   const [showSettings, setShowSettings] = useState(false);
+  const [micPermissionError, setMicPermissionError] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -400,9 +401,10 @@ export const FluxKaraoke = () => {
       output.connect(ctx.destination);
 
       setMicEnabled(true);
+      setMicPermissionError(false);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      alert("No se pudo acceder al micrófono para el modo Karaoke.");
+      setMicPermissionError(true);
     }
   };
 
@@ -1375,7 +1377,7 @@ export const FluxKaraoke = () => {
                         </button>
                         
                         <button 
-                          onClick={(e) => { e.stopPropagation(); setMicEnabled(prev => !prev); }}
+                          onClick={(e) => { e.stopPropagation(); toggleMic(); }}
                           className={`p-2 rounded-full transition-all ${micEnabled ? 'bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-white hover:bg-white/25'}`}
                           title={micEnabled ? "Desactivar Mic" : "Activar Mic"}
                         >
@@ -1477,7 +1479,72 @@ export const FluxKaraoke = () => {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>    </div>
+      </AnimatePresence>
+
+      {/* Custom Microphone Permission Modal */}
+      <AnimatePresence>
+        {micPermissionError && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-2xl text-center overflow-hidden"
+            >
+              {/* Background Glow */}
+              <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Close Button */}
+              <button
+                onClick={() => setMicPermissionError(false)}
+                className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-900 transition-all border border-zinc-800/50 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Icon */}
+              <div className="relative w-16 h-16 mx-auto mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center">
+                <Mic className="w-8 h-8 text-emerald-400 animate-pulse" />
+              </div>
+
+              {/* Title */}
+              <h3 className="text-xl font-black uppercase tracking-wider text-emerald-400 mb-4">
+                Acceso al Micrófono
+              </h3>
+
+              {/* Description */}
+              <p className="text-xs text-zinc-300 leading-relaxed mb-6 font-medium text-left md:text-center">
+                Para cantar con micrófono y disfrutar del efecto de eco en tiempo real, el navegador requiere acceso de audio.
+                <br /><br />
+                Por privacidad y para evitar que el navegador te moleste con alertas automáticas al entrar, hemos desactivado la solicitud al cargar la app.
+                <br /><br />
+                Para activarlo ahora de forma segura y limpia, abre la app en una pestaña nueva, donde podrás conceder permiso únicamente en este momento.
+              </p>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    window.open(window.location.href, "_blank");
+                    setMicPermissionError(false);
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 cursor-pointer"
+                >
+                  Abrir en pestaña nueva y cantar
+                </button>
+                <button
+                  onClick={() => setMicPermissionError(false)}
+                  className="w-full py-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-bold uppercase tracking-wider text-xs transition-all cursor-pointer"
+                >
+                  Seguir escuchando música
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 
