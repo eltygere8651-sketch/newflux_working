@@ -206,9 +206,9 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     if (activeTab === "support" && adminChatEndRef.current) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         adminChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      });
     }
   }, [selectedThreadEmail, supportMessages, activeTab]);
 

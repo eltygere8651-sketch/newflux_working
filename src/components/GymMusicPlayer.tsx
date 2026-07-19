@@ -5565,23 +5565,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
         </button>
 
-        {/* Soporte */}
-        <button
-          onClick={() => {
-            window.dispatchEvent(new Event("open-support"));
-          }}
-          className="relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-        >
-          <span className="flex items-center gap-1.5 font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">
-            Soporte
-            <MessageSquare className="w-3.5 h-3.5 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-            {unreadRepliesCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-bounce">
-                {unreadRepliesCount}
-              </span>
-            )}
-          </span>
-        </button>
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">

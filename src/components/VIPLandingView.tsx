@@ -74,16 +74,19 @@ export const VIPLandingView = () => {
           setIsLoading(false);
           return;
         }
-      } else {
-        await setDoc(hashRef, { 
-          activatedAt: activatedAt,
-        });
       }
 
       let uid = auth.currentUser?.uid;
       if (!uid) {
         const userCred = await recoverOrSignInGuest();
         uid = userCred.user.uid;
+      }
+
+      if (!hashDoc.exists()) {
+        await setDoc(hashRef, { 
+          activatedAt: activatedAt,
+          uid: uid
+        });
       }
       
       await setDoc(doc(db, 'vip_activations', uid), {
@@ -111,7 +114,7 @@ export const VIPLandingView = () => {
       }, { merge: true });
       
       window.history.replaceState({}, '', '/');
-      window.location.reload();
+      
     } catch (e: any) {
       console.error(e);
       setTrialState('new');
@@ -183,7 +186,7 @@ export const VIPLandingView = () => {
           <button
             onClick={() => {
               signOut(auth);
-              window.location.reload();
+              
             }}
             className="mt-6 text-white/40 hover:text-white/80 transition-colors text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 z-10"
           >
