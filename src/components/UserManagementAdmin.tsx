@@ -70,11 +70,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [activeTab, setActiveTab] = useState<"requests" | "subscriptions" | "notifications" | "monitor" | "analytics" | "qr_campaigns">("subscriptions");
 
     useEffect(() => {
-    if (activeTab !== "analytics") {
-      setRealtimeActiveUsers([]);
-      return;
-    }
-
     // Escucha en tiempo real de usuarios con actividad en los últimos 15 minutos
     const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
     const q = query(
@@ -108,7 +103,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     });
 
     return () => unsubscribe();
-  }, [activeTab]);
+  }, []);
 
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -147,97 +142,30 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     });
   };
 
-  // Support chat state variables
-  const [supportMessages, setSupportMessages] = useState<any[]>([]);
-  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
-  const [selectedThreadEmail, setSelectedThreadEmail] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [isSendingReply, setIsSendingReply] = useState(false);
-  const adminChatEndRef = useRef<HTMLDivElement>(null);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
-  
 
 
-  const computedThreads = React.useMemo(() => {
-    const threadsMap: Record<string, any> = {};
-
-    supportMessages.forEach((m) => {
-      const email = m.userEmail || "Anónimo";
-      if (!threadsMap[email]) {
-        threadsMap[email] = {
-          userEmail: email,
-          userName: m.userName || "Socio Flux",
-          messages: [],
-          lastMessage: null,
-          unreadCount: 0,
-        };
-      }
-      threadsMap[email].messages.push(m);
-      threadsMap[email].lastMessage = m;
-
-      if (!m.isAdminReply && !m.readByAdmin) {
-        threadsMap[email].unreadCount += 1;
-      }
-    });
-
-    return Object.values(threadsMap).sort((a: any, b: any) => {
-      const timeA = a.lastMessage?.createdAt || 0;
-      const timeB = b.lastMessage?.createdAt || 0;
-      return timeB - timeA;
-    });
-  }, [supportMessages]);
 
   useEffect(() => {
-    const q = query(collection(db, "support_messages"), orderBy("createdAt", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSupportMessages(msgs);
 
-      // Unread support count: user messages that aren't read by admin
-      const unread = msgs.filter((m: any) => !m.isAdminReply && !m.readByAdmin).length;
-      setUnreadSupportCount(unread);
-    }, (error) => {
-      console.warn("Error listening to support messages in admin:", error);
-    });
-
-
-  return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "support" && adminChatEndRef.current) {
-      setTimeout(() => {
-        adminChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }
-  }, [selectedThreadEmail, supportMessages, activeTab]);
-
-  useEffect(() => {
-    if (selectedThreadEmail && supportMessages.length > 0) {
-      const threadMsgs = supportMessages.filter(m => m.userEmail === selectedThreadEmail);
-      const unreadUserMsgs = threadMsgs.filter(m => !m.isAdminReply && !m.readByAdmin);
-      
-      unreadUserMsgs.forEach(async (m) => {
-        try {
-          await updateDoc(doc(db, "support_messages", m.id), { readByAdmin: true });
-        } catch (e) {
-          console.warn("Could not mark support message as read by admin:", e);
-        }
-      });
-    }
-  }, [selectedThreadEmail, supportMessages]);
-
-  useEffect(() => {
     const el = tabsContainerRef.current;
+
     if (!el) return;
 
     let isDown = false;
+
     let startX: number;
+
     let scrollLeft: number;
 
+
+
     const onMouseDown = (e: MouseEvent) => {
+
       isDown = true;
+
       el.classList.add("cursor-grabbing");
+
       startX = e.pageX - el.offsetLeft;
       scrollLeft = el.scrollLeft;
     };
@@ -272,40 +200,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       el.removeEventListener("mousemove", onMouseMove);
     };
   }, []);
-
-  const handleSendAdminReply = async () => {
-    if (!replyText.trim() || !selectedThreadEmail) return;
-
-    try {
-      setIsSendingReply(true);
-      const textToMsg = replyText.trim();
-      setReplyText("");
-
-      // Find user info from existing messages in the thread
-      const threadMsgs = supportMessages.filter(m => m.userEmail === selectedThreadEmail);
-      const firstMsgObj = threadMsgs[0];
-      const userIdVal = firstMsgObj?.userId || "unknown_user";
-      const userNameVal = firstMsgObj?.userName || "Socio Flux";
-
-      const newReply = {
-        userId: userIdVal,
-        userEmail: selectedThreadEmail,
-        userName: "Soporte FLUX",
-        message: textToMsg,
-        createdAt: Date.now(),
-        isAdminReply: true,
-        readByAdmin: true,
-        readByUser: false
-      };
-
-      await addDoc(collection(db, "support_messages"), newReply);
-    } catch (e) {
-      console.error("Error sending admin reply:", e);
-      alert("No se pudo enviar la respuesta: " + e);
-    } finally {
-      setIsSendingReply(false);
-    }
-  };
 
   // Announcement composition states
   const [annTitle, setAnnTitle] = useState("");

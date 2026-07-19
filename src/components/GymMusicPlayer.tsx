@@ -3347,9 +3347,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
-  useEffect(() => {
-  }, [currentTrack]);
-
   const handleNextRef = useRef(handleNext);
   useEffect(() => {
     handleNextRef.current = handleNext;

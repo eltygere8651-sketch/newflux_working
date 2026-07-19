@@ -154,7 +154,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
         
-        unsubscribeFirestore = onSnapshot(userRef, async (snapshot) => {
+        const snapshotUnsubscribe = onSnapshot(userRef, async (snapshot) => {
           try {
             
             let deviceHasTrial = false;
@@ -336,6 +336,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         window.addEventListener("beforeunload", handleBeforeUnload);
 
         unsubscribeFirestore = () => {
+          snapshotUnsubscribe();
           clearInterval(pollInterval);
           window.removeEventListener("click", handleUserInteraction);
           window.removeEventListener("keydown", handleUserInteraction);
