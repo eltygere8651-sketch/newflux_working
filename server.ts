@@ -2686,33 +2686,35 @@ app.post("/api/vip/recover", async (req, res) => {
 
 // Admin endpoint to find device records for a given search query (UID, email, fingerprint, hardwareSignature, deviceId)
 app.post("/api/admin/find-device", async (req, res) => {
-  console.log("POST /api/admin/find-device");
-  const adminEmail = req.headers["x-admin-email"];
-  const { searchTerm } = req.body;
-
-  console.log(`[ADMIN_QA] Petición recibida en /api/admin/find-device`);
-  console.log(`[ADMIN_QA] Admin: ${adminEmail}`);
-  console.log(`[ADMIN_QA] SearchTerm: ${searchTerm}`);
-
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    console.warn(`[ADMIN_QA] Intento de acceso no autorizado por ${adminEmail}`);
-    return res.status(403).json({ error: "No autorizado. Solo el administrador puede utilizar esta herramienta." });
-  }
-
-  if (!searchTerm || typeof searchTerm !== "string" || !searchTerm.trim()) {
-    return res.status(400).json({ error: "Debe proporcionar un parámetro de búsqueda válido." });
-  }
-
-  const queryStr = searchTerm.trim();
-  const db = getFirestoreDb();
-  if (!db) {
-    console.error(`[ADMIN_QA] Firestore no inicializado`);
-    return res.status(503).json({ error: "Firebase no inicializado" });
-  }
-
-  console.log(`[ADMIN_QA] Iniciando búsqueda para: ${queryStr}`);
+  const startTime = Date.now();
+  console.log(`[DEBUG_TRACE] [${startTime}] Inicio del endpoint /api/admin/find-device (Express)`);
 
   try {
+    const adminEmail = req.headers["x-admin-email"];
+    const { searchTerm } = req.body;
+
+    console.log(`[DEBUG_TRACE] [${Date.now()}] Admin: ${adminEmail}`);
+    console.log(`[DEBUG_TRACE] [${Date.now()}] SearchTerm: ${searchTerm}`);
+
+    if (adminEmail !== "eltygere8651@gmail.com") {
+      console.warn(`[DEBUG_TRACE] [${Date.now()}] Acceso denegado para: ${adminEmail}`);
+      return res.status(403).json({ success: false, error: "No autorizado." });
+    }
+
+    if (!searchTerm || typeof searchTerm !== "string" || !searchTerm.trim()) {
+      return res.status(400).json({ success: false, error: "Debe proporcionar un parámetro de búsqueda válido." });
+    }
+
+    const queryStr = searchTerm.trim();
+    console.log(`[DEBUG_TRACE] [${Date.now()}] Llamando a getFirestoreDb()`);
+    const db = getFirestoreDb();
+    if (!db) {
+      console.error(`[DEBUG_TRACE] [${Date.now()}] getFirestoreDb() devolvió null`);
+      return res.status(503).json({ success: false, error: "Firebase no inicializado" });
+    }
+    console.log(`[DEBUG_TRACE] [${Date.now()}] Firestore obtenido correctamente`);
+
+    try {
     // 1. Try resolving User by email or UID
     let userDoc = null;
     const uDoc = await db.collection("users").doc(queryStr).get().catch((err) => {
@@ -2871,29 +2873,46 @@ app.post("/api/admin/find-device", async (req, res) => {
 
     console.log(`[ADMIN_QA] Resumen de búsqueda finalizado. Found: ${deviceDocs.length + vipDeviceDocs.length + trialRequests.length > 0}`);
 
-    return res.json({
-      success: true,
-      found: deviceDocs.length > 0 || vipDeviceDocs.length > 0 || trialRequests.length > 0 || vipActivations.length > 0 || !!userDoc,
-      device: {
-        uid: resolvedUid,
-        email: resolvedEmail,
-        fingerprints: resolvedFp,
-        hardwareSignatures: resolvedHws,
-        firstActivationDate,
-        status: currentStatus,
-        details: {
-          devicesCount: deviceDocs.length,
-          vipDevicesCount: vipDeviceDocs.length,
-          trialRequestsCount: trialRequests.length,
-          vipActivationsCount: vipActivations.length,
-          userExists: !!userDoc
-        }
-      }
-    });
+      console.log(`[DEBUG_TRACE] [${Date.now()}] Fin del endpoint con éxito. Tiempo: ${Date.now() - startTime}ms`);
 
-  } catch (error: any) {
-    console.error("Error looking up device:", error);
-    return res.status(500).json({ error: "Error interno al buscar el dispositivo." });
+      return res.json({
+        success: true,
+        found: deviceDocs.length > 0 || vipDeviceDocs.length > 0 || trialRequests.length > 0 || vipActivations.length > 0 || !!userDoc,
+        device: {
+          uid: resolvedUid,
+          email: resolvedEmail,
+          fingerprints: resolvedFp,
+          hardwareSignatures: resolvedHws,
+          firstActivationDate,
+          status: currentStatus,
+          details: {
+            devicesCount: deviceDocs.length,
+            vipDevicesCount: vipDeviceDocs.length,
+            trialRequestsCount: trialRequests.length,
+            vipActivationsCount: vipActivations.length,
+            userExists: !!userDoc
+          }
+        }
+      });
+
+    } catch (firestoreErr: any) {
+      console.error(`[DEBUG_TRACE] Error en operaciones de Firestore:`, firestoreErr);
+      return res.status(500).json({ 
+        success: false, 
+        error: "Error en operaciones de Firestore", 
+        message: firestoreErr.message,
+        stack: firestoreErr.stack 
+      });
+    }
+
+  } catch (globalErr: any) {
+    console.error(`[DEBUG_TRACE] EXCEPCIÓN GLOBAL EN /api/admin/find-device:`, globalErr);
+    return res.status(500).json({ 
+      success: false, 
+      error: "Error interno del servidor", 
+      message: globalErr.message,
+      stack: globalErr.stack 
+    });
   }
 });
 
@@ -3110,6 +3129,71 @@ app.post("/api/admin/reset-device", async (req, res) => {
   } catch (error: any) {
     console.error("Error resetting device:", error);
     return res.status(500).json({ error: "Error interno al reiniciar el dispositivo de prueba." });
+  }
+});
+
+// Admin endpoint to list trial requests
+app.get("/api/admin/trial-requests", async (req, res) => {
+  const adminEmail = req.headers["x-admin-email"];
+  if (adminEmail !== "eltygere8651@gmail.com") {
+    return res.status(403).json({ error: "No autorizado. Solo el administrador puede listar solicitudes." });
+  }
+
+  const db = getFirestoreDb();
+  if (!db) {
+    return res.status(503).json({ error: "Firebase no inicializado" });
+  }
+
+  try {
+    const snap = await db.collection("trial_requests").orderBy("createdAt", "desc").limit(100).get();
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return res.json({ success: true, requests: list });
+  } catch (error: any) {
+    console.error("Error listing trial requests:", error);
+    return res.status(500).json({ error: error.message || "Error al listar solicitudes de prueba." });
+  }
+});
+
+// Admin endpoint to reject a trial request
+app.post("/api/admin/trial-requests/:id/reject", async (req, res) => {
+  const adminEmail = req.headers["x-admin-email"];
+  if (adminEmail !== "eltygere8651@gmail.com") {
+    return res.status(403).json({ error: "No autorizado" });
+  }
+
+  const { id } = req.params;
+  const db = getFirestoreDb();
+  if (!db) return res.status(503).json({ error: "Firebase no inicializado" });
+
+  try {
+    await db.collection("trial_requests").doc(id).update({
+      status: "rejected",
+      updatedAt: Date.now()
+    });
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error("Error rejecting trial request:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin endpoint to delete a trial request record
+app.delete("/api/admin/trial-requests/:id", async (req, res) => {
+  const adminEmail = req.headers["x-admin-email"];
+  if (adminEmail !== "eltygere8651@gmail.com") {
+    return res.status(403).json({ error: "No autorizado" });
+  }
+
+  const { id } = req.params;
+  const db = getFirestoreDb();
+  if (!db) return res.status(503).json({ error: "Firebase no inicializado" });
+
+  try {
+    await db.collection("trial_requests").doc(id).delete();
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error("Error deleting trial request:", error);
+    return res.status(500).json({ error: error.message });
   }
 });
 

@@ -928,82 +928,19 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  const fetchRequests = async (
-    pageIndex = requestsPage > 0 ? requestsPage - 1 : 0,
-    limitSize = requestsPageSize,
-  ) => {
+  const fetchRequests = async (_pageIndex?: number, _limitSize?: number) => {
     try {
       setLoadingRequests(true);
-
-      let q = query(
-        collection(db, "trial_requests"),
-        orderBy("createdAt", "desc"),
-        limit(limitSize),
-      );
-      const startDoc = requestsPageHistory[pageIndex];
-      if (startDoc) {
-        q = query(
-          collection(db, "trial_requests"),
-          orderBy("createdAt", "desc"),
-          startAfter(startDoc),
-          limit(limitSize),
-        );
-      }
-
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-
-      list.sort((a, b) => {
-        if (a.status === "pending" && b.status !== "pending") return -1;
-        if (a.status !== "pending" && b.status === "pending") return 1;
-        return (b.createdAt || 0) - (a.createdAt || 0);
+      const response = await fetch("/api/admin/trial-requests", {
+        headers: { "x-admin-email": user?.email || "" }
       });
-
-      setRequests(list);
-      setHasMoreRequests(snap.docs.length === limitSize);
-
-      if (snap.docs.length > 0) {
-        setRequestsPageHistory((prev) => {
-          const next = [...prev];
-          next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
-          return next;
-        });
+      if (!response.ok) throw new Error(`Error: ${response.status}`);
+      const data = await response.json();
+      if (data.success) {
+        setRequests(data.requests || []);
       }
-      setRequestsPage(pageIndex + 1);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error loaded trial requests:", e);
-      try {
-        let q = query(collection(db, "trial_requests"), limit(limitSize));
-        const startDoc = requestsPageHistory[pageIndex];
-        if (startDoc) {
-          q = query(
-            collection(db, "trial_requests"),
-            startAfter(startDoc),
-            limit(limitSize),
-          );
-        }
-        const snap = await getDocs(q);
-        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-
-        list.sort((a, b) => {
-          if (a.status === "pending" && b.status !== "pending") return -1;
-          if (a.status !== "pending" && b.status === "pending") return 1;
-          return (b.createdAt || 0) - (a.createdAt || 0);
-        });
-
-        setRequests(list);
-        setHasMoreRequests(snap.docs.length === limitSize);
-        if (snap.docs.length > 0) {
-          setRequestsPageHistory((prev) => {
-            const next = [...prev];
-            next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
-            return next;
-          });
-        }
-        setRequestsPage(pageIndex + 1);
-      } catch (innerErr) {
-        console.error("Fallback failed:", innerErr);
-      }
     } finally {
       setLoadingRequests(false);
     }
@@ -1089,13 +1026,16 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleRejectRequest = async (reqId: string) => {
     askConfirm("¿Rechazar esta solicitud de prueba?", async () => {
       try {
-        await updateDoc(doc(db, "trial_requests", reqId), {
-          status: "rejected",
+        const response = await fetch(`/api/admin/trial-requests/${reqId}/reject`, {
+          method: "POST",
+          headers: { "x-admin-email": user?.email || "" }
         });
+        if (!response.ok) throw new Error(`Error: ${response.status}`);
         showAlert("Solicitud rechazada.");
         fetchRequests();
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        alert(`Error al rechazar: ${err.message}`);
       }
     });
   };
@@ -1103,10 +1043,16 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleDeleteRequestRecord = async (reqId: string) => {
     askConfirm("¿Eliminar registro de esta solicitud?", async () => {
       try {
-        await deleteDoc(doc(db, "trial_requests", reqId));
+        const response = await fetch(`/api/admin/trial-requests/${reqId}`, {
+          method: "DELETE",
+          headers: { "x-admin-email": user?.email || "" }
+        });
+        if (!response.ok) throw new Error(`Error: ${response.status}`);
+        showAlert("Registro eliminado.");
         fetchRequests();
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        alert(`Error al eliminar: ${err.message}`);
       }
     });
   };
