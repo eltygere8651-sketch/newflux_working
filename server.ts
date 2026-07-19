@@ -2838,27 +2838,28 @@ app.post("/api/admin/find-device", async (req, res) => {
     }
 
     // Summarize the info found
-    const resolvedUid = foundUid || (trialRequests.length > 0 ? trialRequests[0].uid : null);
-    const resolvedEmail = foundEmail || (userDoc ? userDoc.data()?.email : null) || (trialRequests.length > 0 ? trialRequests[0].email : null);
+    const resolvedUid = userDoc ? userDoc.id : (foundUid || null);
+    const resolvedEmail = userDoc ? userDoc.data()?.email || foundEmail : (foundEmail || null);
     const resolvedFp = Array.from(fingerprints);
     const resolvedHws = Array.from(hardwareSignatures);
-
-    // Let's get the firstSeen / activatedAt
+    
     let firstActivationDate = null;
-    let currentStatus = "Sin activar / Desconocido";
+    let currentStatus = "Sin registros";
 
     if (deviceDocs.length > 0) {
       const d = deviceDocs[0].data();
-      firstActivationDate = d.firstSeen || d.trialActivatedAt || null;
+      firstActivationDate = d.firstSeen || d.trialActivatedAt || d.createdAt || null;
       if (d.trialUsed) {
         currentStatus = "Prueba usada";
         if (d.trialExpiresAt && Date.now() > d.trialExpiresAt) {
           currentStatus = "Prueba expirada";
         }
+      } else {
+        currentStatus = "Activado / En uso";
       }
     } else if (vipDeviceDocs.length > 0) {
       const v = vipDeviceDocs[0].data();
-      firstActivationDate = v.activatedAt || null;
+      firstActivationDate = v.activatedAt || v.createdAt || null;
       currentStatus = "Activo en VIP";
     }
 
@@ -2866,34 +2867,34 @@ app.post("/api/admin/find-device", async (req, res) => {
       const tr = trialRequests[0];
       if (tr.status === "pending") {
         currentStatus = "Solicitud pendiente";
-      } else if (tr.status === "approved" && currentStatus === "Sin activar / Desconocido") {
+      } else if (tr.status === "approved" && (currentStatus === "Sin registros" || currentStatus === "Sin activar / Desconocido")) {
         currentStatus = "Solicitud aprobada";
       }
     }
 
     console.log(`[ADMIN_QA] Resumen de búsqueda finalizado. Found: ${deviceDocs.length + vipDeviceDocs.length + trialRequests.length > 0}`);
 
-      console.log(`[DEBUG_TRACE] [${Date.now()}] Fin del endpoint con éxito. Tiempo: ${Date.now() - startTime}ms`);
+    console.log(`[DEBUG_TRACE] [${Date.now()}] Fin del endpoint con éxito. Tiempo: ${Date.now() - startTime}ms`);
 
-      return res.json({
-        success: true,
-        found: deviceDocs.length > 0 || vipDeviceDocs.length > 0 || trialRequests.length > 0 || vipActivations.length > 0 || !!userDoc,
-        device: {
-          uid: resolvedUid,
-          email: resolvedEmail,
-          fingerprints: resolvedFp,
-          hardwareSignatures: resolvedHws,
-          firstActivationDate,
-          status: currentStatus,
-          details: {
-            devicesCount: deviceDocs.length,
-            vipDevicesCount: vipDeviceDocs.length,
-            trialRequestsCount: trialRequests.length,
-            vipActivationsCount: vipActivations.length,
-            userExists: !!userDoc
-          }
+    return res.json({
+      success: true,
+      found: deviceDocs.length > 0 || vipDeviceDocs.length > 0 || trialRequests.length > 0 || vipActivations.length > 0 || !!userDoc,
+      device: {
+        uid: resolvedUid,
+        email: resolvedEmail,
+        fingerprints: resolvedFp,
+        hardwareSignatures: resolvedHws,
+        firstActivationDate,
+        status: currentStatus,
+        details: {
+          devicesCount: deviceDocs.length,
+          vipDevicesCount: vipDeviceDocs.length,
+          trialRequestsCount: trialRequests.length,
+          vipActivationsCount: vipActivations.length,
+          userExists: !!userDoc
         }
-      });
+      }
+    });
 
     } catch (firestoreErr: any) {
       console.error(`[DEBUG_TRACE] Error en operaciones de Firestore:`, firestoreErr);
