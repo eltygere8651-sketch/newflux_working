@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Innertube } from "youtubei.js";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestoreDb } from "./src/lib/firebase-admin";
 import fs from "fs";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -55,6 +55,14 @@ console.error = (...args) => {
 dotenv.config();
 
 const app = express();
+
+// Global Logger for API requests (to debug 405/404 in production)
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/")) {
+    console.log(`[API_REQUEST] ${req.method} ${req.path}`);
+  }
+  next();
+});
 
 // Trust proxy if we are behind Vercel or other reverse proxies
 app.set("trust proxy", 1);
@@ -2295,63 +2303,8 @@ app.post("/api/trial/approve-request", async (req, res) => {
   }
 });
 
-let isFirebaseAdminInitialized = false;
-
-function getFirestoreDb() {
-  console.log("DEBUG: getFirestoreDb called, isFirebaseAdminInitialized:", isFirebaseAdminInitialized);
-  if (!isFirebaseAdminInitialized) {
-    try {
-      const configPath = path.join(
-        process.cwd(),
-        "firebase-applet-config.json",
-      );
-      console.log("DEBUG: configPath:", configPath);
-      console.log("DEBUG: config file exists:", fs.existsSync(configPath));
-      console.log("DEBUG: FIREBASE_SERVICE_ACCOUNT exists:", !!process.env.FIREBASE_SERVICE_ACCOUNT);
-      console.log("DEBUG: GOOGLE_APPLICATION_CREDENTIALS exists:", !!process.env.GOOGLE_APPLICATION_CREDENTIALS);
-      
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        console.log("DEBUG: config loaded, projectId:", config.projectId);
-        admin.initializeApp({
-          credential: process.env.FIREBASE_SERVICE_ACCOUNT 
-            ? admin.credential.cert(typeof process.env.FIREBASE_SERVICE_ACCOUNT === 'string' ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : process.env.FIREBASE_SERVICE_ACCOUNT) 
-            : admin.credential.applicationDefault(),
-          projectId: config.projectId,
-        });
-        console.log("DEBUG: admin.initializeApp successful");
-        isFirebaseAdminInitialized = true;
-      } else {
-        console.error("DEBUG: firebase-applet-config.json NOT FOUND at", configPath);
-      }
-    } catch (e) {
-      console.error("Error initializing Firebase Admin in backend:", e);
-      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        console.error("FIREBASE_SERVICE_ACCOUNT env var type:", typeof process.env.FIREBASE_SERVICE_ACCOUNT);
-        console.error("FIREBASE_SERVICE_ACCOUNT env var value (truncated):", process.env.FIREBASE_SERVICE_ACCOUNT.substring(0, 50));
-      }
-    }
-  }
-  if (isFirebaseAdminInitialized) {
-    try {
-      const configPath = path.join(
-        process.cwd(),
-        "firebase-applet-config.json",
-      );
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        const dbId = config.firestoreDatabaseId;
-        if (dbId) {
-          return getFirestore(dbId);
-        }
-      }
-      return getFirestore();
-    } catch (e) {
-      console.error("Error getting firestore instance in backend:", e);
-    }
-  }
-  return null;
-}
+// Admin logic moved to shared lib
+// getFirestoreDb is now imported from ./src/lib/firebase-admin
 
 let cachedTelegramConfig: { botToken: string; chatId: string } | null = null;
 const CACHE_FILE_PATH = path.join(process.cwd(), "telegram_cache.json");
@@ -2733,12 +2686,19 @@ app.post("/api/vip/recover", async (req, res) => {
 
 // Admin endpoint to find device records for a given search query (UID, email, fingerprint, hardwareSignature, deviceId)
 app.post("/api/admin/find-device", async (req, res) => {
+  console.log("POST /api/admin/find-device");
   const adminEmail = req.headers["x-admin-email"];
+  const { searchTerm } = req.body;
+
+  console.log(`[ADMIN_QA] Petición recibida en /api/admin/find-device`);
+  console.log(`[ADMIN_QA] Admin: ${adminEmail}`);
+  console.log(`[ADMIN_QA] SearchTerm: ${searchTerm}`);
+
   if (adminEmail !== "eltygere8651@gmail.com") {
+    console.warn(`[ADMIN_QA] Intento de acceso no autorizado por ${adminEmail}`);
     return res.status(403).json({ error: "No autorizado. Solo el administrador puede utilizar esta herramienta." });
   }
 
-  const { searchTerm } = req.body;
   if (!searchTerm || typeof searchTerm !== "string" || !searchTerm.trim()) {
     return res.status(400).json({ error: "Debe proporcionar un parámetro de búsqueda válido." });
   }
@@ -2746,17 +2706,26 @@ app.post("/api/admin/find-device", async (req, res) => {
   const queryStr = searchTerm.trim();
   const db = getFirestoreDb();
   if (!db) {
+    console.error(`[ADMIN_QA] Firestore no inicializado`);
     return res.status(503).json({ error: "Firebase no inicializado" });
   }
+
+  console.log(`[ADMIN_QA] Iniciando búsqueda para: ${queryStr}`);
 
   try {
     // 1. Try resolving User by email or UID
     let userDoc = null;
-    const uDoc = await db.collection("users").doc(queryStr).get().catch(() => null);
+    const uDoc = await db.collection("users").doc(queryStr).get().catch((err) => {
+      console.error(`[ADMIN_QA] Error buscando usuario por ID: ${err.message}`);
+      return null;
+    });
     if (uDoc && uDoc.exists) {
       userDoc = uDoc;
     } else {
-      const uQuery = await db.collection("users").where("email", "==", queryStr).limit(1).get().catch(() => null);
+      const uQuery = await db.collection("users").where("email", "==", queryStr).limit(1).get().catch((err) => {
+        console.error(`[ADMIN_QA] Error buscando usuario por email: ${err.message}`);
+        return null;
+      });
       if (uQuery && !uQuery.empty) {
         userDoc = uQuery.docs[0];
       }
@@ -2764,6 +2733,8 @@ app.post("/api/admin/find-device", async (req, res) => {
 
     const foundUid = userDoc ? userDoc.id : (queryStr.startsWith("vip_") ? queryStr : null);
     const foundEmail = userDoc ? userDoc.data()?.email : (queryStr.includes("@") ? queryStr : null);
+    
+    console.log(`[ADMIN_QA] UID Resuelto: ${foundUid}, Email Resuelto: ${foundEmail}`);
 
     // 2. Devices searching
     const deviceDocs: any[] = [];
@@ -2898,6 +2869,8 @@ app.post("/api/admin/find-device", async (req, res) => {
       }
     }
 
+    console.log(`[ADMIN_QA] Resumen de búsqueda finalizado. Found: ${deviceDocs.length + vipDeviceDocs.length + trialRequests.length > 0}`);
+
     return res.json({
       success: true,
       found: deviceDocs.length > 0 || vipDeviceDocs.length > 0 || trialRequests.length > 0 || vipActivations.length > 0 || !!userDoc,
@@ -2926,18 +2899,28 @@ app.post("/api/admin/find-device", async (req, res) => {
 
 // Admin endpoint to reset device records safely for QR and Free trial testing
 app.post("/api/admin/reset-device", async (req, res) => {
+  console.log("POST /api/admin/reset-device");
   const adminEmail = req.headers["x-admin-email"];
+  const { uid, email, fingerprints, hardwareSignatures } = req.body;
+
+  console.log(`[ADMIN_QA] Petición recibida en /api/admin/reset-device`);
+  console.log(`[ADMIN_QA] Admin: ${adminEmail}`);
+  console.log(`[ADMIN_QA] UID to reset: ${uid}`);
+  console.log(`[ADMIN_QA] FPs to reset:`, fingerprints);
+
   if (adminEmail !== "eltygere8651@gmail.com") {
+    console.warn(`[ADMIN_QA] Intento de reset no autorizado por ${adminEmail}`);
     return res.status(403).json({ error: "No autorizado. Solo el administrador puede utilizar esta herramienta." });
   }
 
-  const { uid, email, fingerprints, hardwareSignatures } = req.body;
   const db = getFirestoreDb();
   if (!db) {
+    console.error(`[ADMIN_QA] Firestore no inicializado para reset`);
     return res.status(503).json({ error: "Firebase no inicializado" });
   }
 
   try {
+    console.log(`[ADMIN_QA] Iniciando proceso de limpieza para dispositivo...`);
     let cleanedDevices = 0;
     let cleanedVipDevices = 0;
     let cleanedTrialRequests = 0;
@@ -3099,6 +3082,8 @@ app.post("/api/admin/reset-device", async (req, res) => {
                     verifyVipDevicesCount === 0 &&
                     verifyTrialRequestsCount === 0 &&
                     verifyVipActivationsCount === 0;
+
+    console.log(`[ADMIN_QA] Proceso de reset finalizado. Audit Pass: ${isClean}`);
 
     return res.json({
       success: true,

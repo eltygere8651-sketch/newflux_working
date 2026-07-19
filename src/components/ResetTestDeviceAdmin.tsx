@@ -73,14 +73,17 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
   const detectCurrentDevice = async () => {
     setLoading(true);
     setError(null);
+    console.log("[QA_TOOL] Iniciando detección de dispositivo...");
     try {
       const fp = await generateDeviceHash();
       const hs = await generateHardwareSignature();
+      console.log("[QA_TOOL] Identificadores generados:", { fp, hs });
       setDetectedIdentifiers({ fp, hs });
       
       // Auto-search after detection
       await handleSearch(fp);
     } catch (err: any) {
+      console.error("[QA_TOOL] Error en detección:", err);
       setError("Error al detectar identificadores del dispositivo: " + err.message);
       setLoading(false);
     }
@@ -88,12 +91,17 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
 
   const handleSearch = async (searchTermOverride?: string) => {
     const term = searchTermOverride || detectedIdentifiers?.fp;
-    if (!term) return;
+    if (!term) {
+      console.warn("[QA_TOOL] handleSearch llamado sin término de búsqueda");
+      return;
+    }
 
     setLoading(true);
     setError(null);
     setDeviceData(null);
     setResetReport(null);
+
+    console.log(`[QA_TOOL] Buscando dispositivo con término: ${term}`);
 
     try {
       const response = await fetch("/api/admin/find-device", {
@@ -105,16 +113,31 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
         body: JSON.stringify({ searchTerm: term.trim() })
       });
 
-      const data = await response.json();
+      console.log(`[QA_TOOL] Respuesta recibida de find-device: ${response.status} ${response.statusText}`);
+      
+      const text = await response.text();
+      console.log(`[QA_TOOL] Cuerpo de respuesta (primeros 100 chars): ${text.substring(0, 100)}`);
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error("[QA_TOOL] Error al parsear JSON:", parseErr);
+        throw new Error(`Respuesta del servidor no es válida (JSON esperado). Código: ${response.status}`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Error al buscar el dispositivo");
+        throw new Error(data.error || `Error del servidor: ${response.status}`);
       }
 
       if (data.success) {
+        console.log("[QA_TOOL] Dispositivo encontrado:", data.device);
         setDeviceData(data.device);
+      } else {
+        console.log("[QA_TOOL] Dispositivo no encontrado en registros.");
       }
     } catch (err: any) {
+      console.error("[QA_TOOL] Error en handleSearch:", err);
       setError(err.message || "Error al conectar con el servidor.");
     } finally {
       setLoading(false);
@@ -126,6 +149,7 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
 
     setIsResetting(true);
     setError(null);
+    console.log("[QA_TOOL] Iniciando reinicio de dispositivo...");
 
     try {
       // We use the detected identifiers to ensure we are resetting THE CURRENT DEVICE
@@ -143,13 +167,22 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
         })
       });
 
-      const data = await response.json();
+      console.log(`[QA_TOOL] Respuesta recibida de reset-device: ${response.status}`);
+      
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(`Respuesta de reinicio no válida. Código: ${response.status}`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Error al reiniciar el dispositivo");
       }
 
       if (data.success) {
+        console.log("[QA_TOOL] Reinicio completado con éxito:", data.report);
         setResetReport(data.report);
         setShowConfirmModal(false);
         setDeviceData(null);
@@ -157,6 +190,7 @@ export const ResetTestDeviceAdmin: React.FC<ResetTestDeviceAdminProps> = ({ admi
         throw new Error("No se pudo completar el reinicio.");
       }
     } catch (err: any) {
+      console.error("[QA_TOOL] Error en handleResetDevice:", err);
       setError(err.message || "Error al reiniciar el dispositivo de prueba.");
       setShowConfirmModal(false);
     } finally {
