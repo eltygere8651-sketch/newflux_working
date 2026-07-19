@@ -5575,23 +5575,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
         </button>
 
-        {/* Soporte */}
-        <button
-          onClick={() => {
-            window.dispatchEvent(new Event("open-support"));
-          }}
-          className="relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-        >
-          <span className="flex items-center gap-1.5 font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">
-            Soporte
-            <MessageSquare className="w-3.5 h-3.5 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-            {unreadRepliesCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-bounce">
-                {unreadRepliesCount}
-              </span>
-            )}
-          </span>
-        </button>
+
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
@@ -8150,21 +8134,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
                 {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                   <div className="bg-[#050505] border-t border-white/5 flex flex-col shrink-0">
-                    <div className="flex justify-center py-2 border-b border-white/[0.03]">
-                      <button
-                        onClick={() => window.dispatchEvent(new Event("open-support"))}
-                        className="relative group flex items-center gap-1.5 px-3 py-1 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40 text-[9px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-widest rounded-full transition-all duration-300 active:scale-95 shadow-[0_2px_10px_rgba(30,215,96,0.05)] hover:shadow-[0_4px_15px_rgba(30,215,96,0.1)] cursor-pointer select-none"
-                      >
-                        <MessageSquare className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform duration-300" />
-                        <span>Soporte en Vivo</span>
-                        {unreadRepliesCount > 0 && (
-                          <span className="absolute -top-2 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-bounce">
-                            {unreadRepliesCount}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                    <div className="px-3 py-1 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest">
+                    <div className="px-3 py-1.5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest">
                       <span>Total: {viewedTracks.length || 0} canciones</span>
                       <span className="text-emerald-500/80">Flux Premium</span>
                     </div>
@@ -10111,18 +10081,18 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                               }, { merge: true });
                             }
                             setTimeout(() => {
-                              window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
+                              window.dispatchEvent(new CustomEvent('open-sidebar-menu', { detail: { openSupport: true, message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
                             }, 1000);
                           } catch(err) {
                             console.error(err);
                           }
                         } else {
-                          window.dispatchEvent(new CustomEvent('open-support', { detail: { message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
+                          window.dispatchEvent(new CustomEvent('open-sidebar-menu', { detail: { openSupport: true, message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
                         }
                       }}
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
                     >
-                      <span>💬 CONTACTAR PARA ACTIVAR PREMIUM</span>
+                      <span>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</span>
                     </button>
                   )}
                   

@@ -251,8 +251,9 @@ export const VIPLandingView = () => {
       }
       window.history.replaceState({}, '', '/');
       setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('open-support', {
+        window.dispatchEvent(new CustomEvent('open-sidebar-menu', {
           detail: {
+            openSupport: true,
             message: "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente."
           }
         }));
@@ -285,7 +286,7 @@ export const VIPLandingView = () => {
           className="w-full max-w-sm bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors z-10 disabled:opacity-50"
         >
           {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-            <><MessageSquare className="w-5 h-5" /> CONTACTAR PARA ACTIVAR PREMIUM</>
+            <>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</>
           )}
         </button>
         {auth.currentUser && (

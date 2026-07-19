@@ -28,7 +28,7 @@ import { VIPLandingView } from "./components/VIPLandingView";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDoc, getCountFromServer } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
@@ -44,15 +44,18 @@ function AppContent() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
-  const [globalBanner, setGlobalBanner] = useState<{id: string, title: string, content: string, category?: string} | null>(null);
 
-  // States for Live Premium Support
+  const latestAnnouncementIdRef = useRef<string | null>(null);
+  const isInitialAnnouncementsLoad = useRef(true);
+
+  // States for Premium Ticket Support
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
   const [suggestedMessage, setSuggestedMessage] = useState("");
   const [isSendingSupport, setIsSendingSupport] = useState(false);
   const [supportChatMessages, setSupportChatMessages] = useState<any[]>([]);
   const [unreadRepliesCount, setUnreadRepliesCount] = useState(0);
+  const [supportToast, setSupportToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
   const supportChatEndRef = useRef<HTMLDivElement>(null);
 
   // States for Admin Support
@@ -66,6 +69,11 @@ function AppContent() {
   const isInitialUserLoad = useRef(true);
   const adminMessageIdsRef = useRef<Set<string>>(new Set());
   const userMessageIdsRef = useRef<Set<string>>(new Set());
+  
+  const isSupportModalOpenRef = useRef(isSupportModalOpen);
+  useEffect(() => {
+    isSupportModalOpenRef.current = isSupportModalOpen;
+  }, [isSupportModalOpen]);
 
   const playNotificationSound = async () => {
     try {
@@ -150,8 +158,24 @@ function AppContent() {
         setSuggestedMessage(e.detail.message);
       }
     };
+    const handleOpenSidebarMenu = (e: any) => {
+      setIsMenuOpen(true);
+      if (e.detail && e.detail.openSupport) {
+        if (e.detail.message) {
+          setSuggestedMessage(e.detail.message);
+        }
+        setTimeout(() => {
+          setIsMenuOpen(false);
+          setIsSupportModalOpen(true);
+        }, 800);
+      }
+    };
     window.addEventListener("open-support", handleOpenSupport);
-    return () => window.removeEventListener("open-support", handleOpenSupport);
+    window.addEventListener("open-sidebar-menu", handleOpenSidebarMenu);
+    return () => {
+      window.removeEventListener("open-support", handleOpenSupport);
+      window.removeEventListener("open-sidebar-menu", handleOpenSidebarMenu);
+    };
   }, []);
 
   const [guestId, setGuestId] = useState<string>(() => {
@@ -164,94 +188,160 @@ function AppContent() {
 
   const currentUserId = user?.uid || guestId;
   
+  // Admin Support messages listener (only active when modal is open to save reads/overhead)
   useEffect(() => {
+    if (!isAdmin || !isSupportModalOpen) return;
+
     isInitialAdminLoad.current = true;
-    isInitialUserLoad.current = true;
     adminMessageIdsRef.current.clear();
+
+    const q = query(
+      collection(db, "support_messages"),
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as any),
+        }));
+
+        // Check if there is any new message sent by a user (not admin reply)
+        const hasNewIncoming = msgs.some(
+          (m: any) => !m.isAdminReply && !adminMessageIdsRef.current.has(m.id)
+        );
+
+        // Update cache of seen IDs
+        msgs.forEach((m: any) => adminMessageIdsRef.current.add(m.id));
+
+        // If it is not the initial snapshot load, play the notification sound
+        if (hasNewIncoming && !isInitialAdminLoad.current) {
+          playNotificationSound();
+        }
+        isInitialAdminLoad.current = false;
+
+        setAllSupportMessages(msgs);
+
+        const unreadCount = msgs.filter(
+          (m: any) => !m.isAdminReply && !m.readByAdmin
+        ).length;
+        setUnreadRepliesCount(unreadCount);
+      },
+      (error) => {
+        console.warn("Error in admin support messages listener:", error);
+      }
+    );
+    return () => unsubscribe();
+  }, [isAdmin, isSupportModalOpen]);
+
+  // User Support messages listener (always active to capture admin replies in real-time, even when modal/menu are closed)
+  useEffect(() => {
+    if (isAdmin) return;
+
+    isInitialUserLoad.current = true;
     userMessageIdsRef.current.clear();
 
-    if (isAdmin) {
-      const q = query(
-        collection(db, "support_messages"),
-        orderBy("createdAt", "asc")
-      );
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const msgs = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as any),
-          }));
+    const q = query(
+      collection(db, "support_messages"),
+      where("userId", "==", currentUserId)
+    );
 
-          // Check if there is any new message sent by a user (not admin reply)
-          const hasNewIncoming = msgs.some(
-            (m: any) => !m.isAdminReply && !adminMessageIdsRef.current.has(m.id)
-          );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as any),
+        })).sort((a: any, b: any) => a.createdAt - b.createdAt);
 
-          // Update cache of seen IDs
-          msgs.forEach((m: any) => adminMessageIdsRef.current.add(m.id));
+        // Check if there is any new message sent by support/admin
+        const hasNewIncoming = msgs.some(
+          (m: any) => m.isAdminReply && !userMessageIdsRef.current.has(m.id)
+        );
 
-          // If it is not the initial snapshot load, play the notification sound
-          if (hasNewIncoming && !isInitialAdminLoad.current) {
-            playNotificationSound();
+        // Update cache of seen IDs
+        msgs.forEach((m: any) => userMessageIdsRef.current.add(m.id));
+
+        // If it is not the initial snapshot load, play the notification sound and show the toast
+        if (hasNewIncoming && !isInitialUserLoad.current) {
+          playNotificationSound();
+          if (!isSupportModalOpenRef.current) {
+            const latestAdminMsg = [...msgs].reverse().find((m: any) => m.isAdminReply);
+            setSupportToast({
+              message: latestAdminMsg ? latestAdminMsg.message : "Tu solicitud de soporte ha sido respondida.",
+              visible: true
+            });
           }
-          isInitialAdminLoad.current = false;
-
-          setAllSupportMessages(msgs);
-
-          const unreadCount = msgs.filter(
-            (m: any) => !m.isAdminReply && !m.readByAdmin
-          ).length;
-          setUnreadRepliesCount(unreadCount);
-        },
-        (error) => {
-          console.warn("Error in admin support messages listener:", error);
         }
-      );
-      return () => unsubscribe();
-    } else {
-      const q = query(
-        collection(db, "support_messages"),
-        where("userId", "==", currentUserId)
-      );
+        isInitialUserLoad.current = false;
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const msgs = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as any),
-          })).sort((a: any, b: any) => a.createdAt - b.createdAt);
+        setSupportChatMessages(msgs);
 
-          // Check if there is any new message sent by support/admin
-          const hasNewIncoming = msgs.some(
-            (m: any) => m.isAdminReply && !userMessageIdsRef.current.has(m.id)
-          );
+        const unreadCount = msgs.filter(
+          (m: any) => m.isAdminReply && !m.readByUser
+        ).length;
+        setUnreadRepliesCount(unreadCount);
+      },
+      (error) => {
+        console.warn("Error in user support messages listener:", error);
+      }
+    );
 
-          // Update cache of seen IDs
-          msgs.forEach((m: any) => userMessageIdsRef.current.add(m.id));
-
-          // If it is not the initial snapshot load, play the notification sound
-          if (hasNewIncoming && !isInitialUserLoad.current) {
-            playNotificationSound();
-          }
-          isInitialUserLoad.current = false;
-
-          setSupportChatMessages(msgs);
-
-          const unreadCount = msgs.filter(
-            (m: any) => m.isAdminReply && !m.readByUser
-          ).length;
-          setUnreadRepliesCount(unreadCount);
-        },
-        (error) => {
-          console.warn("Error in support messages listener:", error);
-        }
-      );
-
-      return () => unsubscribe();
-    }
+    return () => unsubscribe();
   }, [isAdmin, currentUserId]);
+
+  // Auto-dismiss support response toast after 8 seconds to ensure no resources or timers leak
+  useEffect(() => {
+    if (supportToast.visible) {
+      const timer = setTimeout(() => {
+        setSupportToast((prev) => ({ ...prev, visible: false }));
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [supportToast.visible]);
+
+  // Fetch unread support count on-demand (on mount, when menu is opened, or when support modal is closed)
+  useEffect(() => {
+    let active = true;
+    const fetchUnreadCount = async () => {
+      if (!user) return;
+      try {
+        if (isAdmin) {
+          const q = query(
+            collection(db, "support_messages"),
+            where("isAdminReply", "==", false),
+            where("readByAdmin", "==", false)
+          );
+          const snapshot = await getCountFromServer(q);
+          if (active) {
+            setUnreadRepliesCount(snapshot.data().count);
+          }
+        } else {
+          const q = query(
+            collection(db, "support_messages"),
+            where("userId", "==", currentUserId),
+            where("isAdminReply", "==", true),
+            where("readByUser", "==", false)
+          );
+          const snapshot = await getCountFromServer(q);
+          if (active) {
+            setUnreadRepliesCount(snapshot.data().count);
+          }
+        }
+      } catch (e) {
+        console.warn("Error loading unread support count:", e);
+      }
+    };
+
+    if (user && (!isSupportModalOpen || isMenuOpen)) {
+      fetchUnreadCount();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, currentUserId, user, isMenuOpen, isSupportModalOpen]);
 
   useEffect(() => {
     if (!isAdmin && isSupportModalOpen) {
@@ -342,7 +432,7 @@ function AppContent() {
               userId: currentUserId,
               userEmail: emailVal,
               userName: "Soporte Automático",
-              message: "¡Hola! Hemos recibido tu mensaje. Nuestro equipo de soporte lo revisará y se pondrá en contacto contigo lo antes posible. Gracias por escribirnos.",
+              message: "¡Hola! Tu solicitud de soporte ha sido recibida correctamente. Nuestro equipo revisará los detalles de tu ticket y te daremos respuesta lo antes posible. Agradecemos tu paciencia.",
               createdAt: Date.now(),
               isAdminReply: true,
               readByAdmin: true,
@@ -395,7 +485,7 @@ function AppContent() {
     if (!selectedThreadId) return;
     
     // Optional: confirm before closing
-    if (!window.confirm("¿Estás seguro de que quieres cerrar y eliminar este caso? Todo el historial de chat con este usuario se borrará.")) {
+    if (!window.confirm("¿Estás seguro de que quieres cerrar y resolver este ticket? Todo el historial de consultas de este usuario se borrará.")) {
       return;
     }
 
@@ -410,8 +500,8 @@ function AppContent() {
       
       setSelectedThreadId(null);
     } catch (e) {
-      console.error("Error closing case:", e);
-      alert("No se pudo cerrar el caso. Inténtalo de nuevo.");
+      console.error("Error closing ticket:", e);
+      alert("No se pudo cerrar el ticket. Inténtalo de nuevo.");
     }
   };
 
@@ -463,7 +553,7 @@ function AppContent() {
 
   useEffect(() => {
     // 1. Verificación local eficiente y síncrona (SIN Firebase)
-    const checkUnread = async () => {
+    const checkLocalUnread = () => {
       const installedVersionRaw = localStorage.getItem("flux_app_installed_version");
       const seenVersionRaw = localStorage.getItem("flux_updates_version_seen");
       if (!installedVersionRaw || !seenVersionRaw) {
@@ -472,42 +562,54 @@ function AppContent() {
         localStorage.setItem("flux_app_installed_version", APP_UPDATES_VERSION.toString());
         localStorage.setItem("flux_updates_version_seen", APP_UPDATES_VERSION.toString());
         setHasUnread(false);
+        return false;
       } else {
         const seenVersion = parseInt(seenVersionRaw, 10);
-        setHasUnread(APP_UPDATES_VERSION > seenVersion);
+        const hasUnreadUpdates = APP_UPDATES_VERSION > seenVersion;
+        if (hasUnreadUpdates) {
+          setHasUnread(true);
+          return true;
+        }
       }
+      return false;
+    };
 
-      // 2. Comprobación del banner global (1 única vez al iniciar)
-      try {
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
-        const snapshot = await getDocs(q);
+    const localUnread = checkLocalUnread();
+
+    // 2. Listener en tiempo real del comunicado más reciente (Bajo consumo: limit(1))
+    let unsub: (() => void) | null = null;
+    try {
+      const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+      unsub = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
           const data = newestDoc.data();
+          const newestId = newestDoc.id;
+          latestAnnouncementIdRef.current = newestId;
+
           const createdAt = data.createdAt;
           const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
 
-          // Si el anuncio tiene menos de 24 horas y no ha sido desactivado ni descartado
-          if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
-            const dismissedId = localStorage.getItem("flux_dismissed_banner");
-            if (dismissedId !== newestDoc.id) {
-              setGlobalBanner({ id: newestDoc.id, title: data.title, content: data.content, category: data.category });
-            } else {
-              setGlobalBanner(null);
+          // Si el anuncio tiene menos de 7 días y no ha sido desactivado ni descartado
+          if (Date.now() - dbDate.getTime() < 604800000 && data.active !== false) {
+            const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
+            if (lastSeenId !== newestId) {
+              setHasUnread(true);
+              
+              // Sonido solo si NO es la carga inicial de la aplicación
+              if (!isInitialAnnouncementsLoad.current) {
+                playNotificationSound();
+              }
             }
-          } else {
-            setGlobalBanner(null);
           }
-        } else {
-          setGlobalBanner(null);
         }
-      } catch (err) {
-        // Fallo de red normal, no mostramos banner global
-        console.warn("No se pudo cargar el banner global:", err);
-      }
-    };
-
-    checkUnread();
+        isInitialAnnouncementsLoad.current = false;
+      }, (err) => {
+        console.warn("Error al escuchar comunicados en tiempo real:", err);
+      });
+    } catch (err) {
+      console.warn("No se pudo iniciar el listener de anuncios:", err);
+    }
 
     const handleRead = () => {
       setHasUnread(false);
@@ -515,6 +617,9 @@ function AppContent() {
     window.addEventListener("notifications-read", handleRead);
     return () => {
       window.removeEventListener("notifications-read", handleRead);
+      if (unsub) {
+        unsub();
+      }
     };
   }, []);
 
@@ -656,6 +761,10 @@ function AppContent() {
               onClick={() => {
                 setIsNotificationsOpen(true);
                 setHasUnread(false);
+                if (latestAnnouncementIdRef.current) {
+                  localStorage.setItem("flux_last_seen_announcement_id", latestAnnouncementIdRef.current);
+                }
+                localStorage.setItem("flux_updates_version_seen", APP_UPDATES_VERSION.toString());
               }}
               className="relative flex items-center justify-center p-2 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.4)] group"
               title="Avisos e importantes"
@@ -733,6 +842,21 @@ function AppContent() {
                   <span className="text-[14px] ml-[1px]">❤️</span>
                   <span>Invitar amigos</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsMenuOpen(false); setIsSupportModalOpen(true); }}
+                  className="w-full h-9 bg-transparent hover:bg-white/5 text-white font-medium text-xs rounded-md transition-colors cursor-pointer flex items-center justify-between px-2.5 relative group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 stroke-[2px] text-emerald-400 group-hover:scale-105 transition-transform" />
+                    <span>Centro de Soporte</span>
+                  </div>
+                  {unreadRepliesCount > 0 && (
+                    <span className="w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-bounce">
+                      {unreadRepliesCount}
+                    </span>
+                  )}
+                </button>
                 {user && !user.isAnonymous ? (
                   <button
                     type="button"
@@ -757,27 +881,6 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        {/* GLOBAL ANNOUNCEMENT BANNER */}
-        {globalBanner && (
-          <div className="w-full mt-2 overflow-hidden bg-gradient-to-r from-emerald-500/10 via-emerald-400/20 to-emerald-500/10 border-y border-emerald-500/20 py-2 shrink-0 flex items-center justify-between relative shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-             <div className="flex items-center gap-6 text-emerald-400 font-extrabold uppercase text-[10px] tracking-widest px-4 animate-marquee whitespace-nowrap overflow-hidden">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                <span className="text-white drop-shadow-md">{globalBanner.title}:</span> 
-                <span className="opacity-90">{globalBanner.content}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)] ml-12" />
-             </div>
-             <button
-                onClick={() => {
-                   localStorage.setItem("flux_dismissed_banner", globalBanner.id);
-                   setGlobalBanner(null);
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-1.5 rounded-full z-10 transition-colors"
-                title="Cerrar aviso"
-             >
-                <X className="w-3.5 h-3.5 text-emerald-400" />
-             </button>
-          </div>
-        )}
       </nav>
 
       
@@ -861,6 +964,61 @@ function AppContent() {
         onClose={() => setIsShareModalOpen(false)}
       />
 
+      {/* SUPPORT TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {supportToast.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md bg-[#0c0c0e] border border-white/10 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.9)] z-[9999999] flex flex-col gap-3 text-left"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-[#1ED760]">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#1ED760]" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-[0.15em]">Soporte Técnico</h4>
+                  <p className="text-[9px] text-[#1ED760] font-bold uppercase tracking-widest mt-0.5">Nueva respuesta de Soporte</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSupportToast(prev => ({ ...prev, visible: false }))}
+                className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <p className="text-xs text-slate-300 font-semibold leading-relaxed line-clamp-2">
+              {supportToast.message || "Tu solicitud ha sido atendida. Pulsa abajo para ver la respuesta del administrador."}
+            </p>
+
+            <div className="flex items-center justify-end gap-2 mt-1">
+              <button
+                onClick={() => setSupportToast(prev => ({ ...prev, visible: false }))}
+                className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
+              >
+                Ignorar
+              </button>
+              <button
+                onClick={() => {
+                  setSupportToast(prev => ({ ...prev, visible: false }));
+                  setIsSupportModalOpen(true);
+                }}
+                className="px-4 py-1.5 text-[10px] font-black uppercase text-black bg-[#1ED760] hover:bg-[#1db954] rounded-lg transition-all shadow-[0_4px_12px_rgba(30,215,96,0.2)] cursor-pointer"
+              >
+                Ver Respuesta
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* SUPPORT DIALOG MODAL */}
       <AnimatePresence>
         {isSupportModalOpen && (
@@ -887,14 +1045,13 @@ function AppContent() {
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-gradient-to-br from-[#1ED760]/10 to-emerald-500/5 rounded-xl border border-[#1ED760]/15 relative">
                     <MessageSquare className="w-4 h-4 text-[#1ED760]" />
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#1ED760]" />
                   </div>
                   <div>
                     <h3 className="text-xs font-black uppercase text-white tracking-[0.15em]">
-                      {isAdmin ? "Soporte Premium (Modo Admin)" : "Soporte Premium Flux"}
+                      {isAdmin ? "Centro de Tickets (Modo Admin)" : "Centro de Soporte por Tickets"}
                     </h3>
                     <p className="text-[8px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">
-                      {isAdmin ? "Responder Consultas en Directo" : "Canal de Asistencia en Directo"}
+                      {isAdmin ? "Bandeja de Entrada de Tickets" : "Historial y Envío de Tickets"}
                     </p>
                   </div>
                 </div>
@@ -919,15 +1076,15 @@ function AppContent() {
                   {/* Left Column: Conversation Thread List */}
                   <div className={`w-full md:w-1/3 border-r border-white/5 flex flex-col h-full bg-[#0a0a0c] ${selectedThreadId ? "hidden md:flex" : "flex"}`}>
                     <div className="p-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
-                      <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Hilos de Conversación</h4>
-                      <p className="text-[7.5px] text-slate-500 uppercase font-bold mt-0.5">Soporte en tiempo real</p>
+                      <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Solicitudes de Soporte</h4>
+                      <p className="text-[7.5px] text-slate-500 uppercase font-bold mt-0.5">Bandeja de Tickets</p>
                     </div>
 
                     <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/5">
                       {computedThreads.length === 0 ? (
                         <div className="text-center py-12 px-4 space-y-2">
                           <MessageSquare className="w-5 h-5 text-slate-600 mx-auto" />
-                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">No hay mensajes aún</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">No hay solicitudes aún</p>
                         </div>
                       ) : (
                         computedThreads.map((thread: any) => {
@@ -988,7 +1145,6 @@ function AppContent() {
                               <h4 className="text-[10px] font-black text-white leading-none">
                                 {allSupportMessages.find(m => m.userId === selectedThreadId)?.userName || "Socio Flux"}
                               </h4>
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_#10b981]" />
                             </div>
                             <p className="text-[8px] font-bold text-slate-500 mt-0.5 truncate">{allSupportMessages.find(m => m.userId === selectedThreadId)?.userEmail || "Anónimo"}</p>
                           </div>
@@ -1000,7 +1156,7 @@ function AppContent() {
                               title="Cerrar y eliminar caso"
                             >
                               <Trash2 className="w-3 h-3" />
-                              <span className="hidden sm:inline">Cerrar Caso</span>
+                              <span className="hidden sm:inline">Cerrar Ticket</span>
                             </button>
                             {/* Mobile Back Button to return to thread list */}
                             <button
@@ -1009,8 +1165,8 @@ function AppContent() {
                             >
                               Ver Lista
                             </button>
-                            <span className="hidden md:inline px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[8px] font-black uppercase tracking-widest rounded-full">
-                              Canal Sincronizado
+                            <span className="hidden md:inline px-2 py-0.5 bg-white/5 border border-white/10 text-slate-300 text-[8px] font-black uppercase tracking-widest rounded-full">
+                              Ticket Activo
                             </span>
                           </div>
                         </div>
@@ -1085,11 +1241,11 @@ function AppContent() {
                           <MessageSquare className="w-8 h-8 text-[#1ED760]" />
                         </div>
                         <div>
-                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Flux Live Support</p>
-                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Panel de Control</p>
+                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Panel de Control de Soporte</p>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Gestión de Tickets</p>
                         </div>
                         <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
-                          Selecciona una conversación de la lista de la izquierda para responder en tiempo real al usuario.
+                          Selecciona un ticket de la lista de la izquierda para dar respuesta a la solicitud del usuario.
                         </p>
                       </div>
                     )}
@@ -1106,11 +1262,11 @@ function AppContent() {
                           <MessageSquare className="w-8 h-8 text-[#1ED760]" />
                         </div>
                         <div>
-                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium</p>
+                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Centro de Soporte</p>
                           <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Identificación Requerida</p>
                         </div>
                         <p className="text-[11px] text-slate-400 font-semibold leading-relaxed max-w-[260px]">
-                          Para garantizar un canal de soporte premium en tiempo real y poder dar seguimiento a tus consultas, por favor inicia sesión.
+                          Para garantizar un canal de soporte premium y poder dar seguimiento a tus tickets, por favor inicia sesión.
                         </p>
                         <button
                           onClick={() => {
@@ -1130,11 +1286,11 @@ function AppContent() {
                               <MessageSquare className="w-8 h-8 text-[#1ED760]" />
                             </div>
                             <div>
-                              <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium en Vivo</p>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Canal Sincronizado</p>
+                              <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Centro de Soporte</p>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Sistema de Tickets</p>
                             </div>
                             <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
-                              👋 ¡Hola! Escribe tu consulta o duda abajo. El equipo administrativo te responderá directamente aquí en tiempo real.
+                              👋 ¡Hola! Envía un ticket con tu consulta o duda abajo. Nuestro equipo revisará tu caso y responderá a tu ticket lo antes posible.
                             </p>
                           </div>
                         )}
@@ -1178,7 +1334,6 @@ function AppContent() {
                             {isReply && (
                               <div className="flex items-center gap-1.5 mb-1 pl-1">
                                 <span className="text-[8px] font-black uppercase text-emerald-400 tracking-widest">Soporte Flux</span>
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#1ED760]" />
                               </div>
                             )}
                             <div
@@ -1214,7 +1369,7 @@ function AppContent() {
                               handleSendSupportMessage();
                             }
                           }}
-                          placeholder="Escribe tu consulta para soporte..."
+                          placeholder="Escribe tu ticket de soporte..."
                           maxLength={1000}
                           disabled={isSendingSupport}
                           className="flex-1 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none focus:border-[#1ED760]/30 focus:bg-white/[0.04] transition-all font-semibold"

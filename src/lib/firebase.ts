@@ -100,19 +100,22 @@ export const migrateGuestData = async (oldUid: string, newUid: string) => {
     const oldVipRef = doc(db, "vip_activations", oldUid);
     const newVipRef = doc(db, "vip_activations", newUid);
     const messagesQ = query(collection(db, "support_messages"), where("userId", "==", oldUid));
+    const vipDevicesQ = query(collection(db, "vip_devices"), where("uid", "==", oldUid));
 
     const [
       oldUserSnap, newUserSnap,
       oldPlaylistsSnap, newPlaylistsSnap,
       oldTrialSnap,
       oldVipSnap, newVipSnap,
-      messagesSnap
+      messagesSnap,
+      vipDevicesSnap
     ] = await Promise.all([
       getDoc(oldUserRef), getDoc(newUserRef),
       getDocs(oldPlaylistsRef), getDocs(newPlaylistsRef),
       getDoc(oldTrialRef),
       getDoc(oldVipRef), getDoc(newVipRef),
-      getDocs(messagesQ)
+      getDocs(messagesQ),
+      getDocs(vipDevicesQ)
     ]);
 
     // 1. users
@@ -191,6 +194,11 @@ export const migrateGuestData = async (oldUid: string, newUid: string) => {
        writes.push({ type: 'update', ref: m.ref, data: { userId: newUid } });
     }
 
+    // 6. vip_devices reference update
+    for (const d of vipDevicesSnap.docs) {
+       writes.push({ type: 'update', ref: d.ref, data: { uid: newUid } });
+    }
+
     // Helper: Execute ops in safely chunked batches
     const executeChunks = async (ops: (DBWrite | DBDelete)[]) => {
       for (let i = 0; i < ops.length; i += 490) {
@@ -229,8 +237,11 @@ export const migrateGuestData = async (oldUid: string, newUid: string) => {
 };
 
 export const loginWithGoogle = async () => {
+  const user = auth.currentUser;
+  const isGuestVip = user && (user.email?.startsWith('socio.') || user.email?.startsWith('vip_'));
+  const oldUid = isGuestVip ? user.uid : null;
+
   try {
-    const user = auth.currentUser;
     if (user && user.isAnonymous) {
       try {
         await linkWithPopup(user, googleProvider);
@@ -239,9 +250,9 @@ export const loginWithGoogle = async () => {
         if (err.code === 'auth/credential-already-in-use') {
           const cred = GoogleAuthProvider.credentialFromError(err);
           if (cred) {
-            const oldUid = user.uid;
+            const anonymousOldUid = user.uid;
             const newCredUser = await signInWithCredential(auth, cred);
-            await migrateGuestData(oldUid, newCredUser.user.uid);
+            await migrateGuestData(anonymousOldUid, newCredUser.user.uid);
             return;
           }
         }
@@ -249,7 +260,10 @@ export const loginWithGoogle = async () => {
       }
     }
     // 1. Try signInWithPopup first (extremely compatible with standalone mobile browsers, safari, etc.)
-    await signInWithPopup(auth, googleProvider);
+    const cred = await signInWithPopup(auth, googleProvider);
+    if (oldUid && cred.user.uid !== oldUid) {
+      await migrateGuestData(oldUid, cred.user.uid);
+    }
   } catch (error: any) {
     console.warn("Popup authentication failed, trying redirect fallback:", error);
     if (onAuthErrorCallback) {
@@ -260,7 +274,7 @@ export const loginWithGoogle = async () => {
     if (error?.code !== "auth/unauthorized-domain") {
       try {
         const currentUser = auth.currentUser;
-        if (currentUser && currentUser.isAnonymous) {
+        if (currentUser && (currentUser.isAnonymous || currentUser.email?.startsWith('socio.') || currentUser.email?.startsWith('vip_'))) {
           sessionStorage.setItem('flux_migration_old_uid', currentUser.uid);
         }
         await signInWithRedirect(auth, googleProvider);

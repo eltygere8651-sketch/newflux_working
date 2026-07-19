@@ -309,8 +309,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       setAnnSuccessMsg(
         "¡Comunicado global publicado con éxito en la base de datos de FLUX!",
       );
-      // Trigger update badge event
-      window.dispatchEvent(new Event("notifications-read"));
       setTimeout(() => setAnnSuccessMsg(""), 4500);
     } catch (err) {
       console.error("Error publicando anuncio:", err);

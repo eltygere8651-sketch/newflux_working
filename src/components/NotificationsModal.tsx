@@ -343,6 +343,14 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
         });
 
         setAnnouncements(combined);
+        if (isOpen && firebaseList.length > 0) {
+          const newestDbId = firebaseList[0].id;
+          const prevSeenAnn = localStorage.getItem("flux_last_seen_announcement_id");
+          if (prevSeenAnn !== newestDbId) {
+            localStorage.setItem("flux_last_seen_announcement_id", newestDbId);
+            window.dispatchEvent(new Event("notifications-read"));
+          }
+        }
         setLoading(false);
       }).catch((err) => {
         console.error("Error al cargar comunicados:", err);
