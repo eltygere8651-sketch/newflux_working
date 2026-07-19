@@ -2114,13 +2114,14 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                       </button>
                     </div>
                   </div>
+                </div>
 
                   {loading ? (
                     <div className="text-center py-12 text-slate-500 text-sm font-medium animate-pulse">
                       Cargando usuarios...
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {users
                         .filter((u) =>
                           userSearchTerm
@@ -2185,15 +2186,15 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                               key={u.id}
                               className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col gap-4"
                             >
-                              <div className="flex justify-between items-start">
-                                <div className="space-y-1">
-                                  <p className="text-white font-bold text-sm">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="space-y-1 min-w-0 flex-1">
+                                  <p className="text-white font-bold text-sm truncate">
                                     {u.displayName || "Sin Nombre"}
                                   </p>
-                                  <p className="text-slate-400 text-xs">
+                                  <p className="text-slate-400 text-xs truncate">
                                     {u.email}
                                   </p>
-                                  <p className="text-[10px] text-slate-500 mt-1">
+                                  <p className="text-[10px] text-slate-500 mt-1 truncate">
                                     ID: {u.id}
                                   </p>
 
@@ -2378,7 +2379,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                         })}
                     </div>
                   )}
-                </div>
               </>
             )}
 

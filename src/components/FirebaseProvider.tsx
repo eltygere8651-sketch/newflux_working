@@ -94,6 +94,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [authError, setAuthError] = useState<any | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [accessData, setAccessData] = useState<UserAccessData | null>(null);
+  const isAuthenticatingRef = useRef(false);
 
   const clearAuthError = () => setAuthError(null);
 
@@ -118,12 +119,21 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (!u) {
+        setUser(null);
+
         if (localStorage.getItem('flux_voluntary_logout') === 'true') {
           setDbUserProfile(null);
           setAccessData(null);
           setLoading(false);
           return;
         }
+
+        if (isAuthenticatingRef.current || (window as any).isFluxAuthenticating) {
+          return;
+        }
+        
+        isAuthenticatingRef.current = true;
+        (window as any).isFluxAuthenticating = true;
 
         // Recover VIP guest session if available
         const uuid = localStorage.getItem('flux_vip_device_id');
@@ -137,6 +147,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 const email = `socio.${act.deviceHash.substring(0, 6)}@fluxmusic.com`;
                 const pass = `${act.deviceHash.substring(0, 10)}_fluxvip`;
                 await signInWithEmailAndPassword(auth, email, pass);
+                isAuthenticatingRef.current = false;
+                (window as any).isFluxAuthenticating = false;
                 return;
               }
             }
@@ -153,6 +165,9 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
           setDbUserProfile(null);
           setAccessData(null);
           setLoading(false);
+        } finally {
+          isAuthenticatingRef.current = false;
+          (window as any).isFluxAuthenticating = false;
         }
         return;
       }
