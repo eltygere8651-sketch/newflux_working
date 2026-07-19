@@ -276,7 +276,8 @@ export const loginWithGoogle = async () => {
 
 export const loginWithEmail = async (email: string, pass: string) => {
   try {
-    const oldUid = auth.currentUser && auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
+    const isGuest = auth.currentUser?.isAnonymous || auth.currentUser?.email?.startsWith('socio.') || auth.currentUser?.email?.startsWith('vip_');
+    const oldUid = auth.currentUser && isGuest ? auth.currentUser.uid : null;
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     if (oldUid && oldUid !== cred.user.uid) {
       await migrateGuestData(oldUid, cred.user.uid);
@@ -295,6 +296,9 @@ export const signupWithEmail = async (email: string, pass: string, nickname?: st
   try {
     let user;
     const currentUser = auth.currentUser;
+    const isVipGuest = currentUser?.email?.startsWith('socio.') || currentUser?.email?.startsWith('vip_');
+    const oldUid = currentUser ? currentUser.uid : null;
+
     if (currentUser && currentUser.isAnonymous) {
       const cred = EmailAuthProvider.credential(email, pass);
       try {
@@ -312,6 +316,9 @@ export const signupWithEmail = async (email: string, pass: string, nickname?: st
     } else {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       user = cred.user;
+      if (oldUid && isVipGuest && oldUid !== user.uid) {
+        await migrateGuestData(oldUid, user.uid);
+      }
     }
 
     const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(nickname || email || user.uid)}`;
@@ -319,6 +326,7 @@ export const signupWithEmail = async (email: string, pass: string, nickname?: st
       displayName: nickname || "Usuario", 
       photoURL: defaultAvatar 
     });
+
     return user;
   } catch (error: any) {
     console.warn("Email registration failed:", error.code || error.message);
@@ -341,7 +349,10 @@ export const resetPassword = async (email: string) => {
   }
 };
 
-export const logout = () => signOut(auth);
+export const logout = () => {
+  localStorage.setItem('flux_voluntary_logout', 'true');
+  return signOut(auth);
+};
 export { signInAnonymously };
 
 // Handle redirect result on load

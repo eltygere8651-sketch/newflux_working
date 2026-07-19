@@ -63,6 +63,7 @@ import { Play,
   Download,
   Users,
   User,
+  UserPlus,
   Library,
   FileText,
   Tv,
@@ -10126,17 +10127,39 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   )}
                   
                   {user && (
-                    <button
-                      onClick={() => signOut(auth)}
-                      className="mt-4 text-white/40 hover:text-white/80 transition-colors text-[9px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 w-full"
-                    >
-                      <LogOut className="w-3 h-3" />
-                      Cerrar Sesión
-                    </button>
+                    <div className="flex flex-col gap-2 mt-4 w-full">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setAuthModalOpen(true)}
+                          className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-[9px] uppercase font-bold tracking-widest rounded-lg transition-colors flex items-center justify-center gap-1.5 border border-white/5"
+                        >
+                          <LogIn className="w-3 h-3" />
+                          <span>Iniciar Sesión</span>
+                        </button>
+                        <button
+                          onClick={() => setAuthModalOpen(true)}
+                          className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-[9px] uppercase font-bold tracking-widest rounded-lg transition-colors flex items-center justify-center gap-1.5 border border-white/5"
+                        >
+                          <UserPlus className="w-3 h-3" />
+                          <span>Registro</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          localStorage.setItem('flux_voluntary_logout', 'true');
+                          signOut(auth);
+                        }}
+                        className="py-2 text-white/40 hover:text-white/80 transition-colors text-[9px] uppercase font-bold tracking-widest flex items-center justify-center gap-1.5 w-full mt-1"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>Cerrar Sesión</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </>
             )}
+
           </div>
         </div>
       )}

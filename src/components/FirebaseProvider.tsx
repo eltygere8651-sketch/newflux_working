@@ -118,6 +118,13 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (!u) {
+        if (localStorage.getItem('flux_voluntary_logout') === 'true') {
+          setDbUserProfile(null);
+          setAccessData(null);
+          setLoading(false);
+          return;
+        }
+
         // Recover VIP guest session if available
         const uuid = localStorage.getItem('flux_vip_device_id');
         if (uuid) {
@@ -151,6 +158,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (u) {
+        localStorage.removeItem('flux_voluntary_logout');
+
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
         
