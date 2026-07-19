@@ -45,7 +45,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({ src, fallbackSrc, classNam
       )}
       {isVisible && (
         <img
-          src={error ? (fallbackSrc || DEFAULT_MUSIC_COVER) : (currentSrc || undefined)}
+          src={error ? (fallbackSrc || DEFAULT_MUSIC_COVER) : currentSrc}
           alt={alt}
           className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => setIsLoaded(true)}

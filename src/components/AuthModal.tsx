@@ -143,7 +143,7 @@ export const AuthModal: React.FC = () => {
 
       setTimeout(() => {
         setAuthModalOpen(false);
-        
+        window.location.reload();
       }, 1200);
     } catch (err: any) {
       console.warn("Unified Auth error:", err.code || err.message);

@@ -1,4 +1,3 @@
-import { recoverOrSignInGuest, getOrCreateDeviceId } from "../lib/guestAuth";
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, signInAnonymously } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
@@ -119,11 +118,31 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (!u) {
-        // Recover or create deterministic guest session
+        // Recover VIP guest session if available
+        const uuid = localStorage.getItem('flux_vip_device_id');
+        if (uuid) {
+          try {
+            const q = query(collection(db, 'vip_activations'), where('uuid', '==', uuid), limit(1));
+            const snaps = await getDocs(q);
+            if (!snaps.empty) {
+              const act = snaps.docs[0].data();
+              if (act.deviceHash) {
+                const email = `socio.${act.deviceHash.substring(0, 6)}@fluxmusic.com`;
+                const pass = `${act.deviceHash.substring(0, 10)}_fluxvip`;
+                await signInWithEmailAndPassword(auth, email, pass);
+                return;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to recover guest:", e);
+          }
+        }
+        
+        // Auto-login anonymously if no session exists to prevent register prompts
         try {
-          await recoverOrSignInGuest();
+          await signInAnonymously(auth);
         } catch (e) {
-          console.error("Failed guest sign-in:", e);
+          console.error("Failed anonymous sign-in:", e);
           setDbUserProfile(null);
           setAccessData(null);
           setLoading(false);
@@ -142,7 +161,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let deviceTrialActive = false;
             let deviceTrialStart = 0;
             try {
-              const hash = await getOrCreateDeviceId();
+              const hash = await generateDeviceHash();
               const hashRef = doc(db, 'vip_devices', hash);
               const hashDoc = await getDoc(hashRef);
               if (hashDoc.exists()) {
@@ -178,7 +197,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               const data = snapshot.data();
               if (deviceHasTrial) {
                 // Keep the deviceHash in sync with the user document so the admin can delete it if needed
-
+                generateDeviceHash().then(hash => {
+                  if (data.deviceHash !== hash) {
+                    setDoc(userRef, { deviceHash: hash }, { merge: true }).catch(() => {});
+                  }
+                }).catch(() => {});
               }
               setDbUserProfile({
                 displayName: data.displayName,

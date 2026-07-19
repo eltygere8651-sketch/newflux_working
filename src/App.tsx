@@ -137,9 +137,9 @@ function AppContent() {
 
   useEffect(() => {
     if (isSupportModalOpen && supportChatEndRef.current) {
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         supportChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
+      }, 100);
     }
   }, [supportChatMessages, isSupportModalOpen]);
 
@@ -165,11 +165,6 @@ function AppContent() {
   const currentUserId = user?.uid || guestId;
   
   useEffect(() => {
-    if (!isSupportModalOpen) {
-      setSupportChatMessages([]);
-      setAllSupportMessages([]);
-      return;
-    }
     isInitialAdminLoad.current = true;
     isInitialUserLoad.current = true;
     adminMessageIdsRef.current.clear();
@@ -256,7 +251,7 @@ function AppContent() {
 
       return () => unsubscribe();
     }
-  }, [isAdmin, currentUserId, isSupportModalOpen]);
+  }, [isAdmin, currentUserId]);
 
   useEffect(() => {
     if (!isAdmin && isSupportModalOpen) {
@@ -306,9 +301,9 @@ function AppContent() {
 
   useEffect(() => {
     if (isAdmin && isSupportModalOpen && adminChatEndRef.current) {
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         adminChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
+      }, 100);
     }
   }, [selectedThreadId, allSupportMessages, isSupportModalOpen, isAdmin]);
 
@@ -341,21 +336,23 @@ function AppContent() {
 
       // 1. Enviar respuesta automática SOLO en el primer mensaje absoluto (cuando no hay historial)
       if (isFirstMessageEver) {
-        try {
-          const autoReplyMsg = {
-            userId: currentUserId,
-            userEmail: emailVal,
-            userName: "Soporte Automático",
-            message: "¡Hola! Hemos recibido tu mensaje. Nuestro equipo revisará tu consulta y responderá lo antes posible. Gracias por escribirnos.",
-            createdAt: Date.now(),
-            isAdminReply: true,
-            readByAdmin: true,
-            readByUser: false,
-          };
-          await addDoc(collection(db, "support_messages"), autoReplyMsg);
-        } catch (e) {
-          console.warn("Failed to send auto-reply:", e);
-        }
+        setTimeout(async () => {
+          try {
+            const autoReplyMsg = {
+              userId: currentUserId,
+              userEmail: emailVal,
+              userName: "Soporte Automático",
+              message: "¡Hola! Hemos recibido tu mensaje. Nuestro equipo de soporte lo revisará y se pondrá en contacto contigo lo antes posible. Gracias por escribirnos.",
+              createdAt: Date.now(),
+              isAdminReply: true,
+              readByAdmin: true,
+              readByUser: false,
+            };
+            await addDoc(collection(db, "support_messages"), autoReplyMsg);
+          } catch (e) {
+            console.warn("Failed to send auto-reply:", e);
+          }
+        }, 1500);
       }
 
       // 2. Notificar a Telegram SIEMPRE
@@ -652,22 +649,8 @@ function AppContent() {
             </div>
           </div>
           
-          {/* RIGHT: PREMIUM BELL NOTIFICATIONS & SUPPORT */}
-          <div className="flex items-center gap-2 relative">
-            <button
-              type="button"
-              onClick={() => setIsSupportModalOpen(true)}
-              className="relative flex items-center justify-center p-2 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.4)] group"
-              title="Soporte"
-            >
-              <MessageSquare className="w-4 h-4 group-hover:text-amber-400 transition-colors shrink-0" />
-              {unreadRepliesCount > 0 && (
-                <>
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center rounded-full shadow-[0_0_8px_rgba(244,63,94,1)]">{unreadRepliesCount}</span>
-                </>
-              )}
-            </button>
+          {/* RIGHT: PREMIUM BELL NOTIFICATIONS */}
+          <div className="flex flex-col items-end justify-center relative">
             <button
               type="button"
               onClick={() => {
@@ -691,7 +674,7 @@ function AppContent() {
                   initial={{ opacity: 0, y: -5, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute top-[calc(100%+10px)] right-0 z-[100] w-48"
+                  className="absolute top-[calc(100%+10px)] right-0 z-[100]"
                 >
                   <button
                     onClick={handleInstallPress}
@@ -937,7 +920,7 @@ function AppContent() {
                   <div className={`w-full md:w-1/3 border-r border-white/5 flex flex-col h-full bg-[#0a0a0c] ${selectedThreadId ? "hidden md:flex" : "flex"}`}>
                     <div className="p-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
                       <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Hilos de Conversación</h4>
-                      <p className="text-[7.5px] text-slate-500 uppercase font-bold mt-0.5">Atención al cliente</p>
+                      <p className="text-[7.5px] text-slate-500 uppercase font-bold mt-0.5">Soporte en tiempo real</p>
                     </div>
 
                     <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/5">
@@ -1106,7 +1089,7 @@ function AppContent() {
                           <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Panel de Control</p>
                         </div>
                         <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
-                          Selecciona una conversación de la lista de la izquierda para responder al usuario.
+                          Selecciona una conversación de la lista de la izquierda para responder en tiempo real al usuario.
                         </p>
                       </div>
                     )}
@@ -1127,7 +1110,7 @@ function AppContent() {
                           <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Identificación Requerida</p>
                         </div>
                         <p className="text-[11px] text-slate-400 font-semibold leading-relaxed max-w-[260px]">
-                          Para garantizar un canal de soporte premium y poder dar seguimiento a tus consultas, por favor inicia sesión.
+                          Para garantizar un canal de soporte premium en tiempo real y poder dar seguimiento a tus consultas, por favor inicia sesión.
                         </p>
                         <button
                           onClick={() => {
@@ -1147,11 +1130,11 @@ function AppContent() {
                               <MessageSquare className="w-8 h-8 text-[#1ED760]" />
                             </div>
                             <div>
-                              <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium</p>
+                              <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium en Vivo</p>
                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Canal Sincronizado</p>
                             </div>
                             <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
-                              👋 ¡Hola! Escribe tu consulta o duda abajo. Nuestro equipo revisará tu consulta y responderá lo antes posible.
+                              👋 ¡Hola! Escribe tu consulta o duda abajo. El equipo administrativo te responderá directamente aquí en tiempo real.
                             </p>
                           </div>
                         )}

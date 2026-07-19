@@ -737,7 +737,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
                 key={currentTrack?.id || "empty"}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                src={albumArt || undefined}
+                src={albumArt}
                 className="w-full h-full object-cover rounded-[1.2rem] sm:rounded-[1.5rem] shadow-2xl border border-[#17d1a5]/20 relative z-10"
                 alt="Now Playing"
               />

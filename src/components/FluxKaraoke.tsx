@@ -24,7 +24,7 @@ import {
   PlaySquare
 } from "lucide-react";
 
-const createSilentAudioBlobURL = (): string | undefined => {
+const createSilentAudioBlobURL = (): string => {
   if (typeof window === "undefined") return "";
   const sampleRate = 44100;
   const duration = 10;
@@ -729,7 +729,7 @@ export const FluxKaraoke = () => {
                           onClick={() => handlePlayTrack(track)}
                           className="w-12 h-12 rounded-lg overflow-hidden relative shrink-0"
                         >
-                          <img src={track.thumbnail || undefined} alt="" className="w-full h-full object-cover" />
+                          <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Play className="w-5 h-5 text-white fill-current" />
                           </div>
@@ -896,7 +896,7 @@ export const FluxKaraoke = () => {
                               onClick={() => handlePlayTrack(track)}
                               className="w-10 h-10 rounded-lg overflow-hidden relative shrink-0"
                             >
-                              <img src={track.thumbnail || undefined} alt="" className="w-full h-full object-cover" />
+                              <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Play className="w-4 h-4 text-white fill-current" />
                               </div>
@@ -956,7 +956,7 @@ export const FluxKaraoke = () => {
                               onClick={() => handlePlayTrack(track)}
                               className="w-28 h-28 rounded-xl overflow-hidden relative mb-2 shadow-md border border-white/5 group-hover:border-pink-500/30 transition-colors"
                             >
-                              <img src={track.thumbnail || undefined} alt="" className="w-full h-full object-cover" />
+                              <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Mic className="w-8 h-8 text-pink-400 drop-shadow-lg" />
                               </div>
@@ -984,7 +984,7 @@ export const FluxKaraoke = () => {
                     karaokeQueue.map((track, idx) => (
                       <div key={`${track.id}-${idx}`} className="w-full flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group">
                         <div className="w-10 h-10 rounded-lg overflow-hidden relative shrink-0">
-                          <img src={track.thumbnail || undefined} alt="" className="w-full h-full object-cover" />
+                          <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center font-bold text-xs text-white">
                             #{idx + 1}
                           </div>

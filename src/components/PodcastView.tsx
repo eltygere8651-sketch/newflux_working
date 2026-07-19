@@ -502,7 +502,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                         </button>
                         <div className="relative">
                           <img
-                            src={podcast.imageUrl || undefined}
+                            src={podcast.imageUrl}
                             alt={podcast.name}
                             className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
                             loading="lazy"
@@ -553,7 +553,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                       </button>
                       <div className="relative">
                         <img
-                          src={podcast.imageUrl || undefined}
+                          src={podcast.imageUrl}
                           alt={podcast.name}
                           className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
                           loading="lazy"
@@ -607,7 +607,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                         <div className="flex items-center gap-3">
                           <div className="relative shrink-0 cursor-pointer" onClick={() => playEpisode(episode, podcastContext as any)}>
                             <img 
-                              src={episode.imageUrl || podcastContext.imageUrl || undefined} 
+                              src={episode.imageUrl || podcastContext.imageUrl} 
                               className="w-14 h-14 md:w-16 md:h-16 rounded-xl object-cover shadow-sm bg-black/50" 
                               alt="" 
                               referrerPolicy="no-referrer"
@@ -687,7 +687,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                style={{ backgroundImage: `url(${selectedPodcast.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
              />
             <img
-              src={selectedPodcast.imageUrl || undefined}
+              src={selectedPodcast.imageUrl}
               alt={selectedPodcast.name}
               className="w-20 h-20 sm:w-24 sm:h-24 md:w-36 md:h-36 rounded-2xl shadow-xl object-cover shrink-0 relative z-10"
               referrerPolicy="no-referrer"
@@ -761,7 +761,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                       </div>
                       <div className="relative shrink-0 cursor-pointer" onClick={() => playEpisode(episode, selectedPodcast)}>
                         <img 
-                          src={episode.imageUrl || selectedPodcast.imageUrl || undefined} 
+                          src={episode.imageUrl || selectedPodcast.imageUrl} 
                           className="w-14 h-14 md:w-16 md:h-16 rounded-xl object-cover shadow-sm bg-black/50" 
                           alt="" 
                           referrerPolicy="no-referrer"
@@ -852,7 +852,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
           
           <div className="flex items-center gap-3 w-full px-2 pt-1.5 pb-0.5">
             {currentEpisode.imageUrl && (
-              <img src={currentEpisode.imageUrl || undefined} className="w-10 h-10 rounded-md object-cover shadow-lg shrink-0" alt="" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src={currentEpisode.imageUrl} className="w-10 h-10 rounded-md object-cover shadow-lg shrink-0" alt="" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             )}
             <div className="flex-1 min-w-0">
               <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">Escuchando Ahora</p>

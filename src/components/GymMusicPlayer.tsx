@@ -644,7 +644,7 @@ const getPlaylistSaves = (
 };
 
 const cleanUrl = (url: string) => {
-  if (!url) return undefined;
+  if (!url) return "";
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
     if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {
@@ -702,8 +702,8 @@ const getPlaylistImage = (pl?: any): string | null => {
 // Generate a 10-second true silent WAV blob to prevent CPU overload
 // Keeps iOS background lock without excessive CPU usage or network calls
 // MUST be 44100Hz to prevent iOS system mixer from downsampling music quality
-const createSilentAudioBlobURL = (): string | undefined => {
-  if (typeof window === "undefined") return undefined;
+const createSilentAudioBlobURL = (): string => {
+  if (typeof window === "undefined") return "";
   const sampleRate = 44100;
   const duration = 10; // Longer duration to avoid loop stuttering on Bluetooth
   const numSamples = sampleRate * duration;
@@ -3616,8 +3616,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       // Ensure user is signed in (anonymously if needed) to satisfy firestore rules
       let currentUser = user;
       if (!currentUser) {
-        const { recoverOrSignInGuest } = await import("../lib/guestAuth");
-        const cred = await recoverOrSignInGuest();
+        const {
+          signInAnonymously: firebaseSignInAnonymously,
+          auth: firebaseAuth,
+        } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
         currentUser = cred.user;
       }
 
@@ -3718,8 +3721,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       // Ensure user is signed in (anonymously if needed) to satisfy firestore rules
       let currentUser = user;
       if (!currentUser) {
-        const { recoverOrSignInGuest } = await import("../lib/guestAuth");
-        const cred = await recoverOrSignInGuest();
+        const {
+          signInAnonymously: firebaseSignInAnonymously,
+          auth: firebaseAuth,
+        } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
         currentUser = cred.user;
       }
 
@@ -4046,8 +4052,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     try {
       let currentUser = user;
       if (!currentUser) {
-        const { recoverOrSignInGuest } = await import("../lib/guestAuth");
-        const cred = await recoverOrSignInGuest();
+        const {
+          signInAnonymously: firebaseSignInAnonymously,
+          auth: firebaseAuth,
+        } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
         currentUser = cred.user;
       }
 
@@ -4470,8 +4479,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     try {
       let currentUser = user;
       if (!currentUser) {
-        const { recoverOrSignInGuest } = await import("../lib/guestAuth");
-        const cred = await recoverOrSignInGuest();
+        const {
+          signInAnonymously: firebaseSignInAnonymously,
+          auth: firebaseAuth,
+        } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
         currentUser = cred.user;
       }
 
@@ -5565,6 +5577,23 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
         </button>
 
+        {/* Soporte */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new Event("open-support"));
+          }}
+          className="relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+        >
+          <span className="flex items-center gap-1.5 font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">
+            Soporte
+            <MessageSquare className="w-3.5 h-3.5 text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+            {unreadRepliesCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-bounce">
+                {unreadRepliesCount}
+              </span>
+            )}
+          </span>
+        </button>
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
@@ -6138,7 +6167,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                           className={`relative z-10 w-full h-full rounded-xl overflow-hidden ${isEcoMode ? "shadow-sm" : "shadow-lg"} border border-white/5`}
                         >
                           <img
-                            src={displayArtwork || undefined}
+                            src={displayArtwork}
                             alt="Artwork"
                             className="w-full h-full object-cover transition-opacity duration-300"
                             referrerPolicy="no-referrer"
@@ -6375,7 +6404,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                               className={`relative z-10 w-full h-full rounded-2xl overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}
                             >
                               <img
-                                src={displayArtwork || undefined}
+                                src={displayArtwork}
                                 alt="Artwork"
                                 className="w-full h-full object-cover transition-opacity duration-300"
                                 referrerPolicy="no-referrer"
@@ -7021,7 +7050,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                });
                                setTrackListTab("artist");
                              }}>
-                                <img src={ytTrack.thumbnails[0]?.url || undefined} className="w-16 h-16 rounded-full object-cover" />
+                                <img src={ytTrack.thumbnails[0]?.url} className="w-16 h-16 rounded-full object-cover" />
                                 <div className="flex-1 min-w-0">
                                   <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">ARTISTA</span>
                                   <h4 className="text-[13px] font-bold text-white truncate leading-tight transition-colors uppercase tracking-tight mt-1">{ytTrack.title}</h4>
@@ -7669,7 +7698,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                       }
                                   }}>
                                     <div className="relative aspect-square rounded-xl overflow-hidden mb-2 shadow-lg group-hover/item:shadow-emerald-500/20 transition-all duration-300">
-                                      <img src={item.thumbnail || undefined} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
+                                      <img src={item.thumbnail} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
                                       <div className="absolute inset-0 bg-black/20 group-hover/item:bg-black/40 transition-colors flex items-center justify-center">
                                         <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all transform scale-75 group-hover/item:scale-100 shadow-xl">
                                           <Play className="w-5 h-5 text-black fill-black ml-1" />
@@ -8199,7 +8228,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               {/* Artwork */}
               <div className="relative w-10 h-10 shrink-0 rounded-md overflow-hidden bg-[#1a1a20]">
                 <img
-                  src={displayArtwork || undefined}
+                  src={displayArtwork}
                   className="w-full h-full object-cover"
                   alt=""
                   referrerPolicy="no-referrer"
