@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, signInAnonymously } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
-import { auth, db, registerAuthErrorHandler, generateDeviceHash } from "../lib/firebase";
+import { auth, db, registerAuthErrorHandler, generateDeviceHash, generateHardwareSignature } from "../lib/firebase";
 
 export interface UserAccessData {
   trialStart: number | null; // Timestamp ms
@@ -140,14 +140,21 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let deviceTrialStart = 0;
             try {
               const hash = await generateDeviceHash();
-              const hashRef = doc(db, 'vip_devices', hash);
-              const hashDoc = await getDoc(hashRef);
-              if (hashDoc.exists()) {
-                deviceHasTrial = true;
-                const hd = hashDoc.data();
-                deviceTrialStart = hd.activatedAt || 0;
-                if (Date.now() <= deviceTrialStart + 7 * 24 * 60 * 60 * 1000) {
-                  deviceTrialActive = true;
+              const hardwareSignature = await generateHardwareSignature();
+              const response = await fetch('/api/trial/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fingerprint: hash, hardwareSignature })
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.trialUsed) {
+                  deviceHasTrial = true;
+                  deviceTrialStart = data.activatedAt || 0;
+                  if (!data.trialExpired) {
+                    deviceTrialActive = true;
+                  }
                 }
               }
             } catch (e) {
