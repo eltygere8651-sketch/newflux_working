@@ -117,11 +117,7 @@ service cloud.firestore {
       allow get: if isSignedIn(); // Allow reading for migration
 
       // Los usuarios autenticados pueden listar/buscar sus propias solicitudes o comprobar por huella digital / IP
-      allow list: if isSignedIn() && (
-        resource.data.uid == request.auth.uid ||
-        resource.data.fingerprint != null ||
-        resource.data.ip != null
-      );
+      allow list: if isSignedIn();
 
       // Crear solicitud de prueba para su propia cuenta
       allow create: if isSignedIn() && (request.auth.uid == requestId) && (incoming().uid == request.auth.uid);

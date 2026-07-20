@@ -811,7 +811,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       const fp = getBrowserFingerprint();
 
       const requestsRef = collection(db, "trial_requests");
-      const q = query(requestsRef, where("fingerprint", "==", fp));
+      const q = query(requestsRef, where("uid", "==", user.uid));
       const snap = await getDocs(q);
 
       if (!snap.empty) {
