@@ -1,14 +1,10 @@
-const admin = require('firebase-admin');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const fs = require('fs');
 
-const config = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
-initializeApp({
-  credential: process.env.FIREBASE_SERVICE_ACCOUNT ? cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) : admin.credential.applicationDefault(),
-  projectId: config.projectId,
-});
-const db = config.firestoreDatabaseId ? getFirestore(config.firestoreDatabaseId) : getFirestore();
+const serviceAccount = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
+initializeApp({ credential: cert(serviceAccount) });
+const db = getFirestore();
 
 async function migrate() {
   const customPlaylists = await db.collection('explore_custom_playlists').get();

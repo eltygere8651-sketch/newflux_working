@@ -1,15 +1,11 @@
 import admin from "firebase-admin";
 import fs from "fs";
-import { getFirestore } from "firebase-admin/firestore";
 
-const config = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf8"));
+const serviceAccount = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf8"));
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: process.env.FIREBASE_SERVICE_ACCOUNT ? admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) : admin.credential.applicationDefault(),
-    projectId: config.projectId,
-  });
+  admin.initializeApp({ credential: admin.credential.cert(serviceAccount.serviceAccount) });
 }
-const db = config.firestoreDatabaseId ? getFirestore(config.firestoreDatabaseId) : getFirestore();
+const db = admin.firestore();
 
 async function test() {
   console.log("Fetching users...");

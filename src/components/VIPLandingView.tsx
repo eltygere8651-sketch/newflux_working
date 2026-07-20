@@ -1,8 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { db, auth, generateDeviceHash, generateHardwareSignature, signInWithCustomToken } from '../lib/firebase';
-import { signInAnonymously, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { db, auth } from '../lib/firebase';
+import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+
+const generateDeviceHash = async () => {
+  const w = window.screen.width || 0;
+  const h = window.screen.height || 0;
+  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
+  
+  const ua = navigator.userAgent;
+  let os = 'Unknown';
+  if (ua.indexOf('Win') !== -1) os = 'Windows';
+  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
+  if (ua.indexOf('Linux') !== -1) os = 'Linux';
+  if (ua.indexOf('Android') !== -1) os = 'Android';
+  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
+  
+  let canvasFingerprint = '';
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText('flux,music,vip', 2, 15);
+      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+      ctx.fillText('flux,music,vip', 4, 17);
+      canvasFingerprint = canvas.toDataURL();
+    }
+  } catch (e) {}
+  
+  const components = [
+    os,
+    screenRes,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.hardwareConcurrency || 'unknown',
+    (navigator as any).deviceMemory || 'unknown',
+    canvasFingerprint
+  ].join('|');
+  
+  const msgBuffer = new TextEncoder().encode(components);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
 
 const getOrCreateDeviceId = () => {
   let id = localStorage.getItem('flux_vip_device_id');
@@ -20,8 +66,6 @@ export const VIPLandingView = () => {
   const [trialState, setTrialState] = useState<TrialState>('loading');
   const [campaignId, setCampaignId] = useState<string | null>(null);
 
-  const [tapCount, setTapCount] = useState(0);
-
   useEffect(() => {
     let mounted = true;
     const init = async () => {
@@ -37,30 +81,15 @@ export const VIPLandingView = () => {
 
       try {
         const hash = await generateDeviceHash();
-        const hardwareSignature = await generateHardwareSignature();
-        
-        // Consultar el estado del dispositivo de forma segura en el servidor
-        const response = await fetch('/api/trial/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fingerprint: hash, hardwareSignature })
-        });
+        const hashRef = doc(db, 'vip_devices', hash);
+        const hashDoc = await getDoc(hashRef);
 
-        if (!response.ok) {
-          let errMsg = 'No se pudo verificar el estado de la prueba';
-          try {
-            const errData = await response.json();
-            if (errData && errData.error) errMsg = errData.error;
-          } catch (_) {}
-          throw new Error(errMsg);
-        }
-        const data = await response.json();
-        
-        const adminBypass = localStorage.getItem("flux_admin_bypass") === "true";
-
-        if (mounted && data.success) {
-          if (data.trialUsed && !adminBypass) {
-            if (data.trialExpired) {
+        if (mounted) {
+          if (hashDoc.exists()) {
+            const data = hashDoc.data();
+            const activatedAt = data.activatedAt || 0;
+            const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+            if (isExpired) {
               setTrialState('expired');
             } else {
               setTrialState('active');
@@ -68,8 +97,6 @@ export const VIPLandingView = () => {
           } else {
             setTrialState('new');
           }
-        } else {
-          if (mounted) setTrialState('new');
         }
       } catch (e) {
         if (mounted) setTrialState('new');
@@ -79,93 +106,122 @@ export const VIPLandingView = () => {
     return () => { mounted = false; };
   }, []);
 
-  const handleTitleTap = () => {
-    setTapCount(prev => {
-      const newCount = prev + 1;
-      if (newCount >= 5) {
-        localStorage.setItem("flux_admin_bypass", "true");
-        alert("Modo Bypass Administrador activado. Las heurísticas y validaciones de huella/IP serán ignoradas.");
-        return 0;
-      }
-      return newCount;
-    });
-  };
-
   const handleActivateOrContinue = async () => {
     setIsLoading(true);
     try {
+      const uuid = getOrCreateDeviceId();
       const deviceHash = await generateDeviceHash();
-      const hardwareSignature = await generateHardwareSignature();
-      const adminBypass = localStorage.getItem("flux_admin_bypass") === "true";
       
-      // Llamar al API seguro del servidor para la activación VIP atómica
-      const response = await fetch('/api/trial/activate-vip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fingerprint: deviceHash, campaignId, hardwareSignature, adminBypass })
-      });
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          // El dispositivo ya fue usado. Validemos si está expirado o si necesita re-autenticar
-          const checkRes = await fetch('/api/trial/check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fingerprint: deviceHash })
-          });
-          
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.success && checkData.trialUsed) {
-              if (checkData.trialExpired) {
-                setTrialState('expired');
-              } else {
-                // Recuperar inicio de sesión para el dispositivo registrado
-                const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-                const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-                await signInWithEmailAndPassword(auth, vipEmail, vipPass);
-                window.history.replaceState({}, '', '/');
-                window.location.reload();
-                return;
-              }
-            }
-          }
+      const hashRef = doc(db, 'vip_devices', deviceHash);
+      const hashDoc = await getDoc(hashRef);
+      
+      if (hashDoc.exists()) {
+        const data = hashDoc.data();
+        const activatedAt = data.activatedAt || 0;
+        const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+        
+        if (isExpired) {
+          setTrialState('expired');
           setIsLoading(false);
           return;
-        }
-        
-        let errorMsg = 'Fallo de activación';
-        try {
-          const errData = await response.json();
-          errorMsg = errData.error || errorMsg;
-        } catch (_) {
+        } else {
+          // Continue existing trial using persistent email/password to avoid creating a new UID
+          const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
+          const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
+          
           try {
-            const txt = await response.text();
-            if (txt) errorMsg = txt;
-          } catch (_) {}
-        }
-        throw new Error(errorMsg);
-      }
+            await signInWithEmailAndPassword(auth, vipEmail, vipPass);
+            window.history.replaceState({}, '', '/');
+            window.location.reload();
+            return;
+          } catch (signInErr: any) {
+            console.error("Recovery signIn error:", signInErr);
+            // If they don't exist yet as email/pass (legacy anonymous account), we fallback to creating an email/pass account so next time they don't lose it
+            const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
+            const newUid = userCred.user.uid;
+            const now = Date.now();
+            
+            await setDoc(doc(db, 'vip_activations', newUid), {
+              uuid,
+              deviceHash,
+              createdAt: activatedAt,
+              expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
+              version: 3,
+              status: 'active',
+              campaignId: campaignId || null
+            });
+            
+            await setDoc(doc(db, "users", newUid), {
+              email: vipEmail,
+              displayName: "Socio VIP",
+              isVIPGuest: true,
+              createdAt: serverTimestamp(),
+              lastLogin: serverTimestamp(),
+              lastActiveAt: now,
+              totalUsageTime: 0,
+              plan: "free",
+              trialStart: activatedAt,
+              maxUsers: 1,
+              originCampaign: campaignId || null,
+            }, { merge: true });
 
-      let data: any;
-      try {
-        data = await response.json();
-      } catch (_) {
-        throw new Error('Respuesta del servidor no válida');
-      }
-      if (data.success && data.customToken) {
-        // Iniciar sesión con el custom token de alta seguridad provisto por el servidor
-        await signInWithCustomToken(auth, data.customToken);
-        
-        if (campaignId) {
-          updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
-        }
+            await updateDoc(hashRef, {
+              uid: newUid,
+              lastRecoveredAt: now
+            });
 
-        window.history.replaceState({}, '', '/');
-        window.location.reload();
+            window.history.replaceState({}, '', '/');
+            window.location.reload();
+            return;
+          }
+        }
       }
+      
+      // New activation
+      const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
+      const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
+      const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
+      const uid = userCred.user.uid;
+      const now = Date.now();
+      
+      await setDoc(hashRef, { 
+        activatedAt: now,
+        uid: uid 
+      });
+      
+      await setDoc(doc(db, 'vip_activations', uid), {
+        uuid,
+        deviceHash,
+        createdAt: now,
+        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+        version: 3,
+        status: 'active',
+        campaignId: campaignId || null
+      });
+      
+      if (campaignId) {
+        updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
+      }
+      
+      await setDoc(doc(db, "users", uid), {
+        email: vipEmail,
+        displayName: "Socio VIP",
+        isVIPGuest: true,
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        lastActiveAt: now,
+        totalUsageTime: 0,
+        plan: "free",
+        trialStart: now,
+        maxUsers: 1,
+        originCampaign: campaignId || null,
+      }, { merge: true });
+      
+      window.history.replaceState({}, '', '/');
+      window.location.reload();
+
     } catch (e: any) {
-      console.error("Fallo al activar prueba VIP:", e);
+      console.error(e);
       setTrialState('new');
     } finally {
       setIsLoading(false);
@@ -255,7 +311,7 @@ export const VIPLandingView = () => {
        
        <div className="w-full max-w-sm flex flex-col items-center z-10">
           <span className="text-6xl mb-4 block">🎵</span>
-          <h1 onClick={handleTitleTap} className="text-3xl font-black text-white mb-2 tracking-tight select-none cursor-pointer">Flux Music Premium</h1>
+          <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Flux Music Premium</h1>
           <h2 className="text-xl text-emerald-400 font-bold mb-6">7 días gratis</h2>
           
           <div className="flex flex-col gap-1 items-center mb-10 text-slate-300 font-medium text-lg">

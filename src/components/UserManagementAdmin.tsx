@@ -17,7 +17,6 @@ import {
   getCountFromServer,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { useFirebase } from "./FirebaseProvider";
 import {
   X,
   UserX,
@@ -37,7 +36,6 @@ import {
   ChevronLeft,
   ChevronRight,
   QrCode,
-  RotateCcw,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
@@ -77,7 +75,6 @@ const formatUsageTime = (seconds: number | undefined) => {
 };
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
-  const { user } = useFirebase();
   const [users, setUsers] = useState<any[]>([]);
   const usersRef = useRef<any[]>([]);
   usersRef.current = users;
@@ -926,19 +923,82 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  const fetchRequests = async (_pageIndex?: number, _limitSize?: number) => {
+  const fetchRequests = async (
+    pageIndex = requestsPage > 0 ? requestsPage - 1 : 0,
+    limitSize = requestsPageSize,
+  ) => {
     try {
       setLoadingRequests(true);
-      const response = await fetch("/api/admin/trial-requests", {
-        headers: { "x-admin-email": user?.email || "" }
-      });
-      if (!response.ok) throw new Error(`Error: ${response.status}`);
-      const data = await response.json();
-      if (data.success) {
-        setRequests(data.requests || []);
+
+      let q = query(
+        collection(db, "trial_requests"),
+        orderBy("createdAt", "desc"),
+        limit(limitSize),
+      );
+      const startDoc = requestsPageHistory[pageIndex];
+      if (startDoc) {
+        q = query(
+          collection(db, "trial_requests"),
+          orderBy("createdAt", "desc"),
+          startAfter(startDoc),
+          limit(limitSize),
+        );
       }
-    } catch (e: any) {
+
+      const snap = await getDocs(q);
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+
+      list.sort((a, b) => {
+        if (a.status === "pending" && b.status !== "pending") return -1;
+        if (a.status !== "pending" && b.status === "pending") return 1;
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+
+      setRequests(list);
+      setHasMoreRequests(snap.docs.length === limitSize);
+
+      if (snap.docs.length > 0) {
+        setRequestsPageHistory((prev) => {
+          const next = [...prev];
+          next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
+          return next;
+        });
+      }
+      setRequestsPage(pageIndex + 1);
+    } catch (e) {
       console.error("Error loaded trial requests:", e);
+      try {
+        let q = query(collection(db, "trial_requests"), limit(limitSize));
+        const startDoc = requestsPageHistory[pageIndex];
+        if (startDoc) {
+          q = query(
+            collection(db, "trial_requests"),
+            startAfter(startDoc),
+            limit(limitSize),
+          );
+        }
+        const snap = await getDocs(q);
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+
+        list.sort((a, b) => {
+          if (a.status === "pending" && b.status !== "pending") return -1;
+          if (a.status !== "pending" && b.status === "pending") return 1;
+          return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+
+        setRequests(list);
+        setHasMoreRequests(snap.docs.length === limitSize);
+        if (snap.docs.length > 0) {
+          setRequestsPageHistory((prev) => {
+            const next = [...prev];
+            next[pageIndex + 1] = snap.docs[snap.docs.length - 1];
+            return next;
+          });
+        }
+        setRequestsPage(pageIndex + 1);
+      } catch (innerErr) {
+        console.error("Fallback failed:", innerErr);
+      }
     } finally {
       setLoadingRequests(false);
     }
@@ -990,32 +1050,26 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleApproveRequest = async (req: any) => {
     askConfirm(`¿Aprobar prueba de 7 días para ${req.email}?`, async () => {
       try {
-        const response = await fetch("/api/trial/approve-request", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reqId: req.id,
-            uid: req.uid,
-            email: req.email,
-            fingerprint: req.fingerprint || null,
-            adminEmail: "eltygere8651@gmail.com"
-          })
+        await updateDoc(doc(db, "users", req.uid), {
+          plan: "free",
+          trialStart: Date.now(),
+          trialDuration: 7,
+          subscriptionEnd: null,
         });
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || "Error en el servidor al aprobar.");
-        }
+        await updateDoc(doc(db, "trial_requests", req.id), {
+          status: "approved",
+        });
 
         showAlert(
           "Acceso de prueba de 7 días activado y solicitud aprobada con éxito!",
         );
         fetchUsers();
         fetchRequests();
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
         showAlert(
-          `Error al aprobar la solicitud: ${err.message}`,
+          "Error al aprobar la solicitud. Revisa si el usuario existe.",
         );
       }
     });
@@ -1024,16 +1078,13 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleRejectRequest = async (reqId: string) => {
     askConfirm("¿Rechazar esta solicitud de prueba?", async () => {
       try {
-        const response = await fetch(`/api/admin/trial-requests/${reqId}/reject`, {
-          method: "POST",
-          headers: { "x-admin-email": user?.email || "" }
+        await updateDoc(doc(db, "trial_requests", reqId), {
+          status: "rejected",
         });
-        if (!response.ok) throw new Error(`Error: ${response.status}`);
         showAlert("Solicitud rechazada.");
         fetchRequests();
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        alert(`Error al rechazar: ${err.message}`);
       }
     });
   };
@@ -1041,16 +1092,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleDeleteRequestRecord = async (reqId: string) => {
     askConfirm("¿Eliminar registro de esta solicitud?", async () => {
       try {
-        const response = await fetch(`/api/admin/trial-requests/${reqId}`, {
-          method: "DELETE",
-          headers: { "x-admin-email": user?.email || "" }
-        });
-        if (!response.ok) throw new Error(`Error: ${response.status}`);
-        showAlert("Registro eliminado.");
+        await deleteDoc(doc(db, "trial_requests", reqId));
         fetchRequests();
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        alert(`Error al eliminar: ${err.message}`);
       }
     });
   };
@@ -1214,52 +1259,42 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       const oneDayAgo = now - 24 * 60 * 60 * 1000;
       const oneDayAgoDate = new Date(oneDayAgo);
 
-      const getCountSafe = async (q: any) => {
-        try {
-          const snap = await getCountFromServer(q);
-          return snap.data().count;
-        } catch (e) {
-          console.warn("safeCount error for query:", e);
-          return 0;
-        }
-      };
-
       // Fetch VIP, User, and Request stats in a highly efficient, parallelized, eco-friendly way (1 read per count request)
       const [
-        activatedCount,
-        activeCount,
-        activeTodayCount,
-        expiredCount,
-        conversionsCount,
-        totalUsersCount,
-        newUsersNormalCount,
-        newUsersVipCount,
-        pendingRequestsCount,
-        activeTrialsCount,
-        activePaidCount,
+        activatedSnap,
+        activeSnap,
+        activeTodaySnap,
+        expiredSnap,
+        conversionsSnap,
+        totalUsersSnap,
+        newUsersNormalSnap,
+        newUsersVipSnap,
+        pendingRequestsSnap,
+        activeTrialsSnap,
+        activePaidSnap,
       ] = await Promise.all([
         // 1. VIP Guest Activations
-        getCountSafe(collection(db, "vip_activations")),
-        getCountSafe(
+        getCountFromServer(collection(db, "vip_activations")),
+        getCountFromServer(
           query(
             collection(db, "vip_activations"),
             where("expiresAt", ">=", now),
           ),
         ),
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "vip_activations"),
             where("createdAt", ">=", oneDayAgo),
           ),
         ),
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "vip_activations"),
             where("expiresAt", "<", now),
           ),
         ),
         // 2. VIP Conversions: Users registered as VIP guests who upgraded to paid/premium plans
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "users"),
             where("isVIPGuest", "==", true),
@@ -1267,37 +1302,37 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           ),
         ),
         // 3. User stats (Global)
-        getCountSafe(collection(db, "users")),
+        getCountFromServer(collection(db, "users")),
         // 4. Normal Users created in last 24h (storing createdAt as serverTimestamp/Date object)
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "users"),
             where("createdAt", ">=", oneDayAgoDate),
           ),
         ),
         // 5. VIP Guest Users created in last 24h (storing createdAt as number of milliseconds)
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "users"),
             where("createdAt", ">=", oneDayAgo),
           ),
-        ),
+        ).catch(() => ({ data: () => ({ count: 0 }) })),
         // 6. Trial requests
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "trial_requests"),
             where("status", "==", "pending"),
           ),
         ),
         // 7. Active free trial users
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "users"),
             where("plan", "==", "free"),
           ),
         ),
         // 8. Active paid subscriber plans
-        getCountSafe(
+        getCountFromServer(
           query(
             collection(db, "users"),
             where("plan", "in", ["premium", "1 Usuario", "2 Usuarios", "5 Usuarios"]),
@@ -1305,27 +1340,32 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         ),
       ]);
 
-      const resolvedNewUsers = newUsersNormalCount + newUsersVipCount;
+      const resolvedNewUsers =
+        newUsersNormalSnap.data().count +
+        ((newUsersVipSnap &&
+          typeof newUsersVipSnap.data === "function" &&
+          newUsersVipSnap.data().count) ||
+          0);
 
       setVipStats({
-        activated: activatedCount,
-        active: activeCount,
-        activeToday: activeTodayCount,
-        expired: expiredCount,
-        conversions: conversionsCount,
+        activated: activatedSnap.data().count,
+        active: activeSnap.data().count,
+        activeToday: activeTodaySnap.data().count,
+        expired: expiredSnap.data().count,
+        conversions: conversionsSnap.data().count,
       });
 
       setAdminStats((prev) => ({
         ...prev,
-        totalUsers: totalUsersCount,
+        totalUsers: totalUsersSnap.data().count,
         newUsers: resolvedNewUsers,
       }));
 
       setAnalyticsStats({
-        totalUsers: totalUsersCount,
-        pendingRequests: pendingRequestsCount,
-        activeTrials: activeTrialsCount,
-        activePaid: activePaidCount,
+        totalUsers: totalUsersSnap.data().count,
+        pendingRequests: pendingRequestsSnap.data().count,
+        activeTrials: activeTrialsSnap.data().count,
+        activePaid: activePaidSnap.data().count,
       });
     } catch (err) {
       console.error("Error fetching analytics:", err);
@@ -1485,11 +1525,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
             }).catch(() => {});
           }
 
-          try {
-            await deleteDoc(userDocRef);
-          } catch (delErr) {
-            console.error("No se pudo eliminar el documento del usuario directamente:", delErr);
-          }
+          await deleteDoc(userDocRef);
           await deleteDoc(doc(db, "trial_requests", userId)).catch(() => {});
           await deleteDoc(vipActDocRef).catch(() => {});
 
@@ -1649,7 +1685,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                 <span>Campañas QR</span>
               </button>
-
             </div>
 
             {/* Botón Scroll Derecha (Se muestra únicamente en escritorio, oculto en móviles/tablets para dejar paso al gesto slide) */}
@@ -2759,7 +2794,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
             )}
 
             {activeTab === "qr_campaigns" && <QRCampaignsAdmin />}
-
 
             {/* Mobile Fixed Close Button */}
             <div className="sm:hidden flex shrink-0 p-3 bg-[#0a0a0c] border-t border-white/5 mt-auto">

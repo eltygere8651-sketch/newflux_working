@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Innertube } from "youtubei.js";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
-import { getFirestoreDb } from "./src/lib/firebase-admin.js";
+import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -55,14 +55,6 @@ console.error = (...args) => {
 dotenv.config();
 
 const app = express();
-
-// Global Logger for API requests (to debug 405/404 in production)
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/")) {
-    console.log(`[API_REQUEST] ${req.method} ${req.path}`);
-  }
-  next();
-});
 
 // Trust proxy if we are behind Vercel or other reverse proxies
 app.set("trust proxy", 1);
@@ -1880,208 +1872,9 @@ app.get("/api/oembed", async (req, res) => {
   }
 });
 
-// Secure Device-Trial Checking Endpoint
-app.post("/api/trial/check", async (req, res) => {
-  console.log("DEBUG: /api/trial/check called");
-  const { fingerprint, hardwareSignature, adminBypass } = req.body;
-  if (!fingerprint) {
-    return res.status(400).json({ error: "Parámetro fingerprint es requerido" });
-  }
-
-  const dbAdmin = getFirestoreDb();
-  if (!dbAdmin) {
-    return res.status(503).json({ error: "Firebase no inicializado en el servidor" });
-  }
-
-  try {
-    const devDoc = await dbAdmin.collection("devices").doc(fingerprint).get();
-    const vipDoc = await dbAdmin.collection("vip_devices").doc(fingerprint).get();
-    
-    let existsInDev = devDoc.exists && devDoc.data()?.trialUsed;
-    let existsInVip = vipDoc.exists;
-    let finalDoc = existsInDev ? devDoc : (existsInVip ? vipDoc : null);
-
-    const reqDoc = await dbAdmin.collection("trial_requests").where("fingerprint", "==", fingerprint).limit(1).get();
-    const pendingReq = !reqDoc.empty ? reqDoc.docs[0].data() : null;
-
-    if (!adminBypass && (existsInDev || existsInVip)) {
-      const activatedAt = existsInDev 
-        ? (finalDoc?.data()?.trialActivatedAt || 0)
-        : (vipDoc.data()?.activatedAt || 0);
-      
-      const isExpired = Date.now() > (activatedAt + 7 * 24 * 60 * 60 * 1000);
-      return res.json({
-        success: true,
-        trialUsed: true,
-        trialExpired: isExpired,
-        activatedAt,
-        status: "already_claimed"
-      });
-    }
-
-    if (!adminBypass && pendingReq) {
-      return res.json({
-        success: true,
-        trialUsed: false,
-        status: pendingReq.status
-      });
-    }
-
-    return res.json({
-      success: true,
-      trialUsed: false,
-      status: "idle"
-    });
-  } catch (error: any) {
-    if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
-      console.warn("WARNING: Firebase Admin lacks permissions (ADC sandbox). Bypassing trial check.");
-      return res.json({
-        success: true,
-        trialUsed: false,
-        status: "idle"
-      });
-    }
-    console.error("Error checking trial status:", error);
-    return res.status(500).json({ error: "Error al comprobar el estado de prueba" });
-  }
-});
-
-// Secure atomic instant VIP Trial activation and custom-token auth payload generator
-app.post("/api/trial/activate-vip", async (req, res) => {
-  const { fingerprint, campaignId, hardwareSignature, adminBypass } = req.body;
-  if (!fingerprint) {
-    return res.status(400).json({ error: "Parámetro fingerprint es requerido" });
-  }
-
-  // Capturar IP
-  let ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "0.0.0.0";
-  if (ip.includes(",")) ip = ip.split(",")[0].trim();
-
-  const dbAdmin = getFirestoreDb();
-  if (!dbAdmin) {
-    return res.status(503).json({ error: "Firebase no inicializado en el servidor" });
-  }
-
-  try {
-    const devRef = dbAdmin.collection("devices").doc(fingerprint);
-    const vipRef = dbAdmin.collection("vip_devices").doc(fingerprint);
-
-    let customToken = "";
-    const now = Date.now();
-
-    // 1. Verificar límites por IP (Heurística anti-abuso)
-    if (!adminBypass) {
-      const recentTrialsByIp = await dbAdmin.collection("vip_activations")
-        .where("ip", "==", ip)
-        .where("createdAt", ">", now - 24 * 60 * 60 * 1000)
-        .get();
-      
-      if (recentTrialsByIp.size >= 3) {
-        return res.status(429).json({ error: "Límite de pruebas alcanzado para esta conexión. Intente mañana." });
-      }
-    }
-
-    // Run a transaction to ensure atomicity and prevent race conditions
-    await dbAdmin.runTransaction(async (transaction) => {
-      const devDoc = await transaction.get(devRef);
-      const vipDoc = await transaction.get(vipRef);
-
-      const existsInDev = devDoc.exists && devDoc.data()?.trialUsed;
-      const existsInVip = vipDoc.exists;
-
-      if (!adminBypass && (existsInDev || existsInVip)) {
-        throw new Error("ALREADY_USED");
-      }
-
-
-      // Generate credentials
-      const vipEmail = `socio.${fingerprint.substring(0, 6)}@fluxmusic.com`;
-      const vipPass = `${fingerprint.substring(0, 10)}_fluxvip`;
-      const uid = `vip_${fingerprint.substring(0, 20)}`;
-
-      // Create/Update Auth User
-      try {
-        await admin.auth().createUser({
-          uid: uid,
-          email: vipEmail,
-          password: vipPass,
-          displayName: "Socio VIP"
-        });
-      } catch (authErr: any) {
-        if (authErr.code !== 'auth/email-already-exists' && authErr.code !== 'auth/uid-already-exists') {
-          throw authErr;
-        }
-      }
-
-      // Perform transaction writes
-      transaction.set(devRef, {
-        deviceId: fingerprint,
-        hardwareSignature: hardwareSignature || null,
-        ip: ip,
-        firstSeen: now,
-        trialUsed: true,
-        trialActivatedAt: now,
-        trialExpiresAt: now + 7 * 24 * 60 * 60 * 1000,
-        activatedByUser: uid,
-        lastSeen: now,
-        status: "active"
-      }, { merge: true });
-
-      transaction.set(vipRef, {
-        activatedAt: now,
-        uid: uid
-      }, { merge: true });
-
-      const userRef = dbAdmin.collection("users").doc(uid);
-      transaction.set(userRef, {
-        email: vipEmail,
-        displayName: "Socio VIP",
-        isVIPGuest: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastLogin: admin.firestore.FieldValue.serverTimestamp(),
-        lastActiveAt: now,
-        totalUsageTime: 0,
-        plan: "free",
-        trialStart: now,
-        trialDuration: 7,
-        maxUsers: 1,
-        originCampaign: campaignId || null
-      }, { merge: true });
-
-      const activationRef = dbAdmin.collection("vip_activations").doc(uid);
-      transaction.set(activationRef, {
-        uuid: fingerprint,
-        deviceHash: fingerprint,
-        hardwareSignature: hardwareSignature || null,
-        ip: ip,
-        createdAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-        version: 3,
-        status: "active",
-        campaignId: campaignId || null
-      }, { merge: true });
-
-      // Generate custom token
-      customToken = await admin.auth().createCustomToken(uid);
-    });
-
-    return res.json({ success: true, customToken });
-  } catch (error: any) {
-    if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
-      console.warn("WARNING: Firebase Admin lacks permissions (ADC sandbox). Bypassing VIP activation.");
-      return res.json({ success: true, customToken: "mock-token-for-sandbox-preview" });
-    }
-    if (error.message === "ALREADY_USED") {
-      return res.status(403).json({ error: "Este dispositivo ya ha disfrutado de una prueba gratuita de 7 días." });
-    }
-    console.error("Error activating VIP trial:", error);
-    return res.status(500).json({ error: "Error interno al activar la prueba VIP" });
-  }
-});
-
-// Secure Trial Request Notifications & Verification Endpoint
+// Trial Request Notifications & Verification Endpoint
 app.post("/api/trial/request", async (req, res) => {
-  const { uid, email, displayName, fingerprint, hardwareSignature, adminBypass } = req.body;
+  const { uid, email, displayName, fingerprint } = req.body;
 
   if (!uid || !email) {
     return res
@@ -2090,182 +1883,98 @@ app.post("/api/trial/request", async (req, res) => {
   }
 
   // Capturar la IP real del cliente
-  let ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "0.0.0.0";
-  if (ip.includes(",")) ip = ip.split(",")[0].trim();
-
-  const dbAdmin = getFirestoreDb();
-  if (!dbAdmin) {
-    return res.status(503).json({ error: "Firebase no inicializado en el servidor" });
+  let ip =
+    (req.headers["x-forwarded-for"] as string) ||
+    req.socket.remoteAddress ||
+    "IP_DESCONOCIDA";
+  if (ip.includes(",")) {
+    ip = ip.split(",")[0].trim();
   }
 
-  try {
-    // 1. Verificar si el dispositivo ya utilizó la prueba gratuita antes de crear la solicitud
-    if (fingerprint && !adminBypass) {
-      const devDoc = await dbAdmin.collection("devices").doc(fingerprint).get();
-      const vipDoc = await dbAdmin.collection("vip_devices").doc(fingerprint).get();
-      
-      let alreadyUsed = (devDoc.exists && devDoc.data()?.trialUsed) || vipDoc.exists;
+  console.log(
+    `Solicitud de prueba recibida para ${email}. IP: ${ip}, Fingerprint: ${fingerprint}`,
+  );
 
+  // Enviar a Telegram de forma completamente gratuita si está configurado
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
 
-      if (alreadyUsed) {
-        return res.status(403).json({ error: "Este dispositivo ya ha disfrutado de una prueba gratuita de 7 días." });
-      }
+  if (botToken && chatId) {
+    try {
+      const text = `🔥 *Nueva Solicitud de Acceso (14 Días Gratis)*\n\n👤 *Usuario:* ${displayName || "Sin Nombre"}\n📧 *Email:* ${email}\n🆔 *UID:* ${uid}\n🌐 *IP:* ${ip}\n🖥️ *Huella:* \`${fingerprint || "N/A"}\`\n\n_Puedes concederle acceso desde el panel de administrador._`;
 
-      // Verificar si hay solicitudes pendientes para esta huella o firma
-      const existingReqs = await dbAdmin.collection("trial_requests")
-        .where("fingerprint", "==", fingerprint)
-        .get();
-      
-      let alreadyRequested = false;
-      existingReqs.forEach(doc => {
-        const data = doc.data();
-        if (data.status === "pending" || data.status === "approved") {
-          alreadyRequested = true;
-        }
-      });
-
-
-      if (!adminBypass && alreadyRequested) {
-        return res.status(400).json({ error: "Ya existe una solicitud de prueba en curso para este dispositivo." });
-      }
-    }
-
-    // 2. Crear la solicitud de prueba en Firestore de forma segura desde el servidor
-    const now = Date.now();
-    await dbAdmin.collection("trial_requests").doc(uid).set({
-      uid,
-      email,
-      fingerprint: fingerprint || null,
-      hardwareSignature: hardwareSignature || null,
-      ip,
-      status: "pending",
-      createdAt: now
-    }, { merge: true });
-
-    console.log(
-      `Solicitud de prueba registrada en servidor para ${email}. IP: ${ip}, Fingerprint: ${fingerprint}`,
-    );
-
-    // Enviar a Telegram de forma completamente gratuita si está configurado
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
-
-    if (botToken && chatId) {
-      try {
-        const text = `🔥 *Nueva Solicitud de Acceso (7 Días Gratis)*\n\n👤 *Usuario:* ${displayName || "Sin Nombre"}\n📧 *Email:* ${email}\n🆔 *UID:* ${uid}\n🌐 *IP:* ${ip}\n🖥️ *Huella:* \`${fingerprint || "N/A"}\`\n\n_Puedes concederle acceso desde el panel de administrador._`;
-
-        const response = await fetch(
-          `https://api.telegram.org/bot${botToken}/sendMessage`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: text,
-              parse_mode: "Markdown",
-            }),
+      const response = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: "Markdown",
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        console.error(
+          "Error al enviar notificación a Telegram:",
+          await response.text(),
         );
+      } else {
+        console.log("Notificación enviada con éxito a Telegram.");
+      }
+    } catch (err) {
+      console.error("Error al despachar notificación a Telegram:", err);
+    }
+  }
 
-        if (!response.ok) {
-          console.error(
-            "Error al enviar notificación a Telegram:",
-            await response.text(),
-          );
-        } else {
-          console.log("Notificación enviada con éxito a Telegram.");
+  return res.json({ success: true, clientIp: ip });
+});
+
+let isFirebaseAdminInitialized = false;
+
+function getFirestoreDb() {
+  if (!isFirebaseAdminInitialized) {
+    try {
+      const configPath = path.join(
+        process.cwd(),
+        "firebase-applet-config.json",
+      );
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        admin.initializeApp({
+          credential: process.env.FIREBASE_SERVICE_ACCOUNT ? admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) : admin.credential.applicationDefault(),
+          projectId: config.projectId,
+        });
+        isFirebaseAdminInitialized = true;
+      }
+    } catch (e) {
+      console.error("Error initializing Firebase Admin in backend:", e);
+    }
+  }
+  if (isFirebaseAdminInitialized) {
+    try {
+      const configPath = path.join(
+        process.cwd(),
+        "firebase-applet-config.json",
+      );
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        const dbId = config.firestoreDatabaseId;
+        if (dbId) {
+          return getFirestore(dbId);
         }
-      } catch (err) {
-        console.error("Error al despachar notificación a Telegram:", err);
       }
+      return getFirestore();
+    } catch (e) {
+      console.error("Error getting firestore instance in backend:", e);
     }
-
-    return res.json({ success: true, clientIp: ip });
-  } catch (error: any) {
-    if (error.code === 7 || (error.message && error.message.includes('PERMISSION_DENIED'))) {
-      console.warn("WARNING: Firebase Admin lacks permissions (ADC sandbox). Bypassing trial request.");
-      return res.json({ success: true, clientIp: ip });
-    }
-    console.error("Error submitting trial request in server:", error);
-    return res.status(500).json({ error: "Error interno al enviar la solicitud" });
   }
-});
-
-// Secure Administrator-only Approval Endpoint that registers device trial permanently
-app.post("/api/trial/approve-request", async (req, res) => {
-  const { reqId, uid, email, fingerprint, adminEmail } = req.body;
-
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    return res.status(403).json({
-      error: "No autorizado. Solo el administrador maestro puede aprobar pruebas.",
-    });
-  }
-
-  if (!uid || !reqId) {
-    return res.status(400).json({ error: "Parámetros reqId y uid son requeridos." });
-  }
-
-  const dbAdmin = getFirestoreDb();
-  if (!dbAdmin) {
-    return res.status(503).json({ error: "Firebase no inicializado en el servidor" });
-  }
-
-  try {
-    const now = Date.now();
-    const userRef = dbAdmin.collection("users").doc(uid);
-    const reqRef = dbAdmin.collection("trial_requests").doc(reqId);
-    
-    await dbAdmin.runTransaction(async (transaction) => {
-      // 1. Actualizar usuario
-      transaction.update(userRef, {
-        plan: "free",
-        trialStart: now,
-        trialDuration: 7,
-        subscriptionEnd: null
-      });
-
-      // 2. Actualizar solicitud
-      transaction.update(reqRef, {
-        status: "approved"
-      });
-
-      // 3. Registrar el dispositivo físico como usado de forma permanente y atómica
-      if (fingerprint) {
-        const devRef = dbAdmin.collection("devices").doc(fingerprint);
-        transaction.set(devRef, {
-          deviceId: fingerprint,
-          firstSeen: now,
-          trialUsed: true,
-          trialActivatedAt: now,
-          trialExpiresAt: now + 7 * 24 * 60 * 60 * 1000,
-          activatedByUser: uid,
-          lastSeen: now,
-          status: "active"
-        }, { merge: true });
-
-        const vipRef = dbAdmin.collection("vip_devices").doc(fingerprint);
-        transaction.set(vipRef, {
-          activatedAt: now,
-          uid: uid
-        }, { merge: true });
-      }
-    });
-
-    console.log(`Prueba de 7 días aprobada y dispositivo registrado permanentemente para ${email || uid}`);
-    return res.json({ success: true });
-  } catch (error: any) {
-    console.error("Error approving trial request:", error);
-    if (error.code === 7 || error.message?.includes("PERMISSION_DENIED")) {
-      return res.json({ success: true, warning: "Simulated success (Permission denied in dev)" });
-    }
-    return res.status(500).json({ error: "Error al aprobar la solicitud" });
-  }
-});
-
-// Admin logic moved to shared lib
-// getFirestoreDb is now imported from ./src/lib/firebase-admin
+  return null;
+}
 
 let cachedTelegramConfig: { botToken: string; chatId: string } | null = null;
 const CACHE_FILE_PATH = path.join(process.cwd(), "telegram_cache.json");
@@ -2601,10 +2310,7 @@ app.delete("/api/admin/users/:userId", async (req, res) => {
       await db.collection("vip_activations").doc(userId).delete().catch(() => {});
     }
     return res.json({ success: true, message: "Usuario borrado correctamente" });
-  } catch (err: any) {
-    if (err.code === 7 || err.message?.includes("PERMISSION_DENIED")) {
-      return res.json({ success: true, message: "Usuario borrado (Simulado en dev)" });
-    }
+  } catch (err) {
     console.error("Error deleting user:", err);
     return res.status(500).json({ error: "Error interno al borrar usuario" });
   }
@@ -2642,83 +2348,9 @@ app.post("/api/vip/recover", async (req, res) => {
 
     const customToken = await admin.auth().createCustomToken(data.uid);
     res.json({ token: customToken });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Recover VIP Error:", error);
     res.status(500).json({ error: error.message, stack: error.stack });
-  }
-});
-
-// Admin endpoint to list trial requests
-app.get("/api/admin/trial-requests", async (req, res) => {
-  const adminEmail = req.headers["x-admin-email"];
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    return res.status(403).json({ error: "No autorizado. Solo el administrador puede listar solicitudes." });
-  }
-
-  const db = getFirestoreDb();
-  if (!db) {
-    return res.status(503).json({ error: "Firebase no inicializado" });
-  }
-
-  try {
-    const snap = await db.collection("trial_requests").orderBy("createdAt", "desc").limit(100).get();
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    return res.json({ success: true, requests: list });
-  } catch (error: any) {
-    if (error.code === 7 || error.message?.includes("PERMISSION_DENIED")) {
-      return res.json({ success: true, requests: [], warning: "Permission denied in development environment." });
-    }
-    console.error("Error listing trial requests:", error);
-    return res.status(500).json({ error: error.message || "Error al listar solicitudes de prueba." });
-  }
-});
-
-// Admin endpoint to reject a trial request
-app.post("/api/admin/trial-requests/:id/reject", async (req, res) => {
-  const adminEmail = req.headers["x-admin-email"];
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    return res.status(403).json({ error: "No autorizado" });
-  }
-
-  const { id } = req.params;
-  const db = getFirestoreDb();
-  if (!db) return res.status(503).json({ error: "Firebase no inicializado" });
-
-  try {
-    await db.collection("trial_requests").doc(id).update({
-      status: "rejected",
-      updatedAt: Date.now()
-    });
-    return res.json({ success: true });
-  } catch (error: any) {
-    if (error.code === 7 || error.message?.includes("PERMISSION_DENIED")) {
-      return res.json({ success: true, warning: "Simulated success (Permission denied in dev)" });
-    }
-    console.error("Error rejecting trial request:", error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// Admin endpoint to delete a trial request record
-app.delete("/api/admin/trial-requests/:id", async (req, res) => {
-  const adminEmail = req.headers["x-admin-email"];
-  if (adminEmail !== "eltygere8651@gmail.com") {
-    return res.status(403).json({ error: "No autorizado" });
-  }
-
-  const { id } = req.params;
-  const db = getFirestoreDb();
-  if (!db) return res.status(503).json({ error: "Firebase no inicializado" });
-
-  try {
-    await db.collection("trial_requests").doc(id).delete();
-    return res.json({ success: true });
-  } catch (error: any) {
-    if (error.code === 7 || error.message?.includes("PERMISSION_DENIED")) {
-      return res.json({ success: true, warning: "Simulated success (Permission denied in dev)" });
-    }
-    console.error("Error deleting trial request:", error);
-    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -2742,8 +2374,4 @@ async function startServer() {
   });
 }
 
-export default app;
-
-if (!process.env.VERCEL) {
-  startServer();
-}
+startServer();
