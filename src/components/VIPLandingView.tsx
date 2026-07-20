@@ -47,7 +47,12 @@ export const VIPLandingView = () => {
         });
 
         if (!response.ok) {
-          throw new Error('No se pudo verificar el estado de la prueba');
+          let errMsg = 'No se pudo verificar el estado de la prueba';
+          try {
+            const errData = await response.json();
+            if (errData && errData.error) errMsg = errData.error;
+          } catch (_) {}
+          throw new Error(errMsg);
         }
         const data = await response.json();
         
