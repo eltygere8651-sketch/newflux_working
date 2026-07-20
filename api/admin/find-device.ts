@@ -1,4 +1,4 @@
-import { getFirestoreDb } from "../../src/lib/firebase-admin";
+import { getFirestoreDb } from "../../src/lib/firebase-admin.js";
 
 export default async function handler(req: any, res: any) {
   const startTime = Date.now();
@@ -86,13 +86,14 @@ export default async function handler(req: any, res: any) {
       let userDoc = null;
       console.log(`[DEBUG_TRACE] [${Date.now()}] Buscando usuario por ID/Email...`);
       
-      const uDoc = await db.collection("users").doc(queryStr).get().catch((err) => {
-        console.error(`[DEBUG_TRACE] [${Date.now()}] Error buscando usuario por ID (${queryStr}):`, err);
-        if (err.code === 7 || err.message?.includes("PERMISSION_DENIED")) {
-          console.error("PERMISOS DENEGADOS detectados en búsqueda por ID");
+      let uDoc = null;
+      try {
+        if (queryStr && !queryStr.includes("/")) {
+          uDoc = await db.collection("users").doc(queryStr).get().catch(() => null);
         }
-        return null;
-      });
+      } catch (e) {
+        console.error("Invalid doc path", e);
+      }
 
       if (uDoc && uDoc.exists) {
         userDoc = uDoc;
@@ -118,11 +119,15 @@ export default async function handler(req: any, res: any) {
       const deviceDocs: any[] = [];
       const vipDeviceDocs: any[] = [];
 
-      const devById = await db.collection("devices").doc(queryStr).get().catch(() => null);
-      if (devById && devById.exists) deviceDocs.push(devById);
+      try {
+        if (queryStr && !queryStr.includes("/")) {
+          const devById = await db.collection("devices").doc(queryStr).get().catch(() => null);
+          if (devById && devById.exists) deviceDocs.push(devById);
 
-      const vipById = await db.collection("vip_devices").doc(queryStr).get().catch(() => null);
-      if (vipById && vipById.exists) vipDeviceDocs.push(vipById);
+          const vipById = await db.collection("vip_devices").doc(queryStr).get().catch(() => null);
+          if (vipById && vipById.exists) vipDeviceDocs.push(vipById);
+        }
+      } catch (e) {}
 
       const dQueries = await Promise.all([
         db.collection("devices").where("deviceId", "==", queryStr).get().catch(() => null),
@@ -160,12 +165,17 @@ export default async function handler(req: any, res: any) {
       };
 
       if (foundUid) {
-        const trResults = await Promise.all([
-          db.collection("trial_requests").doc(foundUid).get().catch(() => null),
-          db.collection("trial_requests").where("uid", "==", foundUid).get().catch(() => null)
-        ]);
-        if (trResults[0] && trResults[0].exists) addTr(trResults[0]);
-        if (trResults[1] && !trResults[1].empty) trResults[1].forEach(addTr);
+        let trDoc = null;
+        try {
+          if (!foundUid.includes("/")) {
+            trDoc = await db.collection("trial_requests").doc(foundUid).get().catch(() => null);
+          }
+        } catch (e) {}
+        
+        const trQuery = await db.collection("trial_requests").where("uid", "==", foundUid).get().catch(() => null);
+        
+        if (trDoc && trDoc.exists) addTr(trDoc);
+        if (trQuery && !trQuery.empty) trQuery.forEach(addTr);
       }
       if (foundEmail) {
         const trEmailQuery = await db.collection("trial_requests").where("email", "==", foundEmail).get().catch(() => null);
@@ -175,8 +185,12 @@ export default async function handler(req: any, res: any) {
       console.log(`[DEBUG_TRACE] [${Date.now()}] Buscando activaciones VIP...`);
       const vipActivations: any[] = [];
       if (foundUid) {
-        const vaDoc = await db.collection("vip_activations").doc(foundUid).get().catch(() => null);
-        if (vaDoc && vaDoc.exists) vipActivations.push({ id: vaDoc.id, ...vaDoc.data() });
+        try {
+          if (!foundUid.includes("/")) {
+            const vaDoc = await db.collection("vip_activations").doc(foundUid).get().catch(() => null);
+            if (vaDoc && vaDoc.exists) vipActivations.push({ id: vaDoc.id, ...vaDoc.data() });
+          }
+        } catch (e) {}
       }
 
       const device = {
