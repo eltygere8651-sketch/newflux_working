@@ -1919,7 +1919,7 @@ app.post("/api/trial/check", async (req, res) => {
       });
     }
 
-    if (pendingReq) {
+    if (!adminBypass && pendingReq) {
       return res.json({
         success: true,
         trialUsed: false,
@@ -2125,7 +2125,7 @@ app.post("/api/trial/request", async (req, res) => {
       });
 
 
-      if (alreadyRequested) {
+      if (!adminBypass && alreadyRequested) {
         return res.status(400).json({ error: "Ya existe una solicitud de prueba en curso para este dispositivo." });
       }
     }
@@ -2742,4 +2742,8 @@ async function startServer() {
   });
 }
 
-startServer();
+export default app;
+
+if (!process.env.VERCEL) {
+  startServer();
+}
