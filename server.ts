@@ -2316,6 +2316,66 @@ app.delete("/api/admin/users/:userId", async (req, res) => {
   }
 });
 
+app.post("/api/admin/clean-ghosts", async (req, res) => {
+  const adminEmail = req.headers["x-admin-email"];
+  
+  if (adminEmail !== "eltygere8651@gmail.com") {
+    return res.status(403).json({ error: "No autorizado." });
+  }
+
+  try {
+    const db = getFirestoreDb();
+    if (!db) return res.status(500).json({ error: "Database not initialized" });
+
+    const usersRef = db.collection("users");
+    const snap = await usersRef.get();
+    
+    let deletedCount = 0;
+    const now = Date.now();
+    
+    for (const userDoc of snap.docs) {
+      const data = userDoc.data();
+      
+      const displayName = data.displayName;
+      const email = data.email || "";
+      
+      let isActive = false;
+      
+      if (email === "eltygere8651@gmail.com") {
+        isActive = true;
+      } else if (data.subscriptionEnd && data.subscriptionEnd > now) {
+        isActive = true;
+      } else if (data.plan === "free" && data.trialStart !== undefined && data.trialStart !== null) {
+        if (data.trialStart !== 0) {
+          const trialDurationDays = data.trialDuration || 7;
+          const trialEnd = data.trialStart + trialDurationDays * 24 * 60 * 60 * 1000;
+          if (now < trialEnd) {
+            isActive = true;
+          }
+        }
+      }
+      
+      const noName = !displayName || displayName.trim() === "";
+      const noAccess = !isActive;
+      
+      if (noName && noAccess) {
+        await userDoc.ref.delete();
+        await db.collection("trial_requests").doc(userDoc.id).delete().catch(() => {});
+        await db.collection("vip_activations").doc(userDoc.id).delete().catch(() => {});
+        if (data.deviceHash) {
+            await db.collection("vip_devices").doc(data.deviceHash).update({ activatedAt: 0 }).catch(() => {});
+        }
+        deletedCount++;
+      }
+    }
+    
+    return res.json({ success: true, deletedCount });
+  } catch (err) {
+    console.error("Error cleaning ghosts:", err);
+    return res.status(500).json({ error: "Error interno al limpiar fantasmas" });
+  }
+});
+
 app.post("/api/vip/recover", async (req, res) => {
   const { deviceHash } = req.body;
   if (!deviceHash) {

@@ -81,6 +81,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
@@ -1499,6 +1500,35 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     });
   };
 
+  const handleCleanGhosts = async () => {
+    askConfirm(
+      "¿Estás seguro de que deseas limpiar todas las cuentas fantasmas (sin nombre y sin acceso)?",
+      async () => {
+        setIsActionLoading(true);
+        try {
+          const res = await fetch("/api/admin/clean-ghosts", {
+            method: "POST",
+            headers: {
+              "x-admin-email": "eltygere8651@gmail.com",
+            },
+          });
+          const data = await res.json();
+          if (res.ok) {
+            showAlert(`Limpieza exitosa. Se eliminaron ${data.deletedCount} cuentas fantasmas.`);
+            fetchUsers();
+          } else {
+            showAlert(`Error: ${data.error}`);
+          }
+        } catch (err) {
+          console.error(err);
+          showAlert("Error interno al limpiar fantasmas.");
+        } finally {
+          setIsActionLoading(false);
+        }
+      }
+    );
+  };
+
   const handleDeleteUser = async (userId: string) => {
     askConfirm(
       "¿Estás seguro de que deseas ELIMINAR a este usuario de Firestore?",
@@ -2157,6 +2187,14 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     </h3>
                   </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                    <button
+                      onClick={handleCleanGhosts}
+                      disabled={isActionLoading}
+                      className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 px-3 py-2 rounded-xl text-xs font-medium transition-colors flex items-center gap-2"
+                    >
+                      <Trash className="w-4 h-4" />
+                      {isActionLoading ? "Limpiando..." : "Limpiar Fantasmas"}
+                    </button>
                     <input
                       type="text"
                       placeholder="Buscar por email, nombre o ID..."
