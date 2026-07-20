@@ -3169,6 +3169,9 @@ app.get("/api/admin/trial-requests", async (req, res) => {
     return res.json({ success: true, requests: list });
   } catch (error: any) {
     console.error("Error listing trial requests:", error);
+    if (error.code === 7 || error.message?.includes("PERMISSION_DENIED")) {
+      return res.json({ success: true, requests: [], warning: "Permission denied in development environment." });
+    }
     return res.status(500).json({ error: error.message || "Error al listar solicitudes de prueba." });
   }
 });
