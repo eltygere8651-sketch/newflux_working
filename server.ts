@@ -1948,7 +1948,7 @@ app.post("/api/trial/check", async (req, res) => {
 
 // Secure atomic instant VIP Trial activation and custom-token auth payload generator
 app.post("/api/trial/activate-vip", async (req, res) => {
-  const { fingerprint, campaignId, hardwareSignature } = req.body;
+  const { fingerprint, campaignId, hardwareSignature, adminBypass } = req.body;
   if (!fingerprint) {
     return res.status(400).json({ error: "Parámetro fingerprint es requerido" });
   }
@@ -1970,13 +1970,15 @@ app.post("/api/trial/activate-vip", async (req, res) => {
     const now = Date.now();
 
     // 1. Verificar límites por IP (Heurística anti-abuso)
-    const recentTrialsByIp = await dbAdmin.collection("vip_activations")
-      .where("ip", "==", ip)
-      .where("createdAt", ">", now - 24 * 60 * 60 * 1000)
-      .get();
-    
-    if (recentTrialsByIp.size >= 3) {
-      return res.status(429).json({ error: "Límite de pruebas alcanzado para esta conexión. Intente mañana." });
+    if (!adminBypass) {
+      const recentTrialsByIp = await dbAdmin.collection("vip_activations")
+        .where("ip", "==", ip)
+        .where("createdAt", ">", now - 24 * 60 * 60 * 1000)
+        .get();
+      
+      if (recentTrialsByIp.size >= 3) {
+        return res.status(429).json({ error: "Límite de pruebas alcanzado para esta conexión. Intente mañana." });
+      }
     }
 
     // Run a transaction to ensure atomicity and prevent race conditions
@@ -1987,7 +1989,7 @@ app.post("/api/trial/activate-vip", async (req, res) => {
       const existsInDev = devDoc.exists && devDoc.data()?.trialUsed;
       const existsInVip = vipDoc.exists;
 
-      if (existsInDev || existsInVip) {
+      if (!adminBypass && (existsInDev || existsInVip)) {
         throw new Error("ALREADY_USED");
       }
 

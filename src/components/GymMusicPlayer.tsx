@@ -897,8 +897,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         "Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador."
       );
       setIsCheckingTrialRequest(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error requesting trial:", err);
+      alert("Error de red o servidor: " + (err.message || "Intenta nuevamente"));
       setIsCheckingTrialRequest(false);
     }
   };
@@ -10003,6 +10004,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                     ) : trialRequestStatus === "sent" ? (
                       <div
                         className="p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                      >
+                        {trialRequestMsg}
+                      </div>
+                    ) : trialRequestStatus === "already_claimed" ? (
+                      <div
+                        className="p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center bg-red-500/10 border-red-500/20 text-red-400"
                       >
                         {trialRequestMsg}
                       </div>
