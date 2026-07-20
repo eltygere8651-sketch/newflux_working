@@ -1901,20 +1901,6 @@ app.post("/api/trial/check", async (req, res) => {
     let existsInVip = vipDoc.exists;
     let finalDoc = existsInDev ? devDoc : (existsInVip ? vipDoc : null);
 
-    // Búsqueda heurística por Hardware Signature si el hash principal no coincide
-    if (!existsInDev && !existsInVip && hardwareSignature) {
-      const hwsQuery = await dbAdmin.collection("devices")
-        .where("hardwareSignature", "==", hardwareSignature)
-        .where("trialUsed", "==", true)
-        .limit(1)
-        .get();
-      
-      if (!hwsQuery.empty) {
-        existsInDev = true;
-        finalDoc = hwsQuery.docs[0];
-      }
-    }
-
     const reqDoc = await dbAdmin.collection("trial_requests").where("fingerprint", "==", fingerprint).limit(1).get();
     const pendingReq = !reqDoc.empty ? reqDoc.docs[0].data() : null;
 
@@ -2005,18 +1991,6 @@ app.post("/api/trial/activate-vip", async (req, res) => {
         throw new Error("ALREADY_USED");
       }
 
-      // 2. Validación por Hardware Signature (Si existe)
-      if (hardwareSignature) {
-        const hwsQuery = await dbAdmin.collection("devices")
-          .where("hardwareSignature", "==", hardwareSignature)
-          .where("trialUsed", "==", true)
-          .limit(1)
-          .get();
-        
-        if (!hwsQuery.empty) {
-          throw new Error("ALREADY_USED");
-        }
-      }
 
       // Generate credentials
       const vipEmail = `socio.${fingerprint.substring(0, 6)}@fluxmusic.com`;
@@ -2130,15 +2104,6 @@ app.post("/api/trial/request", async (req, res) => {
       
       let alreadyUsed = (devDoc.exists && devDoc.data()?.trialUsed) || vipDoc.exists;
 
-      // Validación por Hardware Signature
-      if (!alreadyUsed && hardwareSignature) {
-        const hwsQuery = await dbAdmin.collection("devices")
-          .where("hardwareSignature", "==", hardwareSignature)
-          .where("trialUsed", "==", true)
-          .limit(1)
-          .get();
-        if (!hwsQuery.empty) alreadyUsed = true;
-      }
 
       if (alreadyUsed) {
         return res.status(403).json({ error: "Este dispositivo ya ha disfrutado de una prueba gratuita de 7 días." });
@@ -2157,15 +2122,6 @@ app.post("/api/trial/request", async (req, res) => {
         }
       });
 
-      if (!alreadyRequested && hardwareSignature) {
-        const hwsReqs = await dbAdmin.collection("trial_requests")
-          .where("hardwareSignature", "==", hardwareSignature)
-          .get();
-        hwsReqs.forEach(doc => {
-          const data = doc.data();
-          if (data.status === "pending" || data.status === "approved") alreadyRequested = true;
-        });
-      }
 
       if (alreadyRequested) {
         return res.status(400).json({ error: "Ya existe una solicitud de prueba en curso para este dispositivo." });
@@ -3029,18 +2985,6 @@ app.post("/api/admin/reset-device", async (req, res) => {
         }
       }
     }
-    // By hardwareSignature
-    if (hardwareSignatures && Array.isArray(hardwareSignatures)) {
-      for (const hws of hardwareSignatures) {
-        if (hws) {
-          const trs = await db.collection("trial_requests").where("hardwareSignature", "==", hws).get();
-          for (const doc of trs.docs) {
-            await doc.ref.delete();
-            cleanedTrialRequests++;
-          }
-        }
-      }
-    }
 
     // 3. Delete vip_activations
     if (uid) {
@@ -3060,17 +3004,6 @@ app.post("/api/admin/reset-device", async (req, res) => {
           }
           const vas2 = await db.collection("vip_activations").where("deviceHash", "==", fp).get();
           for (const doc of vas2.docs) {
-            await doc.ref.delete();
-            cleanedVipActivations++;
-          }
-        }
-      }
-    }
-    if (hardwareSignatures && Array.isArray(hardwareSignatures)) {
-      for (const hws of hardwareSignatures) {
-        if (hws) {
-          const vas = await db.collection("vip_activations").where("hardwareSignature", "==", hws).get();
-          for (const doc of vas.docs) {
             await doc.ref.delete();
             cleanedVipActivations++;
           }
@@ -3118,14 +3051,6 @@ app.post("/api/admin/reset-device", async (req, res) => {
       }
     }
 
-    if (hardwareSignatures && Array.isArray(hardwareSignatures)) {
-      for (const hws of hardwareSignatures) {
-        if (hws) {
-          const trsHws = await db.collection("trial_requests").where("hardwareSignature", "==", hws).get();
-          verifyTrialRequestsCount += trsHws.size;
-        }
-      }
-    }
 
     if (uid) {
       const trDoc = await db.collection("trial_requests").doc(uid).get();
