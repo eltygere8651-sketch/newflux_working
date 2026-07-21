@@ -3378,10 +3378,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       setAuthModalOpen(true);
       return;
     }
-    if (user.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
-    }
     setPlaylistToCopy(pl);
     setCopyPlaylistNameInput(pl.name);
     setCopyPlaylistDescInput(
@@ -3571,10 +3567,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const handleAddNewCanalClick = () => {
-    if (user?.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
-    }
     setTrackToAddDestination(null);
     setModalNewPlaylistName("");
     setModalNewPlaylistDesc("");
@@ -4035,10 +4027,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const addSingleTrackToCurrentPlaylist = (track: MusicTrack) => {
-    if (user?.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
-    }
     setTrackToAddDestination(track);
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite =
@@ -4469,10 +4457,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const addYoutubeTrackToPlaylist = (ytTrack: any) => {
-    if (user?.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
-    }
     setTrackToAddDestination(ytTrack);
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite =
@@ -4490,10 +4474,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const saveCommunityPlaylistToLibrary = async (pl: MusicPlaylist) => {
-    if (user?.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
-    }
     try {
       let currentUser = user;
       if (!currentUser) {
@@ -4563,11 +4543,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     if (!user) {
       showNotification("Debes iniciar sesión para añadir a favoritos");
       return;
-    }
-
-    if (user.plan !== 'premium' && !isAdmin) {
-       showNotification("Esta función está disponible para usuarios Premium.");
-       return;
     }
 
     // Find "Favoritos"/"Siguiente" playlist for user

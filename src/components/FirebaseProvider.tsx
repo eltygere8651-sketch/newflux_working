@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
-import { onAuthStateChanged, User, signOut, signInAnonymously } from "firebase/auth";
+import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, signInAnonymously, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
@@ -89,10 +89,30 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticatingRef.current = true;
         (window as any).isFluxAuthenticating = true;
 
+        // Try auto-login with device hash if created, else fall back to anonymous
         try {
-            await signInAnonymously(auth);
+            const { generateDeviceHash } = await import('../lib/deviceHash');
+            const hash = await generateDeviceHash();
+            const email = `socio.${hash.substring(0, 6)}@fluxmusic.com`;
+            const pass = `${hash.substring(0, 10)}_fluxvip`;
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+                isAuthenticatingRef.current = false;
+                (window as any).isFluxAuthenticating = false;
+                return;
+            } catch (e) {
+                try {
+                    await createUserWithEmailAndPassword(auth, email, pass);
+                    isAuthenticatingRef.current = false;
+                    (window as any).isFluxAuthenticating = false;
+                    return;
+                } catch (e2) {
+                    await signInAnonymously(auth);
+                }
+            }
         } catch (e) {
             console.error("Failed auto sign-in:", e);
+            try { await signInAnonymously(auth); } catch (e3) {}
             setDbUserProfile(null);
             setAccessData(null);
             setLoading(false);
@@ -271,6 +291,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 lastLogin: serverTimestamp(),
                 lastActiveAt: Date.now(),
                 totalUsageTime: 0,
+                trialStart: null,
+                plan: "none",
                 maxUsers: 1
               });
               // fetchUserData();

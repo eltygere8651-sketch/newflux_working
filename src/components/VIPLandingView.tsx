@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut, Mail } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, updateEmail, updatePassword } from 'firebase/auth';
+import { db, auth, migrateGuestData } from '../lib/firebase';
+import { signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateEmail, updatePassword } from 'firebase/auth';
 import { generateDeviceHash } from '../lib/deviceHash';
 
 const getOrCreateDeviceId = () => {
@@ -105,46 +105,55 @@ export const VIPLandingView = () => {
       
       // If we reach here, they are either not signed in, or they are signed in but don't have a trialStart yet.
       let uid;
-      let token;
-      const hash = await generateDeviceHash();
-      if (!currentUser) {
-         const userCred = await signInAnonymously(auth);
+      if (!currentUser || currentUser.isAnonymous) {
+         const oldUid = currentUser ? currentUser.uid : null;
+         const hash = await generateDeviceHash();
+         const internalEmail = `socio.${hash.substring(0, 6)}@fluxmusic.com`;
+         const internalPass = `${hash.substring(0, 10)}_fluxvip`;
+         
+         let userCred;
+         try {
+             userCred = await signInWithEmailAndPassword(auth, internalEmail, internalPass);
+         } catch (e) {
+             userCred = await createUserWithEmailAndPassword(auth, internalEmail, internalPass);
+         }
          uid = userCred.user.uid;
-         token = await userCred.user.getIdToken(true);
+         
+         if (oldUid && oldUid !== uid) {
+             try {
+                 await migrateGuestData(oldUid, uid);
+             } catch (e) {
+                 console.error("Failed to migrate guest data", e);
+             }
+         }
       } else {
          uid = currentUser.uid;
-         token = await currentUser.getIdToken(true);
       }
-
-      if (!token) throw new Error("No token");
-
+      const now = Date.now();
+      
       const randomId = Math.floor(1000 + Math.random() * 9000);
       const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
       const randomName = `${prefix}${randomId}`;
-
-      const res = await fetch("/api/trial/activate-vip", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          deviceHash: hash,
-          campaignId: campaignId || null,
-          displayName: randomName
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        if (err.error && (err.error.includes("ya ha recibido") || err.error.includes("ya ha disfrutado"))) {
-            setTrialState('expired');
-            setIsLoading(false);
-            return;
-        }
-        throw new Error(err.error || "Failed to activate VIP trial");
+      
+      const uuid = getOrCreateDeviceId();
+      
+      if (campaignId) {
+        updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
       }
+      
+      await setDoc(doc(db, "users", uid), {
+        displayName: randomName,
+        isVIPGuest: true,
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        lastActiveAt: now,
+        totalUsageTime: 0,
+        plan: "free",
+        trialStart: now,
+        maxUsers: 1,
+        originCampaign: campaignId || null,
+      }, { merge: true });
       
       window.history.replaceState({}, '', '/');
       window.location.reload();
@@ -188,8 +197,18 @@ export const VIPLandingView = () => {
      setErrorMsg(null);
      try {
          if (auth.currentUser) {
-             const cred = EmailAuthProvider.credential(email, password);
-             await linkWithCredential(auth.currentUser, cred);
+             const isInternal = auth.currentUser.email?.startsWith("socio.");
+             if (auth.currentUser.isAnonymous) {
+                 const cred = EmailAuthProvider.credential(email, password);
+                 await linkWithCredential(auth.currentUser, cred);
+             } else if (isInternal) {
+                 await updateEmail(auth.currentUser, email);
+                 await updatePassword(auth.currentUser, password);
+             } else {
+                 // In case it's already another provider or normal email, try link (will fail if already email)
+                 const cred = EmailAuthProvider.credential(email, password);
+                 await linkWithCredential(auth.currentUser, cred);
+             }
              window.history.replaceState({}, '', '/');
              window.location.reload();
          }
@@ -282,7 +301,8 @@ export const VIPLandingView = () => {
   }
 
   if (trialState === 'expired') {
-    const isAnonymous = auth.currentUser?.isAnonymous;
+    const isInternalAccount = auth.currentUser?.email?.startsWith("socio.");
+    const isAnonymous = auth.currentUser?.isAnonymous || isInternalAccount;
     return (
       <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
         <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
