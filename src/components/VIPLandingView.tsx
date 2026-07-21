@@ -5,21 +5,6 @@ import { db, auth } from '../lib/firebase';
 import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const generateDeviceHash = async () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('admin_bypass') === 'ho82788278') {
-    let bypassHash = sessionStorage.getItem('flux_vip_bypass_hash');
-    if (!bypassHash) {
-      bypassHash = 'bypass_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-      sessionStorage.setItem('flux_vip_bypass_hash', bypassHash);
-    }
-    return bypassHash;
-  }
-
-  let storedHash = localStorage.getItem('flux_vip_device_hash');
-  if (storedHash) {
-    return storedHash;
-  }
-
   const w = window.screen.width || 0;
   const h = window.screen.height || 0;
   const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
@@ -62,21 +47,10 @@ const generateDeviceHash = async () => {
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  localStorage.setItem('flux_vip_device_hash', hashHex);
   return hashHex;
 };
 
 const getOrCreateDeviceId = () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('admin_bypass') === 'ho82788278') {
-    let bypassId = sessionStorage.getItem('flux_vip_bypass_id');
-    if (!bypassId) {
-      bypassId = crypto.randomUUID();
-      sessionStorage.setItem('flux_vip_bypass_id', bypassId);
-    }
-    return bypassId;
-  }
-
   let id = localStorage.getItem('flux_vip_device_id');
   if (!id) {
     id = crypto.randomUUID();
@@ -163,15 +137,9 @@ export const VIPLandingView = () => {
           } catch (signInErr: any) {
             console.error("Recovery signIn error:", signInErr);
             // If they don't exist yet as email/pass (legacy anonymous account), we fallback to creating an email/pass account so next time they don't lose it
-            const randomNum = Math.floor(1000 + Math.random() * 9000);
-            const generatedName = `Usuario VIP #${randomNum}`;
             const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
             const newUid = userCred.user.uid;
             const now = Date.now();
-            
-            // Update Auth profile
-            const { updateProfile } = await import('firebase/auth');
-            await updateProfile(userCred.user, { displayName: generatedName });
             
             await setDoc(doc(db, 'vip_activations', newUid), {
               uuid,
@@ -185,7 +153,7 @@ export const VIPLandingView = () => {
             
             await setDoc(doc(db, "users", newUid), {
               email: vipEmail,
-              displayName: generatedName,
+              displayName: "Socio VIP",
               isVIPGuest: true,
               createdAt: serverTimestamp(),
               lastLogin: serverTimestamp(),
@@ -210,17 +178,11 @@ export const VIPLandingView = () => {
       }
       
       // New activation
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const generatedName = `Usuario VIP #${randomNum}`;
       const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
       const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
       const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
       const uid = userCred.user.uid;
       const now = Date.now();
-      
-      // Update Auth profile so GymMusicPlayer has it immediately
-      const { updateProfile } = await import('firebase/auth');
-      await updateProfile(userCred.user, { displayName: generatedName });
       
       await setDoc(hashRef, { 
         activatedAt: now,
@@ -243,7 +205,7 @@ export const VIPLandingView = () => {
       
       await setDoc(doc(db, "users", uid), {
         email: vipEmail,
-        displayName: generatedName,
+        displayName: "Socio VIP",
         isVIPGuest: true,
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
