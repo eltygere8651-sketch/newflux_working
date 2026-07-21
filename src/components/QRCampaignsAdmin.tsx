@@ -257,7 +257,8 @@ export const QRCampaignsAdmin = () => {
   };
 
   const getQRUrl = (id: string) => {
-    return `https://www.fluxplay.cc/vip?campaign=${id}`;
+    const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+    return `${origin}/vip?campaign=${id}`;
   };
 
   const downloadQRSvg = () => {
