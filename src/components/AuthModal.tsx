@@ -11,7 +11,6 @@ export const AuthModal: React.FC = () => {
   const [email, setEmail] = useState(() => localStorage.getItem("gym_music_saved_email") || "");
   const [password, setPassword] = useState(() => localStorage.getItem("gym_music_saved_password") || "");
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("gym_music_remember_login") === "true");
-  const [nickname, setNickname] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -75,7 +74,7 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    if (!email.trim() || !password.trim() || (authType === "signup" && !nickname.trim())) {
+    if (!email.trim() || !password.trim()) {
       setErrorMsg("Por favor, rellena todos los campos.");
       return;
     }
@@ -101,7 +100,10 @@ export const AuthModal: React.FC = () => {
           localStorage.setItem("gym_music_remember_login", "false");
         }
       } else {
-        const userCred = await signupWithEmail(cleanEmail, cleanPassword, nickname.trim());
+        const randomId = Math.floor(1000 + Math.random() * 9000);
+        const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
+        const randomName = `${prefixes[Math.floor(Math.random() * prefixes.length)]}${randomId}`;
+        const userCred = await signupWithEmail(cleanEmail, cleanPassword, randomName);
         setSuccessMsg("¡Cuenta creada con éxito! Solicitando acceso de prueba...");
         
         try {
@@ -115,7 +117,7 @@ export const AuthModal: React.FC = () => {
           await setDoc(doc(db, "trial_requests", userCred.uid), {
             uid: userCred.uid,
             email: cleanEmail,
-            displayName: nickname.trim() || cleanEmail,
+            displayName: randomName,
             fingerprint: fp,
             ip: "Auto_Signup",
             status: "pending",
@@ -126,7 +128,7 @@ export const AuthModal: React.FC = () => {
           const _tgData = _tgDoc.data();
           if (_tgData?.botToken && _tgData?.chatId) {
             const title = `🎁 Nueva Solicitud de Prueba de 7 Días 🎁`;
-            const text = `${title}\n\n👤 Usuario: ${nickname.trim() || cleanEmail}\n📧 Email: ${cleanEmail}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
+            const text = `${title}\n\n👤 Usuario: ${randomName}\n📧 Email: ${cleanEmail}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
             
             await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
               method: "POST",
@@ -268,28 +270,6 @@ export const AuthModal: React.FC = () => {
                 <div className="p-3 bg-[#1ED760]/10 border border-[#1ED760]/20 text-[#1ED760] text-xs rounded-xl flex items-start gap-2">
                   <Check className="w-4 h-4 shrink-0 mt-0.5 animate-bounce" />
                   <span className="leading-snug font-medium">{successMsg}</span>
-                </div>
-              )}
-
-              {/* Input for Nickname (Only visible when signing up) */}
-              {authType === "signup" && (
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black tracking-widest text-[#1ED760] uppercase block pl-1">
-                    Apodo / Nickname Público *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                      <span className="text-[12px] font-bold">👤</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                      placeholder="Tu nombre público (sin mostrar tu email)"
-                      className="w-full pl-10 pr-4 py-3 bg-[#121214] border border-[#1ED760]/20 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
-                      required={authType === "signup"}
-                    />
-                  </div>
                 </div>
               )}
 

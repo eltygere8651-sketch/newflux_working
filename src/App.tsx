@@ -36,7 +36,7 @@ import { APP_UPDATES_VERSION } from "./config/appVersion";
 import { ShareModal } from "./components/ShareModal";
 
 function AppContent() {
-  const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
+  const { user, loading: authLoading, isOnline, setAuthModalOpen, accessData } = useFirebase();
 
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -763,7 +763,8 @@ function AppContent() {
   const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
 
   const isVIPMode = typeof window !== 'undefined' && (window.location.pathname === '/vip' || window.location.search.includes('vip=1'));
-  if (isVIPMode && !user) {
+  const isAnonymousExpired = user?.isAnonymous && accessData && !accessData.isValid && accessData.trialStart;
+  if (isVIPMode || isAnonymousExpired) {
     return <VIPLandingView />;
   }
 

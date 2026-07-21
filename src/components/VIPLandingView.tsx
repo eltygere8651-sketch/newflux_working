@@ -1,54 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut } from 'lucide-react';
+import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut, Mail } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-
-const generateDeviceHash = async () => {
-  const w = window.screen.width || 0;
-  const h = window.screen.height || 0;
-  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
-  
-  const ua = navigator.userAgent;
-  let os = 'Unknown';
-  if (ua.indexOf('Win') !== -1) os = 'Windows';
-  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
-  if (ua.indexOf('Linux') !== -1) os = 'Linux';
-  if (ua.indexOf('Android') !== -1) os = 'Android';
-  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
-  
-  let canvasFingerprint = '';
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.textBaseline = 'top';
-      ctx.font = '14px Arial';
-      ctx.fillStyle = '#f60';
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = '#069';
-      ctx.fillText('flux,music,vip', 2, 15);
-      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('flux,music,vip', 4, 17);
-      canvasFingerprint = canvas.toDataURL();
-    }
-  } catch (e) {}
-  
-  const components = [
-    os,
-    screenRes,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.hardwareConcurrency || 'unknown',
-    (navigator as any).deviceMemory || 'unknown',
-    canvasFingerprint
-  ].join('|');
-  
-  const msgBuffer = new TextEncoder().encode(components);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
+import { signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, updateEmail, updatePassword } from 'firebase/auth';
+import { generateDeviceHash } from '../lib/deviceHash';
 
 const getOrCreateDeviceId = () => {
   let id = localStorage.getItem('flux_vip_device_id');
@@ -59,12 +14,18 @@ const getOrCreateDeviceId = () => {
   return id;
 };
 
-type TrialState = 'loading' | 'new' | 'active' | 'expired';
+type TrialState = 'loading' | 'new' | 'active' | 'expired' | 'link-email';
 
 export const VIPLandingView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [trialState, setTrialState] = useState<TrialState>('loading');
   const [campaignId, setCampaignId] = useState<string | null>(null);
+
+  // Email Linking State
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -79,143 +40,111 @@ export const VIPLandingView = () => {
         }
       }
 
-      try {
-        const hash = await generateDeviceHash();
-        const hashRef = doc(db, 'vip_devices', hash);
-        const hashDoc = await getDoc(hashRef);
-
+      // Check current user
+      const currentUser = auth.currentUser;
+      if (currentUser) {
         if (mounted) {
-          if (hashDoc.exists()) {
-            const data = hashDoc.data();
-            const activatedAt = data.activatedAt || 0;
-            const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
-            if (isExpired) {
-              setTrialState('expired');
-            } else {
-              setTrialState('active');
-            }
+          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          if (userDoc.exists()) {
+             const data = userDoc.data();
+             if (data.isVIPGuest || data.trialStart) {
+                const activatedAt = data.trialStart || 0;
+                const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+                
+                if (isExpired) {
+                  setTrialState('expired');
+                } else {
+                  setTrialState('active');
+                }
+             } else {
+                setTrialState('new');
+             }
           } else {
-            setTrialState('new');
+             setTrialState('new');
           }
         }
-      } catch (e) {
+      } else {
         if (mounted) setTrialState('new');
       }
     };
     init();
-    return () => { mounted = false; };
+    
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (user) {
+            init();
+        }
+    });
+    
+    return () => { mounted = false; unsubscribe(); };
   }, []);
 
   const handleActivateOrContinue = async () => {
     setIsLoading(true);
     try {
-      const uuid = getOrCreateDeviceId();
-      const deviceHash = await generateDeviceHash();
-      
-      const hashRef = doc(db, 'vip_devices', deviceHash);
-      const hashDoc = await getDoc(hashRef);
-      
-      if (hashDoc.exists()) {
-        const data = hashDoc.data();
-        const activatedAt = data.activatedAt || 0;
-        const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
-        
-        if (isExpired) {
-          setTrialState('expired');
-          setIsLoading(false);
-          return;
-        } else {
-          // Continue existing trial using persistent email/password to avoid creating a new UID
-          const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-          const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-          
-          try {
-            await signInWithEmailAndPassword(auth, vipEmail, vipPass);
-            window.history.replaceState({}, '', '/');
-            window.location.reload();
-            return;
-          } catch (signInErr: any) {
-            console.error("Recovery signIn error:", signInErr);
-            // If they don't exist yet as email/pass (legacy anonymous account), we fallback to creating an email/pass account so next time they don't lose it
-            const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
-            const newUid = userCred.user.uid;
-            const now = Date.now();
-            
-            await setDoc(doc(db, 'vip_activations', newUid), {
-              uuid,
-              deviceHash,
-              createdAt: activatedAt,
-              expiresAt: activatedAt + 7 * 24 * 60 * 60 * 1000,
-              version: 3,
-              status: 'active',
-              campaignId: campaignId || null
-            });
-            
-            await setDoc(doc(db, "users", newUid), {
-              email: vipEmail,
-              displayName: "Socio VIP",
-              isVIPGuest: true,
-              createdAt: serverTimestamp(),
-              lastLogin: serverTimestamp(),
-              lastActiveAt: now,
-              totalUsageTime: 0,
-              plan: "free",
-              trialStart: activatedAt,
-              maxUsers: 1,
-              originCampaign: campaignId || null,
-            }, { merge: true });
-
-            await updateDoc(hashRef, {
-              uid: newUid,
-              lastRecoveredAt: now
-            });
-
-            window.history.replaceState({}, '', '/');
-            window.location.reload();
-            return;
-          }
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+           const data = userDoc.data();
+           
+           if (data.trialStart) {
+               const activatedAt = data.trialStart;
+               const isExpired = Date.now() > activatedAt + (7 * 24 * 60 * 60 * 1000);
+               if (isExpired) {
+                 setTrialState('expired');
+                 setIsLoading(false);
+                 return;
+               } else {
+                 window.history.replaceState({}, '', '/');
+                 window.location.reload();
+                 return;
+               }
+           }
         }
       }
       
-      // New activation
-      const vipEmail = `socio.${deviceHash.substring(0, 6)}@fluxmusic.com`;
-      const vipPass = `${deviceHash.substring(0, 10)}_fluxvip`;
-      const userCred = await createUserWithEmailAndPassword(auth, vipEmail, vipPass);
-      const uid = userCred.user.uid;
-      const now = Date.now();
-      
-      await setDoc(hashRef, { 
-        activatedAt: now,
-        uid: uid 
-      });
-      
-      await setDoc(doc(db, 'vip_activations', uid), {
-        uuid,
-        deviceHash,
-        createdAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-        version: 3,
-        status: 'active',
-        campaignId: campaignId || null
-      });
-      
-      if (campaignId) {
-        updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
+      // If we reach here, they are either not signed in, or they are signed in but don't have a trialStart yet.
+      let uid;
+      let token;
+      const hash = await generateDeviceHash();
+      if (!currentUser) {
+         const userCred = await signInAnonymously(auth);
+         uid = userCred.user.uid;
+         token = await userCred.user.getIdToken(true);
+      } else {
+         uid = currentUser.uid;
+         token = await currentUser.getIdToken(true);
       }
-      
-      await setDoc(doc(db, "users", uid), {
-        email: vipEmail,
-        displayName: "Socio VIP",
-        isVIPGuest: true,
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-        lastActiveAt: now,
-        totalUsageTime: 0,
-        plan: "free",
-        trialStart: now,
-        maxUsers: 1,
-        originCampaign: campaignId || null,
-      }, { merge: true });
+
+      if (!token) throw new Error("No token");
+
+      const randomId = Math.floor(1000 + Math.random() * 9000);
+      const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const randomName = `${prefix}${randomId}`;
+
+      const res = await fetch("/api/trial/activate-vip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          deviceHash: hash,
+          campaignId: campaignId || null,
+          displayName: randomName
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && (err.error.includes("ya ha recibido") || err.error.includes("ya ha disfrutado"))) {
+            setTrialState('expired');
+            setIsLoading(false);
+            return;
+        }
+        throw new Error(err.error || "Failed to activate VIP trial");
+      }
       
       window.history.replaceState({}, '', '/');
       window.location.reload();
@@ -228,40 +157,62 @@ export const VIPLandingView = () => {
     }
   };
 
-  const handleContactSupport = async () => {
+  const handleLinkGoogle = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
     try {
-      setIsLoading(true);
-      if (!auth.currentUser) {
-        const userCred = await signInAnonymously(auth);
-        const uid = userCred.user.uid;
-        const now = Date.now();
-        // Create an expired user record so they see "Fin de la Prueba VIP" in the background
-        await setDoc(doc(db, "users", uid), {
-          displayName: "Socio VIP",
-          isVIPGuest: true,
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
-          lastActiveAt: now,
-          totalUsageTime: 0,
-          plan: "free",
-          trialStart: now - (8 * 24 * 60 * 60 * 1000), // explicitly expired (8 days ago)
-          maxUsers: 1,
-          originCampaign: campaignId || null,
-        }, { merge: true });
+      const provider = new GoogleAuthProvider();
+      if (auth.currentUser) {
+        await linkWithPopup(auth.currentUser, provider);
+        window.history.replaceState({}, '', '/');
+        window.location.reload();
       }
-      window.history.replaceState({}, '', '/');
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('open-sidebar-menu', {
-          detail: {
-            openSupport: true,
-            message: "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente."
-          }
-        }));
-      }, 800);
-    } catch(e) {
-      console.error("Error signing in for support:", e);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/credential-already-in-use') {
+         setErrorMsg("Esta cuenta de Google ya está en uso.");
+      } else {
+         setErrorMsg(err.message || "Error al conectar con Google.");
+      }
       setIsLoading(false);
     }
+  };
+  
+  const handleLinkEmail = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (password !== confirmPassword) {
+         setErrorMsg("Las contraseñas no coinciden.");
+         return;
+     }
+     setIsLoading(true);
+     setErrorMsg(null);
+     try {
+         if (auth.currentUser) {
+             const cred = EmailAuthProvider.credential(email, password);
+             await linkWithCredential(auth.currentUser, cred);
+             window.history.replaceState({}, '', '/');
+             window.location.reload();
+         }
+     } catch (err: any) {
+         console.error(err);
+         if (err.code === 'auth/email-already-in-use') {
+            setErrorMsg("Este correo ya está registrado.");
+         } else if (err.code === 'auth/weak-password') {
+            setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
+         } else {
+            setErrorMsg(err.message || "Error al vincular el correo.");
+         }
+         setIsLoading(false);
+     }
+  };
+
+  const handleContactSupport = () => {
+      window.dispatchEvent(new CustomEvent('open-sidebar-menu', {
+        detail: {
+          openSupport: true,
+          message: "Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente."
+        }
+      }));
   };
 
   if (trialState === 'loading') {
@@ -272,30 +223,115 @@ export const VIPLandingView = () => {
     );
   }
 
+  if (trialState === 'link-email') {
+    return (
+      <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
+         <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+         <h1 className="text-2xl md:text-3xl font-black text-white mb-2 z-10">Continuar con Email</h1>
+         <p className="text-slate-400 mb-8 z-10">Vincula un correo para no perder tu música.</p>
+         
+         <form onSubmit={handleLinkEmail} className="w-full max-w-sm z-10 space-y-4">
+             {errorMsg && (
+                 <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl text-left">
+                   {errorMsg}
+                 </div>
+             )}
+             <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Correo Electrónico"
+                className="w-full px-4 py-3 bg-[#121214] border border-white/5 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#1ED760]"
+             />
+             <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Contraseña"
+                className="w-full px-4 py-3 bg-[#121214] border border-white/5 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#1ED760]"
+             />
+             <input
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirmar contraseña"
+                className="w-full px-4 py-3 bg-[#121214] border border-white/5 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#1ED760]"
+             />
+             
+             <button
+               type="submit"
+               disabled={isLoading}
+               className="w-full mt-4 bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors disabled:opacity-50"
+             >
+               {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "VINCULAR CUENTA"}
+             </button>
+             
+             <button
+                type="button"
+                onClick={() => setTrialState('expired')}
+                className="mt-4 text-slate-400 font-bold hover:text-white transition-colors text-sm uppercase tracking-wider"
+             >
+                VOLVER
+             </button>
+         </form>
+      </div>
+    );
+  }
+
   if (trialState === 'expired') {
+    const isAnonymous = auth.currentUser?.isAnonymous;
     return (
       <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
         <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
         <span className="text-6xl mb-6 block z-10">🎵</span>
-        <h1 className="text-2xl md:text-3xl font-black text-white mb-2 z-10">Ya disfrutaste de tu prueba gratuita.</h1>
-        <p className="text-slate-300 text-lg mb-6 z-10">Gracias por probar Flux Music.</p>
-        <p className="text-slate-400 font-medium mb-10 max-w-sm z-10">Continúa disfrutando de toda la música sin anuncios por solo <br/><span className="text-white font-bold text-xl">5 € al mes</span>.</p>
-        <button
-          onClick={handleContactSupport}
-          disabled={isLoading}
-          className="w-full max-w-sm bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors z-10 disabled:opacity-50"
-        >
-          {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-            <>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</>
-          )}
-        </button>
+        <h1 className="text-2xl md:text-3xl font-black text-white mb-2 z-10">
+           {isAnonymous ? "Conserva toda tu música" : "Ya disfrutaste de tu prueba gratuita."}
+        </h1>
+        <p className="text-slate-300 text-lg mb-8 z-10">
+           {isAnonymous 
+             ? "No pierdas tus playlists, historial ni favoritos." 
+             : "Continúa disfrutando de toda la música sin anuncios por solo 5 € al mes."}
+        </p>
+        
+        {isAnonymous ? (
+            <div className="flex flex-col gap-4 w-full max-w-sm z-10 mt-4">
+                 <button
+                   onClick={() => setTrialState('link-email')}
+                   className="w-full bg-white text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors"
+                 >
+                   📧 Continuar con Email
+                 </button>
+                 
+                 <button
+                   onClick={handleLinkGoogle}
+                   disabled={isLoading}
+                   className="w-full bg-[#4285F4] text-white font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#3367d6] transition-colors disabled:opacity-50"
+                 >
+                   {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "🔵 Continuar con Google"}
+                 </button>
+            </div>
+        ) : (
+            <button
+              onClick={handleContactSupport}
+              disabled={isLoading}
+              className="w-full max-w-sm bg-emerald-500 text-black font-black uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors z-10 disabled:opacity-50"
+            >
+              {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+                <>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</>
+              )}
+            </button>
+        )}
+
         {auth.currentUser && (
           <button
             onClick={() => {
               signOut(auth);
               window.location.reload();
             }}
-            className="mt-6 text-white/40 hover:text-white/80 transition-colors text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 z-10"
+            className="mt-12 text-white/40 hover:text-white/80 transition-colors text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 z-10"
           >
             <LogOut className="w-4 h-4" />
             Cerrar Sesión

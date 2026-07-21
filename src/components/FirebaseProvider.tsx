@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
-import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, signInAnonymously } from "firebase/auth";
+import { onAuthStateChanged, User, signOut, signInAnonymously } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, increment, onSnapshot, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
@@ -37,52 +37,6 @@ const FirebaseContext = createContext<FirebaseContextType>({
 
 export const useFirebase = () => useContext(FirebaseContext);
 
-
-const generateDeviceHash = async () => {
-  const w = window.screen.width || 0;
-  const h = window.screen.height || 0;
-  const screenRes = Math.max(w, h) + 'x' + Math.min(w, h);
-  
-  const ua = navigator.userAgent;
-  let os = 'Unknown';
-  if (ua.indexOf('Win') !== -1) os = 'Windows';
-  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
-  if (ua.indexOf('Linux') !== -1) os = 'Linux';
-  if (ua.indexOf('Android') !== -1) os = 'Android';
-  if (ua.indexOf('like Mac') !== -1) os = 'iOS';
-  
-  let canvasFingerprint = '';
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.textBaseline = 'top';
-      ctx.font = '14px Arial';
-      ctx.fillStyle = '#f60';
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = '#069';
-      ctx.fillText('flux,music,vip', 2, 15);
-      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('flux,music,vip', 4, 17);
-      canvasFingerprint = canvas.toDataURL();
-    }
-  } catch (e) {}
-  
-  const components = [
-    os,
-    screenRes,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.hardwareConcurrency || 'unknown',
-    (navigator as any).deviceMemory || 'unknown',
-    canvasFingerprint
-  ].join('|');
-  
-  const msgBuffer = new TextEncoder().encode(components);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
 
 export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -135,39 +89,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticatingRef.current = true;
         (window as any).isFluxAuthenticating = true;
 
-        // Recover VIP guest session if available
-        const uuid = localStorage.getItem('flux_vip_device_id');
-        if (uuid) {
-          try {
-            const q = query(collection(db, 'vip_activations'), where('uuid', '==', uuid), limit(1));
-            const snaps = await getDocs(q);
-            if (!snaps.empty) {
-              const act = snaps.docs[0].data();
-              if (act.deviceHash) {
-                const email = `socio.${act.deviceHash.substring(0, 6)}@fluxmusic.com`;
-                const pass = `${act.deviceHash.substring(0, 10)}_fluxvip`;
-                await signInWithEmailAndPassword(auth, email, pass);
-                isAuthenticatingRef.current = false;
-                (window as any).isFluxAuthenticating = false;
-                return;
-              }
-            }
-          } catch (e) {
-            console.error("Failed to recover guest:", e);
-          }
-        }
-        
-        // Auto-login anonymously if no session exists to prevent register prompts
         try {
-          await signInAnonymously(auth);
+            await signInAnonymously(auth);
         } catch (e) {
-          console.error("Failed anonymous sign-in:", e);
-          setDbUserProfile(null);
-          setAccessData(null);
-          setLoading(false);
+            console.error("Failed auto sign-in:", e);
+            setDbUserProfile(null);
+            setAccessData(null);
+            setLoading(false);
         } finally {
-          isAuthenticatingRef.current = false;
-          (window as any).isFluxAuthenticating = false;
+            isAuthenticatingRef.current = false;
+            (window as any).isFluxAuthenticating = false;
         }
         return;
       }
@@ -180,25 +111,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         
         const snapshotUnsubscribe = onSnapshot(userRef, async (snapshot) => {
           try {
-            
-            let deviceHasTrial = false;
-            let deviceTrialActive = false;
-            let deviceTrialStart = 0;
-            try {
-              const hash = await generateDeviceHash();
-              const hashRef = doc(db, 'vip_devices', hash);
-              const hashDoc = await getDoc(hashRef);
-              if (hashDoc.exists()) {
-                deviceHasTrial = true;
-                const hd = hashDoc.data();
-                deviceTrialStart = hd.activatedAt || 0;
-                if (Date.now() <= deviceTrialStart + 7 * 24 * 60 * 60 * 1000) {
-                  deviceTrialActive = true;
-                }
-              }
-            } catch (e) {
-              console.error("Device hash check failed", e);
-            }
             
             const isVipAccount = u.email?.startsWith('vip_');
             let tStart = null;
@@ -219,14 +131,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             }
             if (snapshot.exists()) {
               const data = snapshot.data();
-              if (deviceHasTrial) {
-                // Keep the deviceHash in sync with the user document so the admin can delete it if needed
-                generateDeviceHash().then(hash => {
-                  if (data.deviceHash !== hash) {
-                    setDoc(userRef, { deviceHash: hash }, { merge: true }).catch(() => {});
-                  }
-                }).catch(() => {});
-              }
               setDbUserProfile({
                 displayName: data.displayName,
                 photoURL: data.photoURL
@@ -263,35 +167,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let finalPlan = planType;
             let finalTStart = tStart;
             
-            // Apply device trial ONLY if the user doesn't have an explicitly expired account trial or subscription
-            const hasExplicitSub = subEnd !== null;
-            const hasExplicitTrial = tStart !== null;
-            const isSubExpired = hasExplicitSub && subEnd <= now;
-            const isTrialExpired = hasExplicitTrial && (tStart === 0 || (tStart + trialDurationDays * msPerDay) <= now);
-            const isPlanNone = planType === 'none';
-
-            if (deviceHasTrial && u.email !== "eltygere8651@gmail.com") {
-              // If the user already has an explicit expired subscription or explicitly expired trial on their account,
-              // the account status takes precedence (they can't use a new device trial to bypass an expired account).
-              const isAccountExpired = isSubExpired || isTrialExpired;
-              const hasActiveSub = hasExplicitSub && !isSubExpired;
-              
-              if (!hasActiveSub && !isAccountExpired) {
-                if (deviceTrialActive) {
-                  finalIsValid = true;
-                  finalPlan = "free";
-                  finalTStart = deviceTrialStart;
-                  daysRemaining = Math.max(0, Math.ceil(((deviceTrialStart + 7 * msPerDay) - now) / msPerDay));
-                } else {
-                  // Device trial is EXPIRED!
-                  // Enforce expiration so they can't request again.
-                  finalIsValid = false;
-                  finalPlan = "free";
-                  finalTStart = 1; 
-                }
-              }
-            }
-
             setAccessData({
               trialStart: finalTStart,
               subscriptionEnd: subEnd,
@@ -396,8 +271,6 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 lastLogin: serverTimestamp(),
                 lastActiveAt: Date.now(),
                 totalUsageTime: 0,
-                trialStart: null,
-                plan: "none",
                 maxUsers: 1
               });
               // fetchUserData();
