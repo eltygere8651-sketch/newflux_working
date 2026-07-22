@@ -89,11 +89,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticatingRef.current = true;
         (window as any).isFluxAuthenticating = true;
 
-        // Just fall back to anonymous if not logged in
+        // Attempt to recover VIP session from device hash
         try {
-            await signInAnonymously(auth);
+            const { generateDeviceHash } = await import('../lib/deviceHash');
+            const hash = await generateDeviceHash();
+            const { signInWithEmailAndPassword } = await import('firebase/auth');
+            await signInWithEmailAndPassword(auth, `device_${hash}@fluxplay.cc`, `Flux-${hash}`);
+            // If successful, onAuthStateChanged will fire again with the user!
+            return;
         } catch (e) {
-            console.error("Failed auto sign-in:", e);
+            // Do not create ghost anonymous users! Just stay unauthenticated.
             setDbUserProfile(null);
             setAccessData(null);
             setLoading(false);
@@ -167,6 +172,13 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let finalIsValid = isValid;
             let finalPlan = planType;
             let finalTStart = tStart;
+            
+            // Clean up ghost anonymous users that have no trial/plan
+            if (u.isAnonymous && !finalIsValid && !finalTStart && planType === "none") {
+                console.log("Ghost user detected, signing out...");
+                await signOut(auth);
+                return;
+            }
             
             setAccessData({
               trialStart: finalTStart,

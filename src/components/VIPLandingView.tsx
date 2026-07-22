@@ -118,9 +118,28 @@ export const VIPLandingView = () => {
       let uid;
       let targetUser = currentUser;
       if (!currentUser) {
-         const userCred = await signInAnonymously(auth);
-         uid = userCred.user.uid;
-         targetUser = userCred.user;
+         try {
+           const { signInWithEmailAndPassword } = await import('firebase/auth');
+           const fakeEmail = `device_${hash}@fluxplay.cc`;
+           const fakePassword = `Flux-${hash}`;
+           let userCred;
+           try {
+              userCred = await createUserWithEmailAndPassword(auth, fakeEmail, fakePassword);
+           } catch(e: any) {
+              if (e.code === 'auth/email-already-in-use') {
+                 userCred = await signInWithEmailAndPassword(auth, fakeEmail, fakePassword);
+              } else {
+                 throw e;
+              }
+           }
+           uid = userCred.user.uid;
+           targetUser = userCred.user;
+         } catch(e) {
+           console.error("Fallback to anonymous:", e);
+           const userCred = await signInAnonymously(auth);
+           uid = userCred.user.uid;
+           targetUser = userCred.user;
+         }
       } else {
          uid = currentUser.uid;
       }
@@ -216,7 +235,9 @@ export const VIPLandingView = () => {
      setErrorMsg(null);
      try {
          if (auth.currentUser) {
-             await createUserWithEmailAndPassword(auth, email, password);
+             const { updateEmail, updatePassword } = await import('firebase/auth');
+             await updateEmail(auth.currentUser, email);
+             await updatePassword(auth.currentUser, password);
              window.history.replaceState({}, '', '/');
              window.location.reload();
          }
