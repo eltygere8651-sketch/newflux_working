@@ -1,5 +1,34 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/components/FirebaseProvider.tsx', 'utf8');
-code = code.replace("      if (!u) {\n        // Recover VIP guest session if available\n        const uuid = localStorage.getItem('flux_vip_device_id');", "      if (!u) {\n        if (localStorage.getItem('flux_voluntary_logout') === 'true') {\n          setDbUserProfile(null);\n          setAccessData(null);\n          setLoading(false);\n          return;\n        }\n\n        // Recover VIP guest session if available\n        const uuid = localStorage.getItem('flux_vip_device_id');");
-code = code.replace("      if (u) {\n        // Fetch from Firestore without active websocket to save concurrents", "      if (u) {\n        localStorage.removeItem('flux_voluntary_logout');\n\n        // Fetch from Firestore without active websocket to save concurrents");
-fs.writeFileSync('src/components/FirebaseProvider.tsx', code);
+const file = 'src/components/VIPLandingView.tsx';
+let code = fs.readFileSync(file, 'utf8');
+
+const target = `      if (userDocExists) {
+        await updateDoc(doc(db, "users", uid), {
+          isVIPGuest: true,
+          lastActiveAt: now,
+          plan: "free",
+          trialStart: now,
+          maxUsers: 1,
+          originCampaign: campaignId || null,
+        });
+      } else {`;
+
+const replacement = `      if (userDocExists) {
+        await updateDoc(doc(db, "users", uid), {
+          isVIPGuest: true,
+          lastActiveAt: now,
+          plan: "free",
+          trialStart: now,
+          maxUsers: 1,
+          originCampaign: campaignId || null,
+          displayName: targetUser.displayName || randomName,
+        });
+      } else {`;
+
+if (code.includes(target)) {
+  code = code.replace(target, replacement);
+  fs.writeFileSync(file, code);
+  console.log("Patched successfully");
+} else {
+  console.log("Target not found!");
+}

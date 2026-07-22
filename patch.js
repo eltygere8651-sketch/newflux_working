@@ -1,7 +1,47 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/components/VIPLandingView.tsx', 'utf8');
-code = code.replace(
-/             const isInternal = auth\.currentUser\.email\?\.startsWith\("socio\."\);\s*if \(auth\.currentUser\.isAnonymous\) \{\s*await createUserWithEmailAndPassword\(auth, email, password\);\s*const cred = EmailAuthProvider\.credential\(email, password\);\s*await linkWithCredential\(auth\.currentUser, cred\);\s*\} else if \(isInternal\) \{\s*await updateEmail\(auth\.currentUser, email\);\s*await updatePassword\(auth\.currentUser, password\);\s*\} else \{\s*\/\/ In case it's already another provider or normal email, try link \(will fail if already email\)\s*const cred = EmailAuthProvider\.credential\(email, password\);\s*await linkWithCredential\(auth\.currentUser, cred\);\s*\}/,
-'             await createUserWithEmailAndPassword(auth, email, password);'
-);
-fs.writeFileSync('src/components/VIPLandingView.tsx', code);
+const file = 'src/components/VIPLandingView.tsx';
+let code = fs.readFileSync(file, 'utf8');
+
+const target = `      let uid;
+      if (!currentUser) {
+         const userCred = await signInAnonymously(auth);
+         uid = userCred.user.uid;
+      } else {
+         uid = currentUser.uid;
+      }
+      const now = Date.now();
+      
+      const randomId = Math.floor(1000 + Math.random() * 9000);
+      const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const randomName = \`\${prefix}\${randomId}\`;`;
+
+const replacement = `      let uid;
+      let targetUser = currentUser;
+      if (!currentUser) {
+         const userCred = await signInAnonymously(auth);
+         uid = userCred.user.uid;
+         targetUser = userCred.user;
+      } else {
+         uid = currentUser.uid;
+      }
+      const now = Date.now();
+      
+      const randomId = Math.floor(100 + Math.random() * 900);
+      const prefixes = ['BailarínFeliz', 'OsoMarchoso', 'TiburónDisco', 'PandaRitmo', 'GatoCumbiero', 'RayoSónico', 'PingüinoDJ'];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const randomName = \`\${prefix}\${randomId}\`;
+      
+      if (targetUser && !targetUser.displayName) {
+        try {
+          await updateProfile(targetUser, { displayName: randomName });
+        } catch(e) { console.error(e); }
+      }`;
+
+if (code.includes(target)) {
+  code = code.replace(target, replacement);
+  fs.writeFileSync(file, code);
+  console.log("Patched successfully");
+} else {
+  console.log("Target not found!");
+}

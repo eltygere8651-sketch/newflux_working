@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut, Mail } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, updateProfile } from 'firebase/auth';
 import { generateDeviceHash } from '../lib/deviceHash';
 
 const getOrCreateDeviceId = () => {
@@ -116,18 +116,26 @@ export const VIPLandingView = () => {
       }
 
       let uid;
+      let targetUser = currentUser;
       if (!currentUser) {
          const userCred = await signInAnonymously(auth);
          uid = userCred.user.uid;
+         targetUser = userCred.user;
       } else {
          uid = currentUser.uid;
       }
       const now = Date.now();
       
-      const randomId = Math.floor(1000 + Math.random() * 9000);
-      const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
+      const randomId = Math.floor(100 + Math.random() * 900);
+      const prefixes = ['BailarínFeliz', 'OsoMarchoso', 'TiburónDisco', 'PandaRitmo', 'GatoCumbiero', 'RayoSónico', 'PingüinoDJ'];
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
       const randomName = `${prefix}${randomId}`;
+      
+      if (targetUser && !targetUser.displayName) {
+        try {
+          await updateProfile(targetUser, { displayName: randomName }); await targetUser.reload();
+        } catch(e) { console.error(e); }
+      }
       
       if (campaignId) {
         updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
@@ -149,6 +157,7 @@ export const VIPLandingView = () => {
           trialStart: now,
           maxUsers: 1,
           originCampaign: campaignId || null,
+          displayName: targetUser.displayName || randomName,
         });
       } else {
         await setDoc(doc(db, "users", uid), {
