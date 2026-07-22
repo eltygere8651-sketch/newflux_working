@@ -900,7 +900,7 @@ function AppContent() {
               className="absolute top-[calc(100%+5px)] left-4 sm:left-6 z-50 origin-top-left"
             >
               <div className="flex flex-col p-1 gap-0.5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 rounded-lg w-auto min-w-[120px] pr-2 bg-[#121212]/95 backdrop-blur-2xl">
-                {user && !user.isAnonymous && (
+                {user && (
                   <button
                     type="button"
                     onClick={() => { setIsMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}

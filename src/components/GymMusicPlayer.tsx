@@ -947,7 +947,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && !authLoading && !user.isAnonymous) {
       const name = user.displayName;
       if (!name || name.includes("@") || name === "Usuario") {
         setShowNicknameModal(true);

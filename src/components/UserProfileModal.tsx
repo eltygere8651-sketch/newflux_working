@@ -557,15 +557,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                   </div>
 
                   {/* Email */}
-                  <div className="space-y-1.5 text-left">
-                    <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 px-1 flex justify-between items-center">
-                      <span>Correo Electrónico</span>
-                      {isGoogleProvider && (
-                        <span className="text-[9px] text-[#1ED760] normal-case font-bold bg-[#1ED760]/5 border border-[#1ED760]/10 px-2 py-0.5 rounded">
-                          Cuenta Google
-                        </span>
-                      )}
-                    </label>
+                  {!user.isAnonymous && (
+                    <>
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 px-1 flex justify-between items-center">
+                          <span>Correo Electrónico</span>
+                          {isGoogleProvider && (
+                            <span className="text-[9px] text-[#1ED760] normal-case font-bold bg-[#1ED760]/5 border border-[#1ED760]/10 px-2 py-0.5 rounded">
+                              Cuenta Google
+                            </span>
+                          )}
+                        </label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-3 w-4.5 h-4.5 text-slate-500" />
                       <input
@@ -612,6 +614,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                         </button>
                       </div>
                     </div>
+                  )}
+                  </>
                   )}
                 </div>
 
