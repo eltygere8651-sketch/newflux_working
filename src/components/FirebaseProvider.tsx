@@ -89,30 +89,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticatingRef.current = true;
         (window as any).isFluxAuthenticating = true;
 
-        // Try auto-login with device hash if created, else fall back to anonymous
+        // Just fall back to anonymous if not logged in
         try {
-            const { generateDeviceHash } = await import('../lib/deviceHash');
-            const hash = await generateDeviceHash();
-            const email = `socio.${hash.substring(0, 6)}@fluxmusic.com`;
-            const pass = `${hash.substring(0, 10)}_fluxvip`;
-            try {
-                await signInWithEmailAndPassword(auth, email, pass);
-                isAuthenticatingRef.current = false;
-                (window as any).isFluxAuthenticating = false;
-                return;
-            } catch (e) {
-                try {
-                    await createUserWithEmailAndPassword(auth, email, pass);
-                    isAuthenticatingRef.current = false;
-                    (window as any).isFluxAuthenticating = false;
-                    return;
-                } catch (e2) {
-                    await signInAnonymously(auth);
-                }
-            }
+            await signInAnonymously(auth);
         } catch (e) {
             console.error("Failed auto sign-in:", e);
-            try { await signInAnonymously(auth); } catch (e3) {}
             setDbUserProfile(null);
             setAccessData(null);
             setLoading(false);

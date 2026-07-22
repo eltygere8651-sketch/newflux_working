@@ -104,41 +104,6 @@ export const AuthModal: React.FC = () => {
         const prefixes = ['FluxUser', 'MusicFan', 'Listener', 'FluxRock', 'Player'];
         const randomName = `${prefixes[Math.floor(Math.random() * prefixes.length)]}${randomId}`;
         const userCred = await signupWithEmail(cleanEmail, cleanPassword, randomName);
-        setSuccessMsg("¡Cuenta creada con éxito! Solicitando acceso de prueba...");
-        
-        try {
-          // Send automatic trial request directly to backend
-          let fp = localStorage.getItem("flux_device_token");
-          if (!fp) {
-             fp = "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
-             localStorage.setItem("flux_device_token", fp);
-          }
-          
-          await setDoc(doc(db, "trial_requests", userCred.uid), {
-            uid: userCred.uid,
-            email: cleanEmail,
-            displayName: randomName,
-            fingerprint: fp,
-            ip: "Auto_Signup",
-            status: "pending",
-            createdAt: Date.now()
-          });
-
-          const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
-          const _tgData = _tgDoc.data();
-          if (_tgData?.botToken && _tgData?.chatId) {
-            const title = `🎁 Nueva Solicitud de Prueba de 7 Días 🎁`;
-            const text = `${title}\n\n👤 Usuario: ${randomName}\n📧 Email: ${cleanEmail}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
-            
-            await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: _tgData.chatId, text: text }),
-            });
-          }
-        } catch(e) {
-          console.warn("Could not auto-request trial:", e);
-        }
 
         setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito! Iniciando...");
       }

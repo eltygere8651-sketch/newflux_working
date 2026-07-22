@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut, Mail } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { db, auth, migrateGuestData } from '../lib/firebase';
-import { signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateEmail, updatePassword } from 'firebase/auth';
+import { db, auth } from '../lib/firebase';
+import { createUserWithEmailAndPassword, signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { generateDeviceHash } from '../lib/deviceHash';
 
 const getOrCreateDeviceId = () => {
@@ -81,10 +81,12 @@ export const VIPLandingView = () => {
   const handleActivateOrContinue = async () => {
     setIsLoading(true);
     try {
+      let userDocExists = false;
       const currentUser = auth.currentUser;
       if (currentUser) {
         const userDoc = await getDoc(doc(db, "users", currentUser.uid));
         if (userDoc.exists()) {
+           userDocExists = true;
            const data = userDoc.data();
            
            if (data.trialStart) {
@@ -103,29 +105,20 @@ export const VIPLandingView = () => {
         }
       }
       
-      // If we reach here, they are either not signed in, or they are signed in but don't have a trialStart yet.
+      // Prevent duplicated trials on the same device
+      const hash = await generateDeviceHash();
+      const deviceRef = doc(db, "vip_devices", hash);
+      const deviceDoc = await getDoc(deviceRef);
+      if (deviceDoc.exists()) {
+          setTrialState('expired');
+          setIsLoading(false);
+          return;
+      }
+
       let uid;
-      if (!currentUser || currentUser.isAnonymous) {
-         const oldUid = currentUser ? currentUser.uid : null;
-         const hash = await generateDeviceHash();
-         const internalEmail = `socio.${hash.substring(0, 6)}@fluxmusic.com`;
-         const internalPass = `${hash.substring(0, 10)}_fluxvip`;
-         
-         let userCred;
-         try {
-             userCred = await signInWithEmailAndPassword(auth, internalEmail, internalPass);
-         } catch (e) {
-             userCred = await createUserWithEmailAndPassword(auth, internalEmail, internalPass);
-         }
+      if (!currentUser) {
+         const userCred = await signInAnonymously(auth);
          uid = userCred.user.uid;
-         
-         if (oldUid && oldUid !== uid) {
-             try {
-                 await migrateGuestData(oldUid, uid);
-             } catch (e) {
-                 console.error("Failed to migrate guest data", e);
-             }
-         }
       } else {
          uid = currentUser.uid;
       }
@@ -136,24 +129,41 @@ export const VIPLandingView = () => {
       const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
       const randomName = `${prefix}${randomId}`;
       
-      const uuid = getOrCreateDeviceId();
-      
       if (campaignId) {
         updateDoc(doc(db, 'qr_campaigns', campaignId), { vipActivations: increment(1) }).catch(e => console.error(e));
       }
       
-      await setDoc(doc(db, "users", uid), {
-        displayName: randomName,
-        isVIPGuest: true,
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-        lastActiveAt: now,
-        totalUsageTime: 0,
-        plan: "free",
-        trialStart: now,
-        maxUsers: 1,
-        originCampaign: campaignId || null,
-      }, { merge: true });
+      // Register the device to prevent future free trials
+      await setDoc(deviceRef, {
+        uid: uid,
+        hash: hash,
+        activatedAt: now
+      });
+      
+      // Create the user profile
+      if (userDocExists) {
+        await updateDoc(doc(db, "users", uid), {
+          isVIPGuest: true,
+          lastActiveAt: now,
+          plan: "free",
+          trialStart: now,
+          maxUsers: 1,
+          originCampaign: campaignId || null,
+        });
+      } else {
+        await setDoc(doc(db, "users", uid), {
+          displayName: randomName,
+          isVIPGuest: true,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+          lastActiveAt: now,
+          totalUsageTime: 0,
+          plan: "free",
+          trialStart: now,
+          maxUsers: 1,
+          originCampaign: campaignId || null,
+        });
+      }
       
       window.history.replaceState({}, '', '/');
       window.location.reload();
@@ -197,18 +207,7 @@ export const VIPLandingView = () => {
      setErrorMsg(null);
      try {
          if (auth.currentUser) {
-             const isInternal = auth.currentUser.email?.startsWith("socio.");
-             if (auth.currentUser.isAnonymous) {
-                 const cred = EmailAuthProvider.credential(email, password);
-                 await linkWithCredential(auth.currentUser, cred);
-             } else if (isInternal) {
-                 await updateEmail(auth.currentUser, email);
-                 await updatePassword(auth.currentUser, password);
-             } else {
-                 // In case it's already another provider or normal email, try link (will fail if already email)
-                 const cred = EmailAuthProvider.credential(email, password);
-                 await linkWithCredential(auth.currentUser, cred);
-             }
+             await createUserWithEmailAndPassword(auth, email, password);
              window.history.replaceState({}, '', '/');
              window.location.reload();
          }
@@ -301,8 +300,8 @@ export const VIPLandingView = () => {
   }
 
   if (trialState === 'expired') {
-    const isInternalAccount = auth.currentUser?.email?.startsWith("socio.");
-    const isAnonymous = auth.currentUser?.isAnonymous || isInternalAccount;
+
+    const isAnonymous = auth.currentUser?.isAnonymous;
     return (
       <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
         <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />

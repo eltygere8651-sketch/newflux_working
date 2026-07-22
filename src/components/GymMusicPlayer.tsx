@@ -754,6 +754,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     logout,
   } = useFirebase();
 
+  const isTemporaryUser = accessData?.plan === "free" || user?.isAnonymous;
+
   const [trialRequestStatus, setTrialRequestStatus] = useState<
     "idle" | "sent" | "already_claimed"
   >("idle");
@@ -857,107 +859,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       setIsCheckingTrialRequest(false);
     }
   };
-
-  const handleRequestTrial = async () => {
-    if (!user) return;
-    try {
-      setIsCheckingTrialRequest(true);
-      const fp = getBrowserFingerprint();
-
-      const apiRes = await fetch("/api/trial/request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || "Socio Premium",
-          fingerprint: fp,
-        }),
-      });
-
-      let clientIp = "IP_DETECTOR_FAILED";
-      if (apiRes.ok) {
-        const json = await apiRes.json();
-        clientIp = json.clientIp || "N/A";
-      }
-
-      if (
-        clientIp !== "IP_DETECTOR_FAILED" &&
-        clientIp !== "127.0.0.1" &&
-        clientIp !== "::1"
-      ) {
-        const ipQuery = query(
-          collection(db, "trial_requests"),
-          where("ip", "==", clientIp),
-        );
-        const ipSnap = await getDocs(ipQuery);
-        if (!ipSnap.empty) {
-          setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg(
-            "Acceso Denegado: Su dirección IP ya ha sido utilizada para activar una cuenta de prueba.",
-          );
-          setIsCheckingTrialRequest(false);
-          return;
-        }
-      }
-
-      const reqId = user.uid;
-      await setDoc(doc(db, "trial_requests", reqId), {
-        uid: user.uid,
-        email: user.email || "anon",
-        displayName: user.displayName || "Socio Premium",
-        fingerprint: fp,
-        ip: clientIp,
-        status: "pending",
-        createdAt: Date.now(),
-      });
-
-      // Notify Admin via Telegram
-      try {
-        const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
-        const _tgData = _tgDoc.data();
-        if (_tgData?.botToken && _tgData?.chatId) {
-            const title = `🎁 Nueva Solicitud de Prueba de 7 Días (Desde Player) 🎁`;
-            const text = `${title}\n\n👤 Usuario: ${user.displayName || user.email}\n📧 Email: ${user.email}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
-            
-            await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: _tgData.chatId, text: text }),
-            }).catch(() => {});
-        } else {
-            await fetch("/api/support/telegram-trial", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                userEmail: user.email,
-                userName: user.displayName,
-              }),
-            });
-        }
-      } catch (e) {
-        console.error("Failed to notify admin via telegram:", e);
-      }
-
-      setTrialRequestStatus("sent");
-      setTrialRequestMsg(
-        "¡Solicitud enviada! El administrador ha sido notificado y la aprobará manualmente pronto.",
-      );
-      setIsCheckingTrialRequest(false);
-    } catch (err) {
-      console.error("Error requesting trial:", err);
-      alert("No se pudo enviar la solicitud. Inténtalo de nuevo.");
-      setIsCheckingTrialRequest(false);
-    }
-  };
-
   const isEcoMode = true;
-
   const isAdmin = user?.email === "eltygere8651@gmail.com";
 
-  // Auto-sync Telegram credentials to backend on load for instant support delivery
   useEffect(() => {
     if (isAdmin && user) {
       const syncTelegram = async () => {
@@ -1105,15 +1009,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [newPlaylistDesc, setNewPlaylistDesc] = useState("");
 
   // Spotify-style playlist copier states
-  const [playlistToCopy, setPlaylistToCopy] = useState<MusicPlaylist | null>(
-    null,
-  );
-  const [targetPlaylistIdForCopy, setTargetPlaylistIdForCopy] =
-    useState<string>("new");
-  const [copyPlaylistNameInput, setCopyPlaylistNameInput] =
-    useState<string>("");
-  const [copyPlaylistDescInput, setCopyPlaylistDescInput] =
-    useState<string>("");
   const [isProcessingCopy, setIsProcessingCopy] = useState<boolean>(false);
 
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
@@ -3073,7 +2968,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     window.addEventListener("refreshCommunity", handleRefreshCommunity);
 
     const fetchUserPlaylists = async (force = false) => {
-      if (!user) {
+      if (isTemporaryUser) { showNotification("Esta función está disponible exclusivamente para usuarios Premium."); return; } if (!user) {
         userDocsRef.current = [];
         processMergedDocs();
         return;
@@ -3372,19 +3267,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     return null;
   };
 
-  const handleCopyPlaylistToProfile = async (pl: MusicPlaylist) => {
-    if (!user) {
-      alert("Debes iniciar sesión para guardar canales en tu perfil.");
-      setAuthModalOpen(true);
-      return;
-    }
-    setPlaylistToCopy(pl);
-    setCopyPlaylistNameInput(pl.name);
-    setCopyPlaylistDescInput(
-      pl.description || "Canal guardado desde novedades",
-    );
-    setTargetPlaylistIdForCopy("new");
-  };
 
   const toggleMoverPlaylistACarpeta = async (
     playlist: MusicPlaylist,
@@ -3431,142 +3313,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       isInFolder ? "Sacado de Tus Listas" : "Añadido a Tus Listas",
     );
   };
-
-  const handleProcessCopyPlaylist = async () => {
-    if (!user || !playlistToCopy) return;
-    setIsProcessingCopy(true);
-
-    // Evitar duplicados en mi biblioteca
-    const alreadyOwns = userPlaylists.some(
-      (p) =>
-        p.ownerId === user.uid &&
-        p.name.trim().toLowerCase() ===
-          (copyPlaylistNameInput.trim() || playlistToCopy.name).toLowerCase(),
-    );
-    if (alreadyOwns) {
-      showNotification("Ya tienes un canal con este nombre en tu biblioteca.");
-      setIsProcessingCopy(false);
-      return;
-    }
-
-    try {
-      if (targetPlaylistIdForCopy === "new") {
-        // Option 1: Create a brand new independent channels group
-        const newPlDoc = {
-          name: copyPlaylistNameInput.trim() || playlistToCopy.name,
-          genre: playlistToCopy.genre || "Personalizado",
-          description:
-            copyPlaylistDescInput.trim() || "Canal guardado desde novedades",
-          icon: playlistToCopy.icon || "📂",
-          thumbnail_url: getPlaylistImage(playlistToCopy) || "",
-          ownerId: user.uid,
-          ownerName: user.displayName || "Socio Premium",
-          isPublic: true,
-          adminSecret: "ho82788278",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          tracks: playlistToCopy.tracks || [],
-          folder: "general",
-        };
-        const docRef = await addDoc(
-          collection(db, "users", user.uid, "playlists"),
-          newPlDoc,
-        );
-        window.dispatchEvent(new Event("refreshUserPlaylists"));
-      window.dispatchEvent(new Event("refreshCommunity"));
-        showNotification(`Canal "${newPlDoc.name}" guardado con éxito`);
-        setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
-      } else {
-        // Option 2: Append all tracks into an existing playlist owned by the user
-        const targetPl = userPlaylists.find(
-          (p) => p.id === targetPlaylistIdForCopy,
-        );
-        if (!targetPl) {
-          alert("La playlist de destino seleccionada no es válida.");
-          setIsProcessingCopy(false);
-          return;
-        }
-
-        // Filter tracks to avoid duplicate URLs
-        const existingUrls = new Set(
-          (targetPl.tracks || []).map((t) => t.url?.trim().toLowerCase()),
-        );
-        const tracksToAdd = (playlistToCopy.tracks || []).filter(
-          (t) => t.url && !existingUrls.has(t.url.trim().toLowerCase()),
-        );
-
-        if (tracksToAdd.length === 0) {
-          showNotification(
-            "Todas las canciones de esta playlist ya existen en tu canal.",
-          );
-          setPlaylistToCopy(null);
-          setIsProcessingCopy(false);
-          return;
-        }
-
-        const mergedTracks = [...(targetPl.tracks || []), ...tracksToAdd];
-        const targetRef = doc(db, "users", user.uid, "playlists", targetPl.id);
-
-        let updateData: any = {
-          tracks: mergedTracks,
-          updatedAt: serverTimestamp(),
-        };
-
-        const firstTrack = mergedTracks[0];
-        const firstTrackCover = firstTrack
-          ? firstTrack.artwork_url || firstTrack.thumbnail || firstTrack.artwork
-          : null;
-
-        const currentCover = targetPl.thumbnail_url || "";
-        const isDefaultCover =
-          !currentCover ||
-          currentCover === "📂" ||
-          currentCover === "" ||
-          currentCover.includes("pollinations.ai") ||
-          currentCover.includes("image.pollinations.ai");
-
-        if (firstTrackCover && isDefaultCover) {
-          updateData.thumbnail_url = firstTrackCover;
-        }
-
-        await updateDoc(targetRef, updateData);
-        window.dispatchEvent(new Event("refreshUserPlaylists"));
-      window.dispatchEvent(new Event("refreshCommunity"));
-
-        showNotification(
-          `¡Añadidas ${tracksToAdd.length} canciones a "${targetPl.name}" con éxito!`,
-        );
-
-        const newUpdatedPlaylistObj = {
-          ...targetPl,
-          tracks: mergedTracks,
-          thumbnail_url: updateData.thumbnail_url || targetPl.thumbnail_url,
-        };
-
-        if (selectedPlaylist?.id === targetPl.id) {
-          setSelectedPlaylist(newUpdatedPlaylistObj);
-        }
-        if (previewPlaylist?.id === targetPl.id) {
-          setPreviewPlaylist(newUpdatedPlaylistObj);
-        }
-        if (playingPlaylist?.id === targetPl.id) {
-          setPlayingPlaylist(newUpdatedPlaylistObj);
-        }
-
-        setUserPlaylists((prev) =>
-          prev.map((p) => (p.id === targetPl.id ? newUpdatedPlaylistObj : p)),
-        );
-      }
-      setPlaylistToCopy(null);
-    } catch (e) {
-      console.error("Error copying playlist:", e);
-      alert("Hubo un problema al guardar las canciones. Inténtalo de nuevo.");
-    } finally {
-      setIsProcessingCopy(false);
-    }
-  };
-
   const handleAddNewCanalClick = () => {
+    if (isTemporaryUser) {
+        showNotification("Esta función está disponible exclusivamente para usuarios Premium.");
+        return;
+    }
     setTrackToAddDestination(null);
     setModalNewPlaylistName("");
     setModalNewPlaylistDesc("");
@@ -4027,6 +3778,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const addSingleTrackToCurrentPlaylist = (track: MusicTrack) => {
+    if (isTemporaryUser) {
+        showNotification("Esta función está disponible exclusivamente para usuarios Premium.");
+        return;
+    }
     setTrackToAddDestination(track);
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite =
@@ -4457,6 +4212,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const addYoutubeTrackToPlaylist = (ytTrack: any) => {
+    if (isTemporaryUser) {
+        showNotification("Esta función está disponible exclusivamente para usuarios Premium.");
+        return;
+    }
     setTrackToAddDestination(ytTrack);
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite =
@@ -4474,6 +4233,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   };
 
   const saveCommunityPlaylistToLibrary = async (pl: MusicPlaylist) => {
+    if (isTemporaryUser) {
+        showNotification("Esta función está disponible exclusivamente para usuarios Premium.");
+        return;
+    }
     try {
       let currentUser = user;
       if (!currentUser) {
@@ -4540,7 +4303,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     event.preventDefault();
     event.stopPropagation();
 
-    if (!user) {
+    if (isTemporaryUser) { showNotification("Esta función está disponible exclusivamente para usuarios Premium."); return; } if (!user) {
       showNotification("Debes iniciar sesión para añadir a favoritos");
       return;
     }
@@ -8822,30 +8585,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                           )}
 
                           {(() => {
-                            const isFullPlaylistAlreadySaved =
-                              userPlaylists.some(
-                                (pl) =>
-                                  pl.ownerId === user?.uid &&
-                                  pl.name.toLowerCase() ===
-                                    previewPlaylist.name.toLowerCase(),
-                              );
-                            return isFullPlaylistAlreadySaved ? (
-                              <div className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[10px] uppercase tracking-wider rounded-full pointer-events-none select-none">
-                                <Check className="w-3.5 h-3.5 text-[#1ED760] stroke-[3px]" />
-                                <span>En tu Biblioteca</span>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  handleCopyPlaylistToProfile(previewPlaylist)
-                                }
-                                className="md:scale-100 hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 bg-white/5 border border-white/10 hover:border-white/30 text-white font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-full transition-all duration-300 shadow-xl cursor-pointer"
-                                title="Guardar este canal de novedades"
-                              >
-                                <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                                <span>Añadir Playlist Completa</span>
-                              </button>
-                            );
                           })()}
                         </div>
                       </div>
@@ -9686,235 +9425,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         </React.Suspense>
       )}
 
-      {/* OVERLAY: SPOTIFY-STYLE MULTI-OPTION PLAYLIST COPIER */}
-      <AnimatePresence>
-        {playlistToCopy && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              backdropFilter: isEcoMode ? "none" : "blur(8px)",
-            }}
-            animate={{
-              opacity: 1,
-              backdropFilter: isEcoMode ? "none" : "blur(8px)",
-            }}
-            exit={{
-              opacity: 0,
-              backdropFilter: isEcoMode ? "none" : "blur(8px)",
-            }}
-            className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 bg-black/85"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.95 }}
-              className="w-full max-w-lg bg-[#121212] border border-white/10 rounded-[32px] p-6 sm:p-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] relative overflow-hidden"
-            >
-              {/* Green layout ambient glow */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#1ED760]/10 blur-[60px] pointer-events-none rounded-full" />
-
-              <div className="flex justify-between items-start mb-6 relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1ED760]/10 rounded-xl flex items-center justify-center border border-[#1ED760]/20 shrink-0">
-                    <ListPlus className="w-5 h-5 text-[#1ED760]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-white tracking-[0.2em]">
-                      Guardar Canal
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 font-sans">
-                      Añade "{playlistToCopy.name}" a tu perfil
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setPlaylistToCopy(null)}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all transform hover:rotate-90 cursor-pointer text-center flex items-center justify-center"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Selection cards */}
-              <div className="space-y-5 relative z-10">
-                <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
-                  ¿Dónde quieres guardar este canal en tu biblioteca? Elige una
-                  opción:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Option 1: Create a new playlist */}
-                  <button
-                    type="button"
-                    onClick={() => setTargetPlaylistIdForCopy("new")}
-                    className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                      targetPlaylistIdForCopy === "new"
-                        ? "bg-[#1f1f1f] border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.15)]"
-                        : "bg-[#181818] border-white/5 hover:border-white/10"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <div
-                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${targetPlaylistIdForCopy === "new" ? "border-[#1ED760]" : "border-slate-500"}`}
-                      >
-                        {targetPlaylistIdForCopy === "new" && (
-                          <div className="w-2 bg-[#1ED760] h-2 rounded-full" />
-                        )}
-                      </div>
-                      <span className="text-xs font-black text-white uppercase tracking-wider font-sans">
-                        Crear Nuevo Canal
-                      </span>
-                    </div>
-                    <p className="text-[9.5px] text-slate-400 leading-snug">
-                      Clona el canal de novedades como una lista independiente.
-                    </p>
-                  </button>
-
-                  {/* Option 2: Add to an existing playlist (enabled only if they own at least one) */}
-                  <button
-                    type="button"
-                    disabled={
-                      userPlaylists.filter((p) => p.ownerId === user?.uid)
-                        .length === 0
-                    }
-                    onClick={() => {
-                      const owned = userPlaylists.filter(
-                        (p) => p.ownerId === user?.uid,
-                      );
-                      if (owned.length > 0) {
-                        setTargetPlaylistIdForCopy(owned[0].id);
-                      }
-                    }}
-                    className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                      userPlaylists.filter((p) => p.ownerId === user?.uid)
-                        .length === 0
-                        ? "opacity-40 grayscale cursor-not-allowed"
-                        : ""
-                    } ${
-                      targetPlaylistIdForCopy !== "new"
-                        ? "bg-[#1f1f1f] border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.15)]"
-                        : "bg-[#181818] border-white/5 hover:border-white/10"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <div
-                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${targetPlaylistIdForCopy !== "new" ? "border-[#1ED760]" : "border-slate-500"}`}
-                      >
-                        {targetPlaylistIdForCopy !== "new" && (
-                          <div className="w-2 bg-[#1ED760] h-2 rounded-full" />
-                        )}
-                      </div>
-                      <span className="text-xs font-black text-white uppercase tracking-wider font-sans">
-                        Añadir a Existente
-                      </span>
-                    </div>
-                    <p className="text-[9.5px] text-slate-400 leading-snug">
-                      Agrega las canciones de este canal a una de tus listas
-                      personales.
-                    </p>
-                  </button>
-                </div>
-
-                {/* Subforms based on choice */}
-                {targetPlaylistIdForCopy === "new" && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3 bg-[#181818] p-4 rounded-2xl border border-white/5"
-                  >
-                    <div>
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1 font-sans">
-                        Nombre del Canal
-                      </label>
-                      <input
-                        type="text"
-                        value={copyPlaylistNameInput}
-                        onChange={(e) =>
-                          setCopyPlaylistNameInput(e.target.value)
-                        }
-                        placeholder="Mi Lista de Música..."
-                        className="w-full bg-[#121212] border border-white/5 focus:border-[#1ED760]/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-[#1ED760]/20 transition-all font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1 font-sans">
-                        Descripción
-                      </label>
-                      <input
-                        type="text"
-                        value={copyPlaylistDescInput}
-                        onChange={(e) =>
-                          setCopyPlaylistDescInput(e.target.value)
-                        }
-                        placeholder="Breve descripción..."
-                        className="w-full bg-[#121212] border border-white/5 focus:border-[#1ED760]/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-[#1ED760]/20 transition-all font-medium"
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                {targetPlaylistIdForCopy !== "new" && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3 bg-[#181818] p-4 rounded-2xl border border-white/5"
-                  >
-                    <div>
-                      <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block mb-1.5 font-sans">
-                        Elige tu Canal Destino
-                      </label>
-                      <select
-                        value={targetPlaylistIdForCopy}
-                        onChange={(e) =>
-                          setTargetPlaylistIdForCopy(e.target.value)
-                        }
-                        className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-xs text-white outline-none focus:border-[#1ED760]/50 transition-all font-bold tracking-wide cursor-pointer"
-                      >
-                        {userPlaylists
-                          .filter((p) => p.ownerId === user?.uid)
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.icon || "📂"} {p.name} ({p.tracks?.length || 0}{" "}
-                              canciones)
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Submit button */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={handleProcessCopyPlaylist}
-                    disabled={
-                      isProcessingCopy ||
-                      (targetPlaylistIdForCopy === "new" &&
-                        !copyPlaylistNameInput.trim())
-                    }
-                    className="w-full py-4 bg-[#1ED760] hover:bg-white text-black hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-widest text-[10px] rounded-2xl cursor-pointer flex items-center justify-center gap-2 shadow-[0_8px_30px_rgba(30,215,96,0.15)] hover:shadow-[#1ED760]/20"
-                  >
-                    {isProcessingCopy ? (
-                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <ListPlus className="w-4.5 h-4.5" />
-                        <span>
-                          {targetPlaylistIdForCopy === "new"
-                            ? "CREAR CANAL EN MI PERFIL"
-                            : "FUSIONAR CON MI CANAL"}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {isAdminPanelOpen && (
         <React.Suspense fallback={null}>
           <LazyUserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />
@@ -10037,40 +9547,15 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 </p>
 
                 <div className="flex flex-col gap-3 w-full">
-                  {/* Si NO tienen plan (o es free sin trialStart) pueden pedir prueba. Si ya la pidieron ven mensaje */}
-                  {!((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart !== null) && !(accessData.plan !== "none" && accessData.plan !== "free") && (
-                    isCheckingTrialRequest ? (
-                      <div className="flex items-center justify-center p-3 text-blue-400 font-bold text-xs gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Procesando...</span>
-                      </div>
-                    ) : trialRequestStatus === "idle" ? (
-                      <button
-                        onClick={handleRequestTrial}
-                        className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
-                      >
-                        <span>⚡ Pedir Acceso Gratis de 7 Días</span>
-                      </button>
-                    ) : trialRequestStatus === "sent" ? (
-                      <div
-                        className="p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                      >
-                        {trialRequestMsg}
-                      </div>
-                    ) : null
-                  )}
-
-                  {/* Siempre mostramos el boton de contactar si ya probaron, si expiró su subs, o si fueron declinados/pendientes */}
-                  {( ((accessData.plan === "free" || accessData.plan === "none") && accessData.trialStart !== null) || (accessData.plan !== "none" && accessData.plan !== "free") || (trialRequestStatus !== "idle" && !isCheckingTrialRequest) ) && (
-                    <button
-                      onClick={async () => {
-                        window.dispatchEvent(new CustomEvent('open-sidebar-menu', { detail: { openSupport: true, message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
-                      }}
-                      className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
-                    >
-                      <span>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</span>
-                    </button>
-                  )}
+                  {/* Siempre mostramos el boton de contactar */}
+                  <button
+                    onClick={async () => {
+                      window.dispatchEvent(new CustomEvent('open-sidebar-menu', { detail: { openSupport: true, message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
+                    }}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
+                  >
+                    <span>⚡ SOLICITAR PREMIUM (ABRIR MENÚ LATERAL)</span>
+                  </button>
                   
                   {user && (
                     <div className="flex flex-col gap-2 mt-4 w-full">

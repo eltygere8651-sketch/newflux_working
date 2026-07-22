@@ -54,7 +54,7 @@ service cloud.firestore {
         )
       );
       
-      allow delete: if isAdmin() || (isSignedIn() && resource != null && (!("plan" in resource.data) || resource.data.plan == "none" || resource.data.plan == "free"));
+      allow delete: if isAdmin();
     }
 
     // 2. Playlists (Acceso Público de Lectura, Escritura SOLO Admin o con Clave)
@@ -162,14 +162,14 @@ service cloud.firestore {
       
       // Prevent any client-side modifications after creation
       allow update: if isAdmin();
-      allow delete: if isAdmin() || isSignedIn();
+      allow delete: if isAdmin();
     }
 
     match /vip_activations/{activationId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == activationId;
       allow update: if isAdmin();
-      allow delete: if isAdmin() || isSignedIn();
+      allow delete: if isAdmin();
     }
   }
 }
