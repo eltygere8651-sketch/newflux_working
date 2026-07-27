@@ -99,15 +99,18 @@ export const FAIView: React.FC<FAIViewProps> = ({
 }) => {
   const [topRatio, setTopRatio] = useState(() => {
     const saved = localStorage.getItem("fai_top_ratio");
-    return saved !== null ? parseInt(saved, 10) : 32;
+    if (saved === "32" || saved === "40") return 60; // Migrate old defaults
+    return saved !== null ? parseInt(saved, 10) : 60;
   });
   const [favRatio, setFavRatio] = useState(() => {
     const saved = localStorage.getItem("fai_fav_ratio");
-    return saved !== null ? parseInt(saved, 10) : 18;
+    if (saved === "18" || saved === "20") return 25; // Migrate old defaults
+    return saved !== null ? parseInt(saved, 10) : 25;
   });
   const [discRatio, setDiscRatio] = useState(() => {
     const saved = localStorage.getItem("fai_disc_ratio");
-    return saved !== null ? parseInt(saved, 10) : 50;
+    if (saved === "50" || saved === "40") return 15; // Migrate old defaults
+    return saved !== null ? parseInt(saved, 10) : 15;
   });
 
   const [discoveryLevel, setDiscoveryLevel] = useState(() => {
@@ -243,213 +246,104 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
     try {
       const activeGenre = forceGenre || selectedGenre;
-      if (genreExploration && activeGenre !== "Variado Mix" && activeGenre !== "La mezcla de Sofia") {
-      if (genreBuffer.length > 0) {
-        next = genreBuffer[0];
-        setGenreBuffer(prev => prev.slice(1));
-      } else {
-        // Fetch new buffer from YouTube Search for the genre to ensure real variety
-        try {
-          
-          // Add random freshness modifier to make the genre query infinite and varied
-          const freshnessModifiers = ["2024 playlist", "novedades", "exitos mix", "actual", "top hits", "tendencia", "mejores", "mix oficial"];
-          const randomModifier = freshnessModifiers[Math.floor(Math.random() * freshnessModifiers.length)];
-          const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(activeGenre + " " + randomModifier)}`);
-
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.length > 0) {
-              const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
-              let foundTracks: MusicTrack[] = [];
-              
-              if (playlists.length > 0) {
-                // Try up to 2 playlists to find tracks
-                for (let i = 0; i < Math.min(2, playlists.length); i++) {
-                  const pl = playlists[i];
-                  const plResp = await fetch(`/api/youtube/playlist?id=${pl.id}`);
-                  if (plResp.ok) {
-                    const plData = await plResp.json();
-                    const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
-                    if (tracksArray && tracksArray.length > 0) {
-                      foundTracks = tracksArray.map((d: any) => ({
-                        id: d.id,
-                        title: extractCleanTitle(d.title),
-                        artist: extractArtist(d.title, activeGenre, d),
-                        url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                        thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
-                        duration: d.duration || "N/A"
-                      })).filter((t: any) => isReasonableTrack(t.duration, t.title));
-                      if (foundTracks.length > 0) break;
-                    }
-                  }
-                }
-              }
-
-              if (foundTracks.length === 0) {
-                // fallback to videos
-                const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
-                if (validData.length > 0) {
-                   foundTracks = validData.map((d: any) => ({
-                    id: d.id,
-                    title: extractCleanTitle(d.title),
-                    artist: extractArtist(d.title, activeGenre, d),
-                    url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                    thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
-                    duration: d.duration || "N/A"
-                  }));
-                }
-              }
-
-              if (foundTracks.length > 0) {
-                // Filter out current track to ensure variety
-                const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
-                const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
-                const shuffled = pool.sort(() => Math.random() - 0.5);
-                next = shuffled[0];
-                setGenreBuffer(shuffled.slice(1));
-              }
-            }
-          }
-        } catch(e) {
-          console.error("FAI Genre search failed", e);
-        }
-      }
-    } else if (activeGenre === "Variado Mix" || activeGenre === "La mezcla de Sofia") {
-      if (genreBuffer.length > 0) {
-          next = genreBuffer[0];
-          setGenreBuffer(prev => prev.slice(1));
-        } else {
-          // Fetch new buffer from YouTube Search for trendy, non-repetitive variety focusing on top young hits
-          const TOP_HITS_QUERIES = [
-            "reggaeton actual 2024 exitos audio oficial",
-            "top canciones españa tendencia hoy hits official music video",
-            "house super top 2024 ibiza club hits audio",
-            "musica urbana españa 2024 official audio",
-            "exitos reggaeton nuevo 2024 bizarrap quevedo rauw official video",
-            "deep house vocal mix 2024 official music video",
-            "techno house super top 2024 tomorrowland sets official",
-            "los 40 principales españa 2024 hoy official audio"
-          ];
-          // Select a random query from the pool to avoid repeating the same lists!
-          const randomQuery = TOP_HITS_QUERIES[Math.floor(Math.random() * TOP_HITS_QUERIES.length)];
-          try {
-            const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.length > 0) {
-              const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
-              let foundTracks: MusicTrack[] = [];
-
-              if (playlists.length > 0) {
-                // Try up to 3 playlists to merge tracks and get huge variety
-                for (let i = 0; i < Math.min(3, playlists.length); i++) {
-                  const pl = playlists[i];
-                  const plResp = await fetch(`/api/youtube/playlist?id=${pl.id}`);
-                  if (plResp.ok) {
-                    const plData = await plResp.json();
-                    const tracksArray2 = Array.isArray(plData) ? plData : (plData.tracks || []);
-                    if (tracksArray2 && tracksArray2.length > 0) {
-                      const plTracks = tracksArray2.map((d: any) => ({
-                        id: d.id,
-                        title: extractCleanTitle(d.title),
-                        artist: extractArtist(d.title, "Variado", d),
-                        url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                        thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
-                        duration: d.duration || "N/A"
-                      })).filter((t: any) => isReasonableTrack(t.duration, t.title));
-                      foundTracks = [...foundTracks, ...plTracks];
-                    }
-                  }
-                }
-              }
-
-              if (foundTracks.length === 0) {
-                // Fallback to videos
-                const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
-                if (validData.length > 0) {
-                  foundTracks = validData.map((d: any) => ({
-                    id: d.id,
-                    title: extractCleanTitle(d.title),
-                    artist: extractArtist(d.title, "Variado", d),
-                    url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                    thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
-                    duration: d.duration || "N/A"
-                  }));
-                }
-              }
-
-              if (foundTracks.length > 0) {
-                // Filter out current track to ensure variety
-                const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
-                const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
-                const shuffled = pool.sort(() => Math.random() - 0.5);
-                next = shuffled[0];
-                setGenreBuffer(shuffled.slice(1));
-              }
-            }
-          }
-        } catch (e) {
-          console.error("FAI Varied Mix search failed", e);
-        }
-      }
-    }
-
-    if (!next) {
       const total = topRatio + favRatio + discRatio;
-      const wDisc = total > 0 ? discRatio / total : 0.50;
+      const wDisc = total > 0 ? discRatio / total : 0.15;
       const rand = Math.random();
+      let doDiscovery = rand < wDisc;
+      
+      const isSpecificGenre = genreExploration && activeGenre !== "Variado Mix" && activeGenre !== "La mezcla de Sofia";
 
-      if (rand < wDisc) {
+      if (!doDiscovery) {
+        next = selectNextDJTrack(topTracks, favorites, allTracks, {
+          discoveryLevel,
+          genreMode: isSpecificGenre,
+          selectedGenre: activeGenre,
+          topRatio,
+          favRatio,
+          discRatio: 0
+        });
+        if (!next) {
+          doDiscovery = true;
+        }
+      }
+
+      if (doDiscovery) {
         if (genreBuffer.length > 0) {
           next = genreBuffer[0];
           setGenreBuffer(prev => prev.slice(1));
         } else {
-          const TOP_HITS_QUERIES = [
-            "novedades musicales 2024",
-            "exitos actuales 2024 oficial",
-            "top canciones mundiales tendencia 2024",
-            "musica nueva top hits 2024",
-            "los 40 principales españa 2024 novedades",
-            "mejores exitos pop urbana 2024 oficial"
-          ];
-          const randomQuery = TOP_HITS_QUERIES[Math.floor(Math.random() * TOP_HITS_QUERIES.length)];
+          // General youtube search logic replacing all 3 branches
+          let queries = [];
+          let artistLabel = "Descubrimiento";
+          if (isSpecificGenre) {
+            artistLabel = activeGenre;
+            queries = [
+              activeGenre + " novedades 2026",
+              activeGenre + " exitos actuales",
+              "mejores canciones " + activeGenre + " 2026",
+              "top " + activeGenre + " mundial"
+            ];
+          } else if (genreExploration && (activeGenre === "Variado Mix" || activeGenre === "La mezcla de Sofia")) {
+            artistLabel = "Variado";
+            queries = [
+              "reggaeton actual 2026 exitos audio oficial",
+              "top canciones españa tendencia hoy hits official music video",
+              "exitos pop latino 2026 oficial",
+              "musica urbana españa 2026 official audio",
+              "exitos reggaeton nuevo 2026 oficial video",
+              "novedades musicales en español 2026",
+              "los 40 principales españa 2026 hoy official audio",
+              "musica variada en español 2026 exitos"
+            ];
+          } else {
+            queries = [
+              "novedades musicales pop reggaeton 2026",
+              "exitos actuales en español 2026",
+              "top canciones latinas mundiales 2026",
+              "musica en español top hits 2026",
+              "los 40 principales españa 2026 novedades",
+              "mejores exitos pop urbana latina 2026"
+            ];
+          }
+
+          const randomQuery = queries[Math.floor(Math.random() * queries.length)];
           try {
-            const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}`);
+            const resp = await fetch("/api/youtube/search?q=" + encodeURIComponent(randomQuery));
             if (resp.ok) {
               const data = await resp.json();
               if (data && data.length > 0) {
-                const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
-                let foundTracks: MusicTrack[] = [];
+                const playlists = data.filter((d) => d.isPlaylist).sort(() => Math.random() - 0.5);
+                let foundTracks = [];
                 if (playlists.length > 0) {
                   for (let i = 0; i < Math.min(3, playlists.length); i++) {
                     const pl = playlists[i];
-                    const plResp = await fetch(`/api/youtube/playlist?id=${pl.id}`);
+                    const plResp = await fetch("/api/youtube/playlist?id=" + pl.id);
                     if (plResp.ok) {
                       const plData = await plResp.json();
                       const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
                       if (tracksArray && tracksArray.length > 0) {
-                        const plTracks = tracksArray.map((d: any) => ({
+                        const plTracks = tracksArray.map((d) => ({
                           id: d.id,
                           title: extractCleanTitle(d.title),
-                          artist: extractArtist(d.title, "Novedades", d),
-                          url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                          thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
+                          artist: extractArtist(d.title, artistLabel, d),
+                          url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
+                          thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
                           duration: d.duration || "N/A"
-                        })).filter((t: any) => isReasonableTrack(t.duration, t.title));
+                        })).filter((t) => isReasonableTrack(t.duration, t.title));
                         foundTracks = [...foundTracks, ...plTracks];
                       }
                     }
                   }
                 }
                 if (foundTracks.length === 0) {
-                  const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
+                  const validData = data.filter((d) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
                   if (validData.length > 0) {
-                    foundTracks = validData.map((d: any) => ({
+                    foundTracks = validData.map((d) => ({
                       id: d.id,
                       title: extractCleanTitle(d.title),
-                      artist: extractArtist(d.title, "Novedades", d),
-                      url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
-                      thumbnail_url: d.thumbnail || d.thumbnail_url || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
+                      artist: extractArtist(d.title, artistLabel, d),
+                      url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
+                      thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
                       duration: d.duration || "N/A"
                     }));
                   }
@@ -464,7 +358,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               }
             }
           } catch (e) {
-            console.error("FAI Algoritmo Discovery search failed", e);
+            console.error("FAI YouTube search failed", e);
           }
         }
       }
@@ -473,17 +367,16 @@ export const FAIView: React.FC<FAIViewProps> = ({
         next = selectNextDJTrack(topTracks, favorites, allTracks, { 
           discoveryLevel,
           genreMode: false,
-          topRatio,
-          favRatio,
-          discRatio: 0 
+          topRatio: 33,
+          favRatio: 33,
+          discRatio: 33
         });
       }
-    }
-    
-    if (next) {
-      onPlayTrack(next);
-      setIsRadioActive(true);
-    }
+
+      if (next) {
+        onPlayTrack(next);
+        setIsRadioActive(true);
+      }
     } catch (e) {
       console.error("FAI handleNextTrack failed", e);
     } finally {
@@ -515,10 +408,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
   
     const handleStartWelcome = async () => {
-    setGenreExploration(true);
-    localStorage.setItem("fai_genre_exploration", "true");
-    setGenreBuffer([]);
-
     setSpeaking(false);
     setIsSpeakingPaused(false);
     setIsRadioActive(true);

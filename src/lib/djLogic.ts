@@ -36,15 +36,14 @@ export function selectNextDJTrack(
     
     // If no tracks found with that genre in top/favs, fallback to discovery for that genre
     if (currentTop.length === 0 && currentFavs.length === 0 && currentDisc.length === 0) {
-      // In worst case, just fallback to discovery pool without strict genre but we tried
-      currentDisc = discoveryPool;
+      return null;
     }
   }
 
-  // Determine user parameters with strict fallback to default (30, 20, 50)
-  let topRatio = 32;
-  let favRatio = 18;
-  let discRatio = 50;
+  // Determine user parameters with strict fallback to industry standard defaults (60, 25, 15)
+  let topRatio = 60;
+  let favRatio = 25;
+  let discRatio = 15;
 
   // Retrieve from localStorage if available in browser
   if (typeof window !== "undefined" && window.localStorage) {
@@ -52,9 +51,18 @@ export function selectNextDJTrack(
       const savedTop = window.localStorage.getItem("fai_top_ratio");
       const savedFav = window.localStorage.getItem("fai_fav_ratio");
       const savedDisc = window.localStorage.getItem("fai_disc_ratio");
-      if (savedTop !== null) topRatio = parseInt(savedTop, 10);
-      if (savedFav !== null) favRatio = parseInt(savedFav, 10);
-      if (savedDisc !== null) discRatio = parseInt(savedDisc, 10);
+      if (savedTop !== null) {
+        if (savedTop === "32" || savedTop === "40") topRatio = 60;
+        else topRatio = parseInt(savedTop, 10);
+      }
+      if (savedFav !== null) {
+        if (savedFav === "18" || savedFav === "20") favRatio = 25;
+        else favRatio = parseInt(savedFav, 10);
+      }
+      if (savedDisc !== null) {
+        if (savedDisc === "50" || savedDisc === "40") discRatio = 15;
+        else discRatio = parseInt(savedDisc, 10);
+      }
     } catch (e) {
       console.warn("Could not read ratios from localStorage:", e);
     }
@@ -67,9 +75,9 @@ export function selectNextDJTrack(
 
   // Normalize so that the ratios are converted to probabilities summing to 1.0
   const total = topRatio + favRatio + discRatio;
-  const wTop = total > 0 ? topRatio / total : 0.32;
-  const wFav = total > 0 ? favRatio / total : 0.18;
-  const wDisc = total > 0 ? discRatio / total : 0.50;
+  const wTop = total > 0 ? topRatio / total : 0.60;
+  const wFav = total > 0 ? favRatio / total : 0.25;
+  const wDisc = total > 0 ? discRatio / total : 0.15;
 
   const rand = Math.random();
 
@@ -84,7 +92,7 @@ export function selectNextDJTrack(
   } else {
     // Fallback logic if some lists are empty
     let fallbackPool = [...currentTop, ...currentFavs, ...currentDisc];
-    if (fallbackPool.length === 0) {
+    if (fallbackPool.length === 0 && !config.genreMode) {
       fallbackPool = [...topTracks, ...favorites, ...discoveryPool];
     }
     if (fallbackPool.length === 0) return null;
