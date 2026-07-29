@@ -212,7 +212,7 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEndHandler}
     >
-      <div className="relative overflow-hidden rounded-2xl bg-[#121212] border border-[#1ED760]/20 shadow-xl group min-h-[90px] sm:min-h-[100px]">
+      <div className="relative overflow-hidden rounded-2xl bg-[#121212] border border-[#1ED760]/20 shadow-xl group min-h-[110px] sm:min-h-[120px]">
         
         {/* Glow ambient effect */}
         <div className="absolute -top-12 -left-12 w-48 h-48 bg-[#1ED760]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#1ED760]/20 transition-all duration-700" />
@@ -261,7 +261,7 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
             className="relative z-10 flex flex-row items-center gap-3 sm:gap-4 p-3 sm:p-4 h-full w-full"
           >
             {/* Cover image thumbnail */}
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden shadow-md border border-white/10 group-hover:scale-[1.02] transition-transform duration-300">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-xl overflow-hidden shadow-md border border-white/10 group-hover:scale-[1.02] transition-transform duration-300">
               <img
                 src={imageUrl}
                 alt={activeItem.title}
