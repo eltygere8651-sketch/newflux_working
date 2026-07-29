@@ -3,6 +3,7 @@ import {
   Play,
   Pause,
   ListPlus,
+  ListMusic,
   Sparkles,
   ChevronRight,
   ChevronDown,
@@ -20,6 +21,8 @@ import {
 import { MusicTrack } from "../types";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { Carousel } from "./Carousel";
+import { FeaturedUpdateBanner } from "./FeaturedUpdateBanner";
+import { PromotePlaylistModal } from "./PromotePlaylistModal";
 
 import { LazyImage } from "./LazyImage";
 
@@ -43,46 +46,46 @@ interface ExploreViewProps {
   isPlaying?: boolean;
 }
 
+const cleanUrl = (url?: any) => {
+  if (!url || typeof url !== "string") return "";
+  if (url.includes("i.ytimg.com")) {
+    let clean = url.split("?")[0];
+    if (clean.endsWith("hqdefault.jpg")) {
+      clean = clean.replace("hqdefault.jpg", "hqdefault.jpg");
+    }
+    return clean;
+  }
+  if (url.includes("googleusercontent.com")) {
+    return url.replace(/=w\d+-h\d+/, "=w512-h512").replace(/=s\d+/, "=s512");
+  }
+  return url;
+};
+
 const getTrackImage = (track?: any): string | null => {
   if (!track) return null;
-  if (track.thumbnail) return track.thumbnail;
-  if (track.thumbnail_url) return track.thumbnail_url;
-  if (track.imageUrl) return track.imageUrl;
-  if (track.artwork_url) return track.artwork_url;
-  if (track.artwork) return track.artwork;
+  if (track.thumbnail) return cleanUrl(track.thumbnail);
+  if (track.thumbnail_url) return cleanUrl(track.thumbnail_url);
+  if (track.imageUrl) return cleanUrl(track.imageUrl);
+  if (track.artwork_url) return cleanUrl(track.artwork_url);
+  if (track.artwork) return cleanUrl(track.artwork);
   if (
     track.url &&
+    typeof track.url === "string" &&
     (track.url.includes("youtube.com") || track.url.includes("youtu.be"))
   ) {
     const match = track.url.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
     if (match && match[1]) {
-      return `https://i.ytimg.com/vi/${match[1]}/mqdefault.jpg`;
+      return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
     }
   }
-  if (track.id?.startsWith("yt_")) {
+  if (typeof track.id === "string" && track.id.startsWith("yt_")) {
     const vid = track.id.split("_")[1];
-    if (vid) return `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+    if (vid) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
   }
   if (track.id && typeof track.id === "string" && track.id.length === 11) {
-    return `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+    return `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
   }
   return null;
-};
-
-
-const cleanUrl = (url: string) => {
-  if (!url) return "";
-  if (url.includes("i.ytimg.com")) {
-    let clean = url.split("?")[0];
-    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {
-      clean = clean.replace("hq720.jpg", "mqdefault.jpg")
-                   .replace("sddefault.jpg", "mqdefault.jpg")
-                   .replace("hqdefault.jpg", "mqdefault.jpg")
-                   .replace("maxresdefault.jpg", "mqdefault.jpg");
-    }
-    return clean;
-  }
-  return url;
 };
 
 const getItemImage = (item: any): string => {
@@ -104,6 +107,10 @@ const getItemImage = (item: any): string => {
   
   const selfImg = getTrackImage(item);
   if (selfImg) return cleanUrl(selfImg);
+
+  if (item.id && typeof item.id === "string" && item.id.length === 11) {
+    return `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+  }
   
   return DEFAULT_MUSIC_COVER;
 };
@@ -136,6 +143,13 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     const [selectedSectionId, setSelectedSectionId] = useState("custom_0");
     const [isAdding, setIsAdding] = useState(false);
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+    const [promoteTarget, setPromoteTarget] = useState<{
+      id: string;
+      title: string;
+      thumbnail?: string;
+      artist?: string;
+      description?: string;
+    } | null>(null);
 
     const [itemToDelete, setItemToDelete] = useState<{
       docId?: string;
@@ -467,6 +481,22 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
 
     return (
       <div className="space-y-6 pb-6 px-0">
+        {/* FEATURED UPDATE PROMOTION BANNER */}
+        <div className="px-3">
+          <FeaturedUpdateBanner
+            onPlayPlaylist={(update) => {
+              if (loadPlaylistAndPlay) {
+                loadPlaylistAndPlay(update.playlistId);
+              }
+            }}
+            onViewPlaylist={(update) => {
+              if (loadPlaylistAndPlay) {
+                loadPlaylistAndPlay(update.playlistId);
+              }
+            }}
+          />
+        </div>
+
         {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
         <div className="px-3 flex items-center justify-between">
           {setSelectedCountry && selectedCountry && (
@@ -965,7 +995,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                         if (d && d.thumbnailUrl) {
                                            setSrc(d.thumbnailUrl);
                                         } else if (d && d.relatedStreams && d.relatedStreams.length > 0) {
-                                           setSrc(`https://i.ytimg.com/vi/${d.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg`);
+                                           setSrc(`https://i.ytimg.com/vi/${d.relatedStreams[0].url.replace("/watch?v=", "")}/hqdefault.jpg`);
                                         }
                                       })
                                       .catch(() => {});
@@ -975,10 +1005,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                       .then(r => r.json())
                                       .then(d => {
                                         if (d && d.thumbnail_url) setSrc(d.thumbnail_url);
-                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`);
+                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
                                       })
                                       .catch(() => {
-                                        setSrc(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`);
+                                        setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
                                       });
                                   }
                                 });
@@ -994,36 +1024,80 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             )}
                           </div>
                         </div>
-                        <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-[9px] font-medium text-white px-1.5 py-0.5 rounded-sm backdrop-blur-sm shadow-md">
-                          {item.artist !== "YouTube Music"
-                            ? "PLAYLIST"
-                            : "CANAL"}
+                        <div className="absolute bottom-1.5 right-1.5 bg-black/75 text-[9px] font-bold text-white px-2 py-0.5 rounded-md backdrop-blur-md border border-white/10 shadow-lg flex items-center gap-1">
+                          {item.isPlaylist ? (
+                            <>
+                              <ListMusic className="w-3 h-3 text-[#1ED760]" />
+                              <span>{item.trackCount ? `${item.trackCount} temas` : "PLAYLIST"}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-2.5 h-2.5 text-white fill-white" />
+                              <span>VIDEO</span>
+                            </>
+                          )}
                         </div>
                         {isAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (item.docId) {
-                                setItemToDelete({ docId: item.docId });
-                              } else {
-                                setItemToDelete({
-                                  sectionId: section.id,
-                                  itemId: item.id || item.url,
+                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPromoteTarget({
+                                  id: item.id || item.docId || item.url,
+                                  title: item.title,
+                                  thumbnail: getItemImage(item),
+                                  artist: item.artist,
+                                  description: item.description,
                                 });
-                              }
-                            }}
-                            className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-500/80 text-white p-1 rounded-full backdrop-blur-sm shadow-md transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                              }}
+                              className="bg-black/80 hover:bg-[#1ED760] hover:text-black text-[#1ED760] p-1 rounded-full backdrop-blur-md border border-[#1ED760]/40 shadow-md transition-all scale-95 hover:scale-105"
+                              title="Promocionar como destacada 🔥"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (item.docId) {
+                                  setItemToDelete({ docId: item.docId });
+                                } else {
+                                  setItemToDelete({
+                                    sectionId: section.id,
+                                    itemId: item.id || item.url,
+                                  });
+                                }
+                              }}
+                              className="bg-black/60 hover:bg-red-500/80 text-white p-1 rounded-full backdrop-blur-sm shadow-md transition-colors"
+                              title="Eliminar"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <p
-                        className="text-[12px] font-bold text-white leading-tight line-clamp-2"
-                        title={item.title}
-                      >
-                        {item.title}
-                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        <p
+                          className="text-[12px] font-bold text-white leading-tight line-clamp-1 group-hover:text-[#1ED760] transition-colors"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
+                          {item.isPlaylist ? (
+                            <>
+                              <span>{item.artist || "YouTube Music"}</span>
+                              {Boolean(item.trackCount || item.tracks?.length) && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-[#1ED760]/90 font-semibold">{item.trackCount || item.tracks?.length} canciones</span>
+                                </>
+                              )}
+                            </>
+                          ) : (
+                            <span>{item.artist || "YouTube"}</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
@@ -1043,6 +1117,16 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
             </Carousel>
           </section>
         ))}
+
+        {/* PROMOTE PLAYLIST MODAL */}
+        {promoteTarget && (
+          <PromotePlaylistModal
+            isOpen={Boolean(promoteTarget)}
+            playlist={promoteTarget}
+            onClose={() => setPromoteTarget(null)}
+            onSuccess={() => showNotification("🔥 Playlist promocionada a todos los usuarios")}
+          />
+        )}
       </div>
     );
   },

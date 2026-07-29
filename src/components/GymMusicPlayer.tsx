@@ -436,7 +436,7 @@ export const ALL_DATABASE_TRACKS: MusicTrack[] = [
 ];
 
 const getPlaylistGradientClass = (name: string) => {
-  const hash = name
+  const hash = (name || "")
     .split("")
     .reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const gradients = [
@@ -644,17 +644,17 @@ const getPlaylistSaves = (
   return finalSaves;
 };
 
-const cleanUrl = (url: string) => {
-  if (!url) return "";
+const cleanUrl = (url?: any) => {
+  if (!url || typeof url !== "string") return "";
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
-    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {
-      clean = clean.replace("hq720.jpg", "mqdefault.jpg")
-                   .replace("sddefault.jpg", "mqdefault.jpg")
-                   .replace("hqdefault.jpg", "mqdefault.jpg")
-                   .replace("maxresdefault.jpg", "mqdefault.jpg");
+    if (clean.endsWith("mqdefault.jpg")) {
+      clean = clean.replace("mqdefault.jpg", "hqdefault.jpg");
     }
     return clean;
+  }
+  if (url.includes("googleusercontent.com")) {
+    return url.replace(/=w\d+-h\d+/, "=w512-h512").replace(/=s\d+/, "=s512");
   }
   return url;
 };
@@ -668,20 +668,21 @@ const getTrackImage = (track?: any): string | null => {
   if (track.artwork) return cleanUrl(track.artwork);
   if (
     track.url &&
+    typeof track.url === "string" &&
     (track.url.includes("youtube.com") || track.url.includes("youtu.be"))
   ) {
     const match = track.url.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
     if (match && match[1]) {
-      return `https://i.ytimg.com/vi/${match[1]}/mqdefault.jpg`;
+      return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
     }
   }
-  if (track.id?.startsWith("yt_")) {
+  if (typeof track.id === "string" && track.id.startsWith("yt_")) {
     const vid = track.id.split("_")[1];
-    if (vid) return `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+    if (vid) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
   }
   // If track.id is exactly 11 characters (typical youtube ID)
   if (track.id && typeof track.id === "string" && track.id.length === 11) {
-    return `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+    return `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
   }
   return null;
 };
@@ -1441,7 +1442,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         ? `/api/youtube/playlist-info?id=${id}`
         : `/api/youtube/video-info?id=${id}`;
         
-      let data: any = { title: "", thumbnail: "", artist: "" };
+      let data: any = { title: "", thumbnail: "", artist: "", trackCount: 0, description: "" };
       
       try {
         const res = await fetch(endpoint);
@@ -1457,8 +1458,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
              
              data = {
                title: fallbackData.name || "Lista Recomendada",
-               thumbnail: fallbackData.thumbnailUrl || (fallbackData.relatedStreams && fallbackData.relatedStreams.length > 0 ? `https://i.ytimg.com/vi/${fallbackData.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg` : ""),
-               artist: "YouTube"
+               thumbnail: fallbackData.thumbnailUrl || (fallbackData.relatedStreams && fallbackData.relatedStreams.length > 0 ? `https://i.ytimg.com/vi/${fallbackData.relatedStreams[0].url.replace("/watch?v=", "")}/hqdefault.jpg` : ""),
+               artist: fallbackData.uploader || fallbackData.uploaderName || "YouTube Music",
+               trackCount: fallbackData.relatedStreams?.length || 0,
+               description: fallbackData.description || "Playlist de YouTube Music",
              };
           } else {
              const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
@@ -1469,29 +1472,57 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
              
              data = {
                title: fallbackData.title || "",
-               thumbnail: fallbackData.thumbnail_url || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-               artist: fallbackData.author_name || ""
+               thumbnail: fallbackData.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+               artist: fallbackData.author_name || "",
+               trackCount: 0,
+               description: "",
              };
           }
         } catch (e) {
           // If all APIs fail, just use default title but add it anyway
           data = {
              title: isPlaylist ? "Lista de YouTube" : "Video de YouTube",
-             thumbnail: isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-             artist: "YouTube"
+             thumbnail: isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+             artist: isPlaylist ? "YouTube Music" : "YouTube",
+             trackCount: 0,
+             description: "",
           };
         }
       }
+
+      // If it's a playlist and trackCount or thumbnail is missing, enrich using track list endpoint
+      if (isPlaylist) {
+        try {
+          const plRes = await fetch(`/api/youtube/playlist?id=${id}`);
+          if (plRes.ok) {
+            const tracks = await plRes.json();
+            if (Array.isArray(tracks) && tracks.length > 0) {
+              if (!data.trackCount || data.trackCount === 0) {
+                data.trackCount = tracks.length;
+              }
+              if (!data.thumbnail && tracks[0].thumbnail) {
+                data.thumbnail = tracks[0].thumbnail;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("No se pudo obtener la lista de temas para enriquecer:", e);
+        }
+      }
+
+      const cleanThumbnail = cleanUrl(data.thumbnail);
 
       await addDoc(collection(db, "explore_custom_playlists"), {
         id: id,
         title:
           data.title ||
           (isPlaylist ? "Lista Recomendada" : "Video Recomendado"),
-        thumbnail: data.thumbnail || "",
+        thumbnail: cleanThumbnail || "",
         url: url,
         isPlaylist: isPlaylist,
-        artist: data.artist || (isPlaylist ? "Tendencias Globales" : "YouTube"),
+        artist: data.artist || (isPlaylist ? "YouTube Music" : "YouTube"),
+        trackCount: data.trackCount || 0,
+        description: data.description || (data.trackCount ? `${data.trackCount} canciones` : "Playlist oficial de YouTube Music"),
         createdAt: serverTimestamp(),
         sectionId: sectionId || "custom_0",
         country: selectedCountry,
@@ -3090,8 +3121,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       : `https://i.ytimg.com/vi/${topPlayed[0].trackId}/mqdefault.jpg`,
                     tracks: topPlayed.map((t, i) => {
                       let vId = t.trackId;
-                      if (t.url && t.url.includes("v=")) {
-                        vId = t.url.split("v=")[1].split("&")[0];
+                      if (t.url && typeof t.url === "string" && t.url.includes("v=")) {
+                        vId = t.url.split("v=")[1]?.split("&")[0] || t.trackId;
                       }
                       return {
                         id: `local_his_${i}_${vId}`,
@@ -3112,7 +3143,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                 const topUniqueArtists: string[] = [];
                 for (const item of topPlayed) {
                   const artistName =
-                    item.artist || item.title?.split("-")[0]?.trim();
+                    item.artist || (typeof item.title === "string" ? item.title.split("-")[0]?.trim() : "");
                   if (
                     artistName &&
                     artistName !== "Artista" &&
@@ -4897,11 +4928,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               }
               console.warn("Unplayable track detected (copyright, regional block, or deleted). Auto-skipping...");
               // Skip automatically after a short timeout to prevent instant double skips
+              const skipDelay = trackListTab === "radio-fai" ? 200 : 800;
               setTimeout(() => {
                 if (handleNextRef.current) {
                   handleNextRef.current(true);
                 }
-              }, 1500);
+              }, skipDelay);
             }}
             onReady={(player) => {
               // Re-register Media Session and reinforce action handlers to beat YouTube iframe's own initial lock screen registration

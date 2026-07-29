@@ -122,66 +122,302 @@ export const FLUX_PAYOLA = [
 export const DJ_GENRES = [
   "La mezcla de Sofia",
   "Variado Mix",
-  "Reggaeton",
-  "Phonk",
-  "EDM",
   "Pop",
-  "Hip Hop",
-  "Hardstyle",
-  "Techno",
   "Rock",
-  "Metal",
+  "Reggaeton",
   "Trap",
+  "Rap",
+  "Hip-Hop",
+  "Electrónica",
   "House",
-  "Afrobeat"
+  "Techno",
+  "Dance",
+  "Indie",
+  "Alternativo",
+  "Latino",
+  "Bachata",
+  "Salsa",
+  "Merengue",
+  "Flamenco",
+  "R&B",
+  "Soul",
+  "Country",
+  "Metal",
+  "Jazz",
+  "Lo-Fi",
+  "Chill"
 ];
-export const isReasonableTrack = (duration: string | undefined | null, title: string | undefined | null): boolean => {
-  if (!duration || duration === "N/A" || duration === "0:00") return false;
-  const parts = duration.split(":");
-  if (parts.length >= 3) return false; // 1 hour or more is too long
-  if (parts.length === 2) {
-    const mins = parseInt(parts[0], 10);
-    const secs = parseInt(parts[1], 10);
-    if (mins > 6) return false; // More than 6 minutes is likely a compilation or extended version for a radio
-    if (mins === 0 && secs < 60) return false; // Less than 60 seconds is too short
-    if (mins === 1 && secs < 30) return false; // Less than 1:30 is usually an intro
-  } else if (parts.length === 1) {
-    return false; // usually just seconds
+
+export function getGenreQueries(
+  genre: string,
+  userTopTracks: MusicTrack[] = [],
+  userFavorites: MusicTrack[] = []
+): string[] {
+  const normalized = genre.trim().toLowerCase();
+
+  const topArtists = Array.from(
+    new Set(
+      [...userTopTracks, ...userFavorites]
+        .map((t) => t.artist)
+        .filter((a): a is string => Boolean(a && a !== "Desconocido" && a !== "Variado" && !a.includes("YouTube") && !a.includes("Topic")))
+    )
+  ).slice(0, 5);
+
+  const eraSuffixes = ["2026 exitos", "2024-2026 trending", "2015-2023 hits", "2000-2015 clasicos", "official audio"];
+
+  if (normalized === "la mezcla de sofia" || normalized === "variado mix" || normalized === "variado") {
+    const baseQueries = [
+      "novedades musicales pop reggaeton urbana 2026",
+      "top exitos actuales en español e ingles 2026",
+      "billboard hot 100 y los 40 principales 2026",
+      "exitos pop latino urbano 2000 2026 official audio",
+      "canciones mas escuchadas españa latinoamerica 2026",
+      "greatest global pop hits 2000-2026 official audio",
+      "tendencias musicales 2026 exitos mix",
+      "top hits mundiales 2010 2020 2026"
+    ];
+
+    if (topArtists.length > 0) {
+      topArtists.forEach((artist) => {
+        const randomEra = eraSuffixes[Math.floor(Math.random() * eraSuffixes.length)];
+        baseQueries.push(`${artist} ${randomEra}`);
+        baseQueries.push(`${artist} canciones exitos`);
+      });
+    }
+
+    return baseQueries;
   }
-  
+
+  const genreQueryMap: Record<string, string[]> = {
+    reggaeton: [
+      "reggaeton actual 2026 exitos audio oficial",
+      "reggaeton latinoamerica y españa 2024 2026",
+      "reggaeton clasicos 2000 2015 perreo antiguo",
+      "top reggaeton puerto rico colombia 2026",
+      "reggaeton lento suave exitos 2000-2026",
+      "exitos reggaeton nuevo 2026 oficial"
+    ],
+    pop: [
+      "pop en español exitos 2000-2026",
+      "pop latino novedades 2026 audio oficial",
+      "pop billboard hot 100 hits 2000-2026",
+      "pop 2000s 2010s clasicos e inolvidables",
+      "top pop canciones internacionales 2026"
+    ],
+    rock: [
+      "rock en español clasicos y actuales 2000-2026",
+      "rock internacional greatest hits 2000-2026",
+      "alternative rock hits 2000s 2010s 2020s",
+      "rock argentino y español exitos inolvidables",
+      "hard rock & indie rock top hits"
+    ],
+    trap: [
+      "trap latino exitos 2016-2026",
+      "trap en español españa puerto rico 2026",
+      "trap americano rap hip hop hits 2020-2026",
+      "trap urbano novedades 2026 official audio"
+    ],
+    rap: [
+      "rap en español exitos 2000-2026",
+      "hip hop rap internacional 2000-2026 hits",
+      "rap rap latino underground y comercial 2026",
+      "top rap songs 2000s 2010s 2020s"
+    ],
+    "hip-hop": [
+      "hip hop rap top hits 2000-2026",
+      "hip hop 2000s 2010s classic bangers",
+      "hip hop en español latinoamerica españa",
+      "billboard hip hop R&B hits 2026"
+    ],
+    "hip hop": [
+      "hip hop rap top hits 2000-2026",
+      "hip hop 2000s 2010s classic bangers",
+      "hip hop en español latinoamerica españa",
+      "billboard hip hop R&B hits 2026"
+    ],
+    electrónica: [
+      "electronic dance music hits 2000-2026",
+      "edm festival bangers 2010-2026",
+      "musica electronica exitos 2000-2026",
+      "top electronic dance tracks official audio"
+    ],
+    electronica: [
+      "electronic dance music hits 2000-2026",
+      "edm festival bangers 2010-2026",
+      "musica electronica exitos 2000-2026",
+      "top electronic dance tracks official audio"
+    ],
+    house: [
+      "house music official audio 2000-2026",
+      "deep house tech house hits 2020-2026",
+      "progressive house festival anthems 2010-2026",
+      "funky house & disco house classics"
+    ],
+    techno: [
+      "techno peak time driving 2020-2026",
+      "melodic techno & industrial hits 2000-2026",
+      "techno festival tracklist official audio",
+      "club techno anthems 2010-2026"
+    ],
+    dance: [
+      "dance pop hits 2000-2026",
+      "eurodance 2000s & modern dance 2026",
+      "top dance tracks festival radio",
+      "exitos dance en español e ingles"
+    ],
+    indie: [
+      "indie pop rock hits 2000-2026",
+      "indie en español españa latinoamerica 2000-2026",
+      "indie alternative top songs 2010-2026",
+      "indie chill & bedroom pop hits"
+    ],
+    alternativo: [
+      "musica alternativa en español e ingles 2000-2026",
+      "alternative rock pop hits 2000-2026",
+      "lo mejor del alternativo latino y mundial",
+      "indie alternativo novedades 2026"
+    ],
+    latino: [
+      "musica latina exitos 2000-2026",
+      "pop latino reggaeton bachata salsa 2026",
+      "canciones latinas mas populares 2000-2026",
+      "top hits latinoamerica españa 2026"
+    ],
+    bachata: [
+      "bachata exitos 2000-2026 romeo aventura prince royce",
+      "bachata romantica y moderna 2000-2026",
+      "bachatareggae & clasicos de la bachata",
+      "top bachata republica dominicana 2026"
+    ],
+    salsa: [
+      "salsa clasicos y exitos 2000-2026",
+      "salsa romantica Marc Anthony Grupo Niche",
+      "salsa brava y moderna 2000-2026",
+      "top salsa latina 2026 official audio"
+    ],
+    merengue: [
+      "merengue bailable exitos 2000-2026",
+      "merengue clasicos 2000s Juan Luis Guerra Olga Tañon",
+      "merengue urbano y tradicional 2026"
+    ],
+    flamenco: [
+      "flamenco fusion urbano exitos 2000-2026",
+      "flamenco pop rumba Rosalía C Tangana Niña Pastori",
+      "flamenco chill y clasicos modernos 2000-2026"
+    ],
+    "r&b": [
+      "r&b soul hits 2000-2026 billboard",
+      "smooth r&b classics 2000s 2010s 2020s",
+      "contemporary r&b official audio 2026"
+    ],
+    soul: [
+      "neo soul & modern soul hits 2000-2026",
+      "soul classic and contemporary anthems",
+      "r&b soul top tracks official audio"
+    ],
+    country: [
+      "country music top hits 2000-2026",
+      "country pop & modern country billboard 2026",
+      "country classics 2000s 2010s 2020s"
+    ],
+    metal: [
+      "metal heavy metal metalcore hits 2000-2026",
+      "alternative metal & hard rock 2000s 2010s 2020s",
+      "top metal tracks official audio"
+    ],
+    jazz: [
+      "smooth jazz & modern jazz 2000-2026",
+      "nu jazz & jazztronica relaxed vibes",
+      "jazz classics 2000s 2010s 2020s"
+    ],
+    "lo-fi": [
+      "lofi hip hop beats 2020-2026 chill study",
+      "lofi chillhop relaxed aesthetic music",
+      "lo fi beats 2000-2026 official audio"
+    ],
+    lofi: [
+      "lofi hip hop beats 2020-2026 chill study",
+      "lofi chillhop relaxed aesthetic music",
+      "lo fi beats 2000-2026 official audio"
+    ],
+    chill: [
+      "chillout lounge music 2000-2026",
+      "chill pop & r&b relaxed hits 2026",
+      "ambient chill vibes 2000-2026"
+    ]
+  };
+
+  const keyMatch = Object.keys(genreQueryMap).find((k) => normalized.includes(k));
+  if (keyMatch && genreQueryMap[keyMatch]) {
+    return genreQueryMap[keyMatch];
+  }
+
+  return [
+    `${genre} novedades 2026 official audio`,
+    `${genre} exitos 2020-2026`,
+    `${genre} top hits 2000-2015`,
+    `mejores canciones ${genre} 2000-2026`,
+    `top ${genre} mundial official music video`
+  ];
+}
+
+export const isReasonableTrack = (duration: string | undefined | null, title: string | undefined | null): boolean => {
   if (title) {
     const t = title.toLowerCase();
     if (
       t.includes("compilation") || 
+      t.includes("compilacion") ||
+      t.includes("compilació") ||
       t.includes("mashup") || 
       t.includes("megamix") || 
       t.includes("1 hour") || 
       t.includes("1 hora") ||
+      t.includes("2 hours") ||
+      t.includes("2 horas") ||
       t.includes("10 hours") ||
+      t.includes("10 horas") ||
+      t.includes("full album") ||
+      t.includes("album completo") ||
+      t.includes("disco completo") ||
+      t.includes("discografia") ||
       t.includes("best of") ||
-      t.includes("mix 202") || 
-      t.includes("mix 201") ||
       t.includes("top 50") ||
       t.includes("top 100") ||
       t.includes("top 40") ||
       t.includes("mas vistas") ||
       t.includes("más vistas") ||
-      t.includes("las canciones") ||
-      t.includes("los exitos") ||
-      t.includes("los éxitos") ||
+      t.includes("las canciones mas") ||
+      t.includes("los exitos de") ||
+      t.includes("los éxitos de") ||
       t.includes("en vivo") ||
       t.includes("live at") ||
       t.includes("concert") ||
       t.includes("playlist") ||
-      t.includes("full album")
+      t.includes("tutorial") ||
+      t.includes("karaoke") ||
+      t.includes("instrumental version") ||
+      t.includes("reaction") ||
+      t.includes("review") ||
+      t.includes("podcast") ||
+      t.includes("8d audio") ||
+      t.includes("bass boosted") ||
+      t.includes("speed up") ||
+      t.includes("nightcore")
     ) {
       return false;
     }
-    // Strict block for just "mix" if it's not "remix"
-    // Many mixes have " mix", "mix " but let's just reject if it has "mix" and is NOT a remix?
-    // User hates "compilaciones imcompletos" and "remis de compilaciones".
-    // We'll trust the duration filter mostly for mixes! (8 minute max).
-    // If it's <= 8 mins and has "mix" in the title, it's likely a normal remix or short DJ mix, which is fine.
   }
+
+  if (duration && duration !== "N/A" && duration !== "0:00") {
+    const parts = duration.split(":");
+    if (parts.length >= 3) return false;
+    if (parts.length === 2) {
+      const mins = parseInt(parts[0], 10);
+      const secs = parseInt(parts[1], 10);
+      if (mins > 7) return false;
+      if (mins === 0 && secs < 45) return false;
+    }
+  }
+  
   return true;
 };

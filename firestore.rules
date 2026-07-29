@@ -171,5 +171,11 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    // 10. Featured Updates (Promoción de Playlists)
+    match /featured_updates/{updateId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

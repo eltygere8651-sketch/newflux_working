@@ -346,6 +346,45 @@ app.get("/api/explore/custom-playlists", async (req, res) => {
   }
 });
 
+// Endpoint to send FCM push notification to topic "all_users" when a playlist is featured
+app.post("/api/admin/notify-featured-topic", async (req, res) => {
+  try {
+    const { title, body, playlistId, image } = req.body || {};
+    const notificationTitle = title || "🔥 Nueva playlist en Flux Music";
+    const notificationBody = body || "Descubre los temas más fuertes del momento";
+
+    console.log(`[FCM Topic] Sending promotion to topic "all_users": ${notificationTitle} - ${notificationBody}`);
+
+    // If Firebase Admin messaging is available, dispatch to FCM topic 'all_users'
+    if (admin.apps.length > 0) {
+      try {
+        const message = {
+          topic: "all_users",
+          notification: {
+            title: notificationTitle,
+            body: notificationBody,
+            ...(image ? { imageUrl: image } : {}),
+          },
+          data: {
+            playlistId: playlistId || "",
+            type: "featured_playlist",
+          },
+        };
+        await admin.messaging().send(message);
+        console.log(`[FCM Topic] Successfully sent FCM message to topic "all_users"`);
+        return res.json({ success: true, sent: true, topic: "all_users" });
+      } catch (fcmError: any) {
+        console.warn(`[FCM Topic] Messaging send attempted (FCM topic fallback handled):`, fcmError.message || fcmError);
+      }
+    }
+
+    return res.json({ success: true, sent: false, message: "Promoción registrada en topic all_users" });
+  } catch (err: any) {
+    console.error("Error in /api/admin/notify-featured-topic:", err);
+    return res.status(500).json({ error: "Error enviando notificación push" });
+  }
+});
+
 
 const userCache = new Map();
 const USER_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
@@ -1335,20 +1374,32 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
       try {
         let title = "";
         let thumbnail = "";
+        let artist = "";
+        let trackCount = 0;
+        let description = "";
 
         if (playlistId.startsWith("MPRE")) {
           const album = await yt.music.getAlbum(playlistId);
           if (album && album.header) {
             const head = album.header as any;
             title = head.title?.toString() || "Álbum Recomendado";
-            thumbnail = head.thumbnails?.[0]?.url || "";
+            artist = head.author?.name || head.author?.toString() || head.artist?.name || "YouTube Music";
+            const thumbs = head.thumbnails || [];
+            thumbnail = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || "";
+            trackCount = Number(head.song_count || head.item_count || head.tracks_count || 0);
+            description = head.description?.toString() || head.second_subtitle?.toString() || "";
           }
         } else {
           try {
             const playlist = await yt.getPlaylist(playlistId);
             if (playlist && playlist.info) {
-              title = playlist.info.title || "Lista Recomendada";
-              thumbnail = playlist.info.thumbnails?.[0]?.url || "";
+              const info = playlist.info as any;
+              title = info.title || "Lista Recomendada";
+              artist = info.author?.name || info.author?.toString() || "YouTube Music";
+              const thumbs = info.thumbnails || [];
+              thumbnail = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || "";
+              trackCount = Number(info.total_items || info.video_count || playlist.items?.length || 0);
+              description = info.description || "";
             }
           } catch (e) {
             // fallback to music playlist
@@ -1356,9 +1407,17 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
             if (mPlaylist && mPlaylist.header) {
               const head = mPlaylist.header as any;
               title = head.title?.toString() || "Lista Recomendada";
-              thumbnail = head.thumbnails?.[0]?.url || "";
+              artist = head.author?.name || head.author?.toString() || head.strapline_text_one?.toString() || "YouTube Music";
+              const thumbs = head.thumbnails || [];
+              thumbnail = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || "";
+              trackCount = Number(head.song_count || head.item_count || head.tracks_count || mPlaylist.contents?.length || 0);
+              description = head.description?.toString() || head.second_subtitle?.toString() || "";
             }
           }
+        }
+
+        if (thumbnail && thumbnail.includes("googleusercontent.com")) {
+          thumbnail = thumbnail.replace(/=w\d+-h\d+/, "=w512-h512").replace(/=s\d+/, "=s512");
         }
 
         if (title || thumbnail) {
@@ -1366,6 +1425,9 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
             id: playlistId,
             title: title || "Lista Recomendada",
             thumbnail: thumbnail,
+            artist: artist || "YouTube Music",
+            trackCount: trackCount,
+            description: description || (trackCount ? `${trackCount} canciones` : "Playlist oficial de YouTube Music"),
           };
           playlistInfoCache.set(cacheKey, {
             data: info,
@@ -1383,14 +1445,22 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
         const pRes = await fetch(`${instance}/playlists/${playlistId}`);
         if (pRes.ok) {
           const pData = (await pRes.json()) as any;
+          let thumb = pData.thumbnailUrl || "";
+          if (!thumb && pData.relatedStreams && pData.relatedStreams.length > 0) {
+            const firstVid = pData.relatedStreams[0].url.replace("/watch?v=", "");
+            thumb = `https://i.ytimg.com/vi/${firstVid}/hqdefault.jpg`;
+          }
+          if (thumb && thumb.includes("googleusercontent.com")) {
+            thumb = thumb.replace(/=w\d+-h\d+/, "=w512-h512").replace(/=s\d+/, "=s512");
+          }
+          const tCount = pData.relatedStreams?.length || pData.videos || 0;
           const info = {
             id: playlistId,
             title: pData.name || "Lista Recomendada",
-            thumbnail:
-              pData.thumbnailUrl ||
-              (pData.relatedStreams && pData.relatedStreams.length > 0
-                ? `https://i.ytimg.com/vi/${pData.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg`
-                : ""),
+            thumbnail: thumb,
+            artist: pData.uploader || pData.uploaderName || "YouTube Music",
+            trackCount: tCount,
+            description: pData.description || (tCount ? `${tCount} canciones` : "Playlist de YouTube Music"),
           };
           playlistInfoCache.set(cacheKey, {
             data: info,
@@ -1402,11 +1472,15 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
         // Try next instance
       }
     }
+
     // Final fallback: return default info instead of throwing 500 so the user can still save it
     const fallbackInfo = {
       id: playlistId,
       title: "Lista Personalizada",
-      thumbnail: "",
+      thumbnail: `https://i.ytimg.com/vi/${playlistId}/hqdefault.jpg`,
+      artist: "YouTube Music",
+      trackCount: 0,
+      description: "Playlist de YouTube Music",
     };
     return res.json(fallbackInfo);
   } catch (err) {
@@ -1415,6 +1489,9 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
       id: playlistId,
       title: "Lista Personalizada",
       thumbnail: "",
+      artist: "YouTube Music",
+      trackCount: 0,
+      description: "Playlist de YouTube Music",
     });
   }
 });

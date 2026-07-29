@@ -451,12 +451,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                                   
                                   {/* Rarity label on hover */}
                                   <span className="absolute bottom-1 inset-x-1 text-[6.5px] font-black text-center truncate uppercase tracking-tight py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 text-white select-none">
-                                    {av.name.split(" ")[0]}
+                                    {av.name ? String(av.name).split(" ")[0] : ""}
                                   </span>
 
                                   {/* Level pill on card */}
                                   <span className={`absolute top-1 left-1 px-1 py-[1px] text-[4.5px] uppercase font-black tracking-widest rounded ${rarityBadgeColor} scale-[0.8] origin-top-left select-none`}>
-                                    {av.rarity.split(" ")[0]}
+                                    {av.rarity ? String(av.rarity).split(" ")[0] : ""}
                                   </span>
 
                                   {isSelected && (

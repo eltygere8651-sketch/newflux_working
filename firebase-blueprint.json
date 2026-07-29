@@ -64,6 +64,24 @@
       },
       "required": ["userEmail", "userName", "message", "createdAt"]
     },
+    "FeaturedUpdate": {
+      "title": "Featured Update",
+      "description": "Promoted playlists banner updates for all users",
+      "type": "object",
+      "properties": {
+        "playlistId": { "type": "string" },
+        "title": { "type": "string" },
+        "image": { "type": "string" },
+        "genre": { "type": "string" },
+        "description": { "type": "string" },
+        "publishedAt": { "type": "integer" },
+        "expiresAt": { "type": "integer" },
+        "priority": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "durationHours": { "type": "integer" }
+      },
+      "required": ["playlistId", "title", "publishedAt", "expiresAt", "active"]
+    },
     "QRCampaign": {
       "title": "QR Campaign",
       "description": "Marketing QR campaign entries",
@@ -104,6 +122,10 @@
     "/support_messages/{messageId}": {
       "schema": "SupportMessage",
       "description": "Customer support and query entries"
+    },
+    "/featured_updates/{updateId}": {
+      "schema": "FeaturedUpdate",
+      "description": "Promoted playlists updates for all users"
     }
   }
 }

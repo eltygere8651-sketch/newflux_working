@@ -8,22 +8,14 @@ import {
   SkipBack,
   Settings2, 
   Heart,
-  Plus,
-  Share2,
   Volume2,
-  RotateCcw,
   Radio,
-  Users,
   Music,
-  Tv,
   Sparkles,
-  MoreHorizontal,
-  X,
-  Compass,
-  ChevronRight
+  X
 } from "lucide-react";
 import { MusicTrack } from "../types";
-import { selectNextDJTrack, FLUX_PAYOLA, DJ_GENRES, isReasonableTrack } from "../lib/djLogic";
+import { selectNextDJTrack, DJ_GENRES, isReasonableTrack, getGenreQueries } from "../lib/djLogic";
 
 interface FAIViewProps {
   favorites: MusicTrack[];
@@ -43,7 +35,18 @@ interface FAIViewProps {
 }
 
 const cleanTrackTitle = (title: string) => {
-  return title.replace(/\[.*?\]|\(.*?\)|\- mix|mix \-|Mix|MIX|Audio Oficial|Official Video|Video Oficial|Lyric Video|Lyrics/gi, "").trim();
+  return title.replace(/\[.*?\]|\(.*?\)|\- mix|mix \-|Mix|MIX|Audio Oficial|Official Video|Video Oficial|Lyric Video|Lyrics|HD|4K|1080p|Explicit/gi, "").trim();
+};
+
+const extractCleanTitle = (title: string) => {
+  let cleaned = cleanTrackTitle(title);
+  cleaned = cleaned.replace(/mix de\s+/gi, "");
+  cleaned = cleaned.replace(/mix:\s+/gi, "");
+  cleaned = cleaned.replace(/\bmix\b/gi, "");
+  if (cleaned.includes(" - ")) {
+    cleaned = cleaned.split(" - ").slice(1).join(" - ").trim();
+  }
+  return cleaned.trim() || title;
 };
 
 const extractArtist = (title: string, defaultArtist: string, d?: any) => {
@@ -53,33 +56,14 @@ const extractArtist = (title: string, defaultArtist: string, d?: any) => {
   if (title.includes(" - ")) {
     return title.split(" - ")[0].trim();
   }
-  if (d && d.channelTitle && !d.channelTitle.includes("YouTube")) {
-    return d.channelTitle;
+  if (d && d.channelTitle && !d.channelTitle.includes("YouTube") && !d.channelTitle.includes("Topic")) {
+    return d.channelTitle.replace(" - Topic", "").trim();
   }
-  // Try to parse out anything before a hyphen or just use the title
   const parts = title.split("-");
   if (parts.length > 1) return parts[0].trim();
 
-  // If we can't extract, we'll try to just return the clean title so at least they see something.
   return defaultArtist === "Variado" || defaultArtist === "La mezcla de Sofia" ? extractCleanTitle(title) : defaultArtist;
 };
-
-const extractCleanTitle = (title: string) => {
-  let cleaned = cleanTrackTitle(title);
-  
-  // Remove "Mix" words so the user just sees the song/artist, preventing "Mix de Fulano"
-  cleaned = cleaned.replace(/mix de\s+/gi, "");
-  cleaned = cleaned.replace(/mix:\s+/gi, "");
-  cleaned = cleaned.replace(/\bmix\b/gi, "");
-  
-  if (cleaned.includes(" - ")) {
-    cleaned = cleaned.split(" - ").slice(1).join(" - ").trim();
-  }
-  return cleaned.trim() || title;
-};
-
-const cachedWelcomeText = "¡Qué pasa chavales! 🔥 Aquí Sofía DJ al mando de los platos. Os traigo un set que es puro fuego, ¡así que subid el volumen al máximo y que empiece el desmadre! ⚡️";
-
 
 export const FAIView: React.FC<FAIViewProps> = ({
   favorites,
@@ -94,22 +78,20 @@ export const FAIView: React.FC<FAIViewProps> = ({
   onVolumeChange,
   position = 0,
   duration = 0,
-  triggerAiDj,
-  isAdmin,
 }) => {
   const [topRatio, setTopRatio] = useState(() => {
     const saved = localStorage.getItem("fai_top_ratio");
-    if (saved === "32" || saved === "40") return 60; // Migrate old defaults
+    if (saved === "32" || saved === "40") return 60;
     return saved !== null ? parseInt(saved, 10) : 60;
   });
   const [favRatio, setFavRatio] = useState(() => {
     const saved = localStorage.getItem("fai_fav_ratio");
-    if (saved === "18" || saved === "20") return 25; // Migrate old defaults
+    if (saved === "18" || saved === "20") return 25;
     return saved !== null ? parseInt(saved, 10) : 25;
   });
   const [discRatio, setDiscRatio] = useState(() => {
     const saved = localStorage.getItem("fai_disc_ratio");
-    if (saved === "50" || saved === "40") return 15; // Migrate old defaults
+    if (saved === "50" || saved === "40") return 15;
     return saved !== null ? parseInt(saved, 10) : 15;
   });
 
@@ -126,60 +108,19 @@ export const FAIView: React.FC<FAIViewProps> = ({
   });
   const [customGenre, setCustomGenre] = useState("");
 
-  const [djMessage, setDjMessage] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [showGenres, setShowGenres] = useState(false);
   const [isRadioActive, setIsRadioActive] = useState(false);
   const [genreBuffer, setGenreBuffer] = useState<MusicTrack[]>([]);
   const [triggerPlay, setTriggerPlay] = useState(false);
 
-  // Auto-start welcome on mount if not yet played in session - DISABLED as per user request to play only on Play click
-  /*
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!welcomePlayed && !isRadioActive) {
-        handleStartWelcome();
-      }
-    }, 500); 
-    return () => clearTimeout(timer);
-  }, [welcomePlayed, isRadioActive]);
-  */
-  const [welcomePlayed, setWelcomePlayed] = useState(() => {
-    return sessionStorage.getItem("flux_radio_welcome_played_session") === "true";
-  });
+  // Anti-repetition played tracks history (limit 200 items)
+  const playedTrackIdsRef = useRef<Set<string>>(new Set());
+  // Previous track stack for SkipBack button
+  const historyStackRef = useRef<MusicTrack[]>([]);
 
-  const [welcomeStep, setWelcomeStep] = useState<"idle" | "loading" | "speaking">("idle");
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSpeakingPaused, setIsSpeakingPaused] = useState(false);
-  const [welcomePosition, setWelcomePosition] = useState(0);
-  const [welcomeDuration, setWelcomeDuration] = useState(0);
-  const [welcomeText, setWelcomeText] = useState(cachedWelcomeText);
-
-  const isSpeakingRef = useRef(false);
   const isSearchingRef = useRef(false);
-  const welcomeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isFetchingMoreRef = useRef(false);
   const handleNextTrackRef = useRef<((isManualParam?: boolean, forceGenre?: string) => Promise<void>) | null>(null);
-  const handleEndWelcomeRef = useRef<(() => void) | null>(null);
-  const speechStartTimeRef = useRef<number>(0);
-  const welcomeRequestIdRef = useRef<number>(0);
-
-  const setSpeaking = (val: boolean) => {
-    setIsSpeaking(val);
-    isSpeakingRef.current = val;
-  };
-
-  useEffect(() => {
-    return () => {
-      welcomeRequestIdRef.current++;
-      if (welcomeAudioRef.current) {
-        welcomeAudioRef.current.pause();
-        welcomeAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     localStorage.setItem("fai_top_ratio", topRatio.toString());
@@ -210,47 +151,115 @@ export const FAIView: React.FC<FAIViewProps> = ({
     setGenreBuffer([]);
   }, [selectedGenre, genreExploration]);
 
-  const showDJMessage = useCallback((message: string) => {
-    // Visual message display is disabled to optimize resources as requested by the user.
-  }, []);
-
-  useEffect(() => {
-    const handleDjMessage = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail) {
-        showDJMessage(customEvent.detail);
-      }
-    };
-    window.addEventListener("dj_message_received", handleDjMessage);
-    return () => {
-      window.removeEventListener("dj_message_received", handleDjMessage);
-    };
-  }, [showDJMessage]);
-
   const handleGenreSelect = (genre: string) => {
     setSelectedGenre(genre);
     setGenreExploration(true);
-    setShowGenres(false);
+    setShowConfig(false);
     setGenreBuffer([]);
     setTriggerPlay(true);
   };
 
-  const handleNextTrack = useCallback(async (isManualParam = false, forceGenre?: string) => {
-    if (isSpeakingRef.current || isSearchingRef.current) {
-      if (isSpeakingRef.current) handleEndWelcomeRef.current?.();
-      return;
+  // Background prefetch function to keep buffer filled with 10-20 tracks
+  const prefetchMoreTracks = useCallback(async (forceGenre?: string) => {
+    if (isFetchingMoreRef.current) return;
+    isFetchingMoreRef.current = true;
+    try {
+      const activeGenre = forceGenre || selectedGenre;
+      const queries = getGenreQueries(activeGenre, topTracks, favorites);
+      const randomQuery = queries[Math.floor(Math.random() * queries.length)];
+
+      const resp = await fetch("/api/youtube/search?q=" + encodeURIComponent(randomQuery));
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data || !Array.isArray(data) || data.length === 0) return;
+
+      let foundTracks: MusicTrack[] = [];
+      const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
+
+      if (playlists.length > 0) {
+        for (let i = 0; i < Math.min(2, playlists.length); i++) {
+          const pl = playlists[i];
+          const plResp = await fetch("/api/youtube/playlist?id=" + pl.id);
+          if (plResp.ok) {
+            const plData = await plResp.json();
+            const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
+            if (tracksArray && tracksArray.length > 0) {
+              const plTracks = tracksArray.map((d: any) => ({
+                id: d.id,
+                title: extractCleanTitle(d.title || ""),
+                artist: extractArtist(d.title || "", activeGenre, d),
+                bpm: d.bpm || 120,
+                url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
+                thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
+                duration: d.duration || "N/A"
+              })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
+              foundTracks = [...foundTracks, ...plTracks];
+            }
+          }
+        }
+      }
+
+      if (foundTracks.length === 0) {
+        const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
+        if (validData.length > 0) {
+          foundTracks = validData.map((d: any) => ({
+            id: d.id,
+            title: extractCleanTitle(d.title || ""),
+            artist: extractArtist(d.title || "", activeGenre, d),
+            bpm: d.bpm || 120,
+            url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
+            thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
+            duration: d.duration || "N/A"
+          }));
+        }
+      }
+
+      if (foundTracks.length > 0) {
+        const newTracks = foundTracks.filter(
+          (t) => !playedTrackIdsRef.current.has(t.id) && t.id !== currentTrack?.id
+        );
+
+        if (newTracks.length > 0) {
+          const shuffled = newTracks.sort(() => Math.random() - 0.5);
+          setGenreBuffer((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id));
+            const uniqueToAdd = shuffled.filter((s) => !existingIds.has(s.id));
+            return [...prev, ...uniqueToAdd];
+          });
+        }
+      }
+    } catch (e) {
+      console.error("FAI prefetchMoreTracks error:", e);
+    } finally {
+      isFetchingMoreRef.current = false;
     }
+  }, [selectedGenre, topTracks, favorites, currentTrack]);
+
+  const handleNextTrack = useCallback(async (isManualParam = false, forceGenre?: string) => {
+    if (isSearchingRef.current) return;
     isSearchingRef.current = true;
-    const isManual = isManualParam === true;
     let next: MusicTrack | null = null;
 
     try {
       const activeGenre = forceGenre || selectedGenre;
+
+      // Track current track in history for previous button
+      if (currentTrack) {
+        historyStackRef.current.push(currentTrack);
+        if (historyStackRef.current.length > 25) {
+          historyStackRef.current.shift();
+        }
+        playedTrackIdsRef.current.add(currentTrack.id);
+        if (playedTrackIdsRef.current.size > 200) {
+          const firstKey = playedTrackIdsRef.current.values().next().value;
+          if (firstKey) playedTrackIdsRef.current.delete(firstKey);
+        }
+      }
+
       const total = topRatio + favRatio + discRatio;
       const wDisc = total > 0 ? discRatio / total : 0.15;
       const rand = Math.random();
       let doDiscovery = rand < wDisc;
-      
       const isSpecificGenre = genreExploration && activeGenre !== "Variado Mix" && activeGenre !== "La mezcla de Sofia";
 
       if (!doDiscovery) {
@@ -262,95 +271,80 @@ export const FAIView: React.FC<FAIViewProps> = ({
           favRatio,
           discRatio: 0
         });
+
+        // Skip if recently played
+        if (next && playedTrackIdsRef.current.has(next.id)) {
+          next = null;
+        }
+
         if (!next) {
           doDiscovery = true;
         }
       }
 
-      if (doDiscovery) {
-        if (genreBuffer.length > 0) {
-          next = genreBuffer[0];
-          setGenreBuffer(prev => prev.slice(1));
-        } else {
-          // General youtube search logic replacing all 3 branches
-          let queries = [];
-          let artistLabel = "Descubrimiento";
-          if (isSpecificGenre) {
-            artistLabel = activeGenre;
-            queries = [
-              activeGenre + " novedades 2026",
-              activeGenre + " exitos actuales",
-              "mejores canciones " + activeGenre + " 2026",
-              "top " + activeGenre + " mundial"
-            ];
-          } else if (genreExploration && (activeGenre === "Variado Mix" || activeGenre === "La mezcla de Sofia")) {
-            artistLabel = "Variado";
-            queries = [
-              "reggaeton actual 2026 exitos audio oficial",
-              "top canciones españa tendencia hoy hits official music video",
-              "exitos pop latino 2026 oficial",
-              "musica urbana españa 2026 official audio",
-              "exitos reggaeton nuevo 2026 oficial video",
-              "novedades musicales en español 2026",
-              "los 40 principales españa 2026 hoy official audio",
-              "musica variada en español 2026 exitos"
-            ];
-          } else {
-            queries = [
-              "novedades musicales pop reggaeton 2026",
-              "exitos actuales en español 2026",
-              "top canciones latinas mundiales 2026",
-              "musica en español top hits 2026",
-              "los 40 principales españa 2026 novedades",
-              "mejores exitos pop urbana latina 2026"
-            ];
-          }
+      if (doDiscovery || !next) {
+        // Pick from preloaded genreBuffer if available
+        const unplayedBufferIndex = genreBuffer.findIndex(
+          (t) => !playedTrackIdsRef.current.has(t.id) && t.id !== currentTrack?.id
+        );
 
+        if (unplayedBufferIndex !== -1) {
+          next = genreBuffer[unplayedBufferIndex];
+          setGenreBuffer((prev) => prev.filter((_, idx) => idx !== unplayedBufferIndex));
+        } else {
+          // Perform direct YouTube search if buffer is empty
+          const queries = getGenreQueries(activeGenre, topTracks, favorites);
           const randomQuery = queries[Math.floor(Math.random() * queries.length)];
+
           try {
             const resp = await fetch("/api/youtube/search?q=" + encodeURIComponent(randomQuery));
             if (resp.ok) {
               const data = await resp.json();
-              if (data && data.length > 0) {
-                const playlists = data.filter((d) => d.isPlaylist).sort(() => Math.random() - 0.5);
-                let foundTracks = [];
+              if (data && Array.isArray(data) && data.length > 0) {
+                let foundTracks: MusicTrack[] = [];
+                const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
+
                 if (playlists.length > 0) {
-                  for (let i = 0; i < Math.min(3, playlists.length); i++) {
+                  for (let i = 0; i < Math.min(2, playlists.length); i++) {
                     const pl = playlists[i];
                     const plResp = await fetch("/api/youtube/playlist?id=" + pl.id);
                     if (plResp.ok) {
                       const plData = await plResp.json();
                       const tracksArray = Array.isArray(plData) ? plData : (plData.tracks || []);
                       if (tracksArray && tracksArray.length > 0) {
-                        const plTracks = tracksArray.map((d) => ({
+                        const plTracks = tracksArray.map((d: any) => ({
                           id: d.id,
-                          title: extractCleanTitle(d.title),
-                          artist: extractArtist(d.title, artistLabel, d),
+                          title: extractCleanTitle(d.title || ""),
+                          artist: extractArtist(d.title || "", activeGenre, d),
+                          bpm: d.bpm || 120,
                           url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
                           thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
                           duration: d.duration || "N/A"
-                        })).filter((t) => isReasonableTrack(t.duration, t.title));
+                        })).filter((t: MusicTrack) => isReasonableTrack(t.duration, t.title));
                         foundTracks = [...foundTracks, ...plTracks];
                       }
                     }
                   }
                 }
+
                 if (foundTracks.length === 0) {
-                  const validData = data.filter((d) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
+                  const validData = data.filter((d: any) => !d.isPlaylist && d.id && isReasonableTrack(d.duration, d.title));
                   if (validData.length > 0) {
-                    foundTracks = validData.map((d) => ({
+                    foundTracks = validData.map((d: any) => ({
                       id: d.id,
-                      title: extractCleanTitle(d.title),
-                      artist: extractArtist(d.title, artistLabel, d),
+                      title: extractCleanTitle(d.title || ""),
+                      artist: extractArtist(d.title || "", activeGenre, d),
+                      bpm: d.bpm || 120,
                       url: d.url || ("https://www.youtube.com/watch?v=" + d.id),
                       thumbnail_url: d.thumbnail || d.thumbnail_url || ("https://i.ytimg.com/vi/" + d.id + "/hqdefault.jpg"),
                       duration: d.duration || "N/A"
                     }));
                   }
                 }
+
                 if (foundTracks.length > 0) {
-                  const filteredTracks = foundTracks.filter(t => t.id !== currentTrack?.id);
-                  const pool = filteredTracks.length > 0 ? filteredTracks : foundTracks;
+                  const unplayed = foundTracks.filter((t) => !playedTrackIdsRef.current.has(t.id) && t.id !== currentTrack?.id);
+                  const pool = unplayed.length > 0 ? unplayed : foundTracks;
                   const shuffled = pool.sort(() => Math.random() - 0.5);
                   next = shuffled[0];
                   setGenreBuffer(shuffled.slice(1));
@@ -374,15 +368,37 @@ export const FAIView: React.FC<FAIViewProps> = ({
       }
 
       if (next) {
+        playedTrackIdsRef.current.add(next.id);
         onPlayTrack(next);
         setIsRadioActive(true);
+
+        // Trigger background prefetch if buffer is running low (< 5 items)
+        if (genreBuffer.length < 5) {
+          prefetchMoreTracks(activeGenre);
+        }
       }
     } catch (e) {
       console.error("FAI handleNextTrack failed", e);
     } finally {
       isSearchingRef.current = false;
     }
-  }, [topTracks, favorites, allTracks, discoveryLevel, topRatio, favRatio, discRatio, genreExploration, selectedGenre, onPlayTrack, showDJMessage, genreBuffer, triggerAiDj]);
+  }, [topTracks, favorites, allTracks, discoveryLevel, topRatio, favRatio, discRatio, genreExploration, selectedGenre, onPlayTrack, genreBuffer, currentTrack, prefetchMoreTracks]);
+
+  const handlePrevTrack = useCallback(() => {
+    if (position > 3 && currentTrack) {
+      onPlayTrack(currentTrack);
+      return;
+    }
+    if (historyStackRef.current.length > 0) {
+      const prevTrack = historyStackRef.current.pop()!;
+      if (currentTrack) {
+        setGenreBuffer((prev) => [currentTrack, ...prev]);
+      }
+      onPlayTrack(prevTrack);
+    } else if (currentTrack) {
+      onPlayTrack(currentTrack);
+    }
+  }, [position, currentTrack, onPlayTrack]);
 
   useEffect(() => {
     const onFaiNext = () => {
@@ -403,29 +419,6 @@ export const FAIView: React.FC<FAIViewProps> = ({
       handleNextTrack();
     }
   }, [triggerPlay, handleNextTrack]);
-
-
-
-  
-    const handleStartWelcome = async () => {
-    setSpeaking(false);
-    setIsSpeakingPaused(false);
-    setIsRadioActive(true);
-    setWelcomePlayed(true);
-    sessionStorage.setItem("flux_radio_welcome_played_session", "true");
-    
-    if (handleNextTrackRef.current) {
-      if (!currentTrack) {
-        handleNextTrackRef.current(false, selectedGenre);
-      } else {
-        if (!isPlaying) onTogglePlay();
-      }
-    }
-  };
-
-  /* Auto-start removed */
-  
-  
 
   const handleRatioChange = (type: 'top' | 'fav' | 'disc', value: number) => {
     const target = Math.max(0, Math.min(100, value));
@@ -482,39 +475,12 @@ export const FAIView: React.FC<FAIViewProps> = ({
   };
 
   const toggleRadio = () => {
-    if (!isRadioActive) {
-      // Start radio session
-      if (!welcomePlayed) {
-        handleStartWelcome();
-      } else {
-        setIsRadioActive(true);
-        if (!isPlaying) onTogglePlay();
-        if (!currentTrack) handleNextTrack();
-      }
+    if (!isRadioActive || !currentTrack) {
+      setIsRadioActive(true);
+      if (!isPlaying) onTogglePlay();
+      if (!currentTrack) handleNextTrack();
     } else {
-      // Radio already active
-      if (isSpeaking) {
-        if (welcomeAudioRef.current) {
-          if (welcomeAudioRef.current.paused) {
-            welcomeAudioRef.current.play().catch(e => console.error("Audio resume error", e));
-            setIsSpeakingPaused(false);
-          } else {
-            welcomeAudioRef.current.pause();
-            setIsSpeakingPaused(true);
-          }
-        } else {
-          // fallback tts pause/resume
-          if (isSpeakingPaused) {
-            window.speechSynthesis.resume();
-            setIsSpeakingPaused(false);
-          } else {
-            window.speechSynthesis.pause();
-            setIsSpeakingPaused(true);
-          }
-        }
-      } else {
-        onTogglePlay();
-      }
+      onTogglePlay();
     }
   };
 
@@ -579,7 +545,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
       {/* Main Viewport */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 pb-4 sm:pt-6 sm:pb-6 z-10 max-w-lg mx-auto w-full overflow-y-auto overflow-x-hidden premium-scrollbar relative">
         <div className="w-full flex flex-col items-center justify-center min-h-min py-8 sm:py-12 overflow-x-hidden">
-        {/* Top Controls / Settings */}
+        
+        {/* Top Controls / Station Selector */}
         <div className="w-full flex justify-center shrink-0 relative z-20 mb-6 px-2 mt-2">
           <button
             onClick={() => setShowConfig(true)}
@@ -608,19 +575,17 @@ export const FAIView: React.FC<FAIViewProps> = ({
             </div>
 
             <div className="relative z-10 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-[#17d1a5]/10 group-hover:border-[#17d1a5]/30 transition-all shrink-0">
-              <Settings2 className="w-4 h-4 text-white/50 group-hover:text-[#17d1a5] group-hover:animate-spin-slow" />
+              <Settings2 className="w-4 h-4 text-white/50 group-hover:text-[#17d1a5]" />
             </div>
           </button>
         </div>
+
+        {/* Album Art Card */}
         <div className="w-full flex justify-center items-center shrink-0 mb-4 sm:mb-8 px-2 relative">
-          
-          {/* Album Art Card */}
           <motion.div 
             className="relative w-[180px] sm:w-[240px] shrink-0 aspect-square group z-10"
           >
-          <div className="absolute inset-0 bg-fuchsia-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
-          
-          
+            <div className="absolute inset-0 bg-fuchsia-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
             <div className="relative w-full h-full group">
               <motion.img
                 key={currentTrack?.id || "empty"}
@@ -631,113 +596,114 @@ export const FAIView: React.FC<FAIViewProps> = ({
                 alt="Now Playing"
               />
               <div className="absolute inset-0 rounded-[1.2rem] sm:rounded-[1.5rem] bg-gradient-to-t from-[#070b1a]/90 via-[#070b1a]/20 to-transparent z-10 pointer-events-none" />
-              
             </div>
-
           </motion.div>
         </div>
 
         <div className="w-full flex flex-col shrink-0">
-        {/* Track Metadata Section */}
-        <div className="w-full mb-6 sm:mb-8 mt-2 flex flex-col items-center">
-          <div className="flex flex-col items-center justify-center relative w-full overflow-hidden">
-            <motion.h2 
-              key={(currentTrack?.title) + "-title"}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xl sm:text-2xl font-black tracking-widest uppercase text-white truncate px-4 text-center w-full drop-shadow-md"
-            >
-              {currentTrack?.title || "Cargando..."}
-            </motion.h2>
-            <motion.p
-              key={(currentTrack?.artist) + "-artist"}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
-            >
-              {currentTrack?.artist || "GENERATING MIX..."}
-            </motion.p>
-          </div>
-        </div>
-
-        {/* Progress Bar & Time */}
-        <div className="w-full mb-6 sm:mb-8">
-          <div className="relative h-1 bg-white/10 rounded-full mb-2.5">
-            <motion.div 
-              className="absolute top-0 left-0 h-full bg-white rounded-full"
-              style={{ width: `${actualProgress}%` }}
-            />
-            <motion.div 
-              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full shadow-[0_0_15px_white] z-20"
-              style={{ left: `${actualProgress}%`, marginLeft: '-5px' }}
-            />
-          </div>
-          <div className="flex justify-between items-center text-[9px] sm:text-xs sm:text-lg sm:text-xl font-black tracking-[0.15em] text-white/30">
-            <span>{formatTime(displayPosition)} / {formatTime(displayDuration)}</span>
-          </div>
-        </div>
-
-        {/* Main Playback Controls */}
-        <div className="flex items-center justify-between w-full px-4 sm:px-8 max-w-lg mb-8 sm:mb-12 mt-auto pb-4">
-          {/* Favorite button on the left */}
-          <div className="flex justify-start items-center gap-1 sm:gap-3 w-full pl-1 sm:pl-2">
-            <button 
-              onClick={(e) => {
-                if (currentTrack && onToggleFavorite ) {
-                  onToggleFavorite(currentTrack, e);
-                }
-              }}
-              className={`p-1 sm:p-2 transition-all transform active:scale-90 flex-shrink-0  ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760] hover:text-[#17b54e]' : 'text-white/40 hover:text-white'}`}
-            >
-              <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'fill-current' : ''}`} />
-            </button>
-          </div>
-
-          {/* Center Play Controls */}
-          <div className="flex items-center justify-center gap-4 sm:gap-8 flex-shrink-0 min-w-max mx-2 sm:mx-0">
-            <button 
-              onClick={() => {}}
-              className="p-1 sm:p-2 text-white/40 hover:text-white transition-all transform active:scale-90 flex-shrink-0"
-              
-            >
-              <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
-            </button>
-            
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
-              onClick={toggleRadio}
-              className="rounded-full w-12 h-12 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl flex-shrink-0"
-            >
-              {showPauseIcon ? <Pause className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7" /> : <Play className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />}
-            </motion.button>
-            
-            <button 
-              onClick={() => handleNextTrack(true)}
-              className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
-            >
-              <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
-            </button>
-          </div>
-
-          {/* Volume Adjuster */}
-          <div className="flex justify-end items-center gap-1.5 sm:gap-3 w-full pr-1 sm:pr-2">
-            <div className="flex items-center justify-end gap-1 sm:gap-1.5 group/vol w-[65px] sm:w-[100px]">
-              <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
-              <div
-                onPointerDown={handleVolumePointerDown}
-                className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
+          {/* Track Metadata Section */}
+          <div className="w-full mb-6 sm:mb-8 mt-2 flex flex-col items-center">
+            <div className="flex flex-col items-center justify-center relative w-full overflow-hidden">
+              <motion.h2 
+                key={(currentTrack?.title) + "-title"}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xl sm:text-2xl font-black tracking-widest uppercase text-white truncate px-4 text-center w-full drop-shadow-md"
               >
+                {currentTrack?.title || "Cargando..."}
+              </motion.h2>
+              <motion.p
+                key={(currentTrack?.artist) + "-artist"}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-emerald-400 mt-1.5 sm:mt-2 truncate px-4 text-center w-full"
+              >
+                {currentTrack?.artist || "RADIO FLUX MUSIC"}
+              </motion.p>
+            </div>
+          </div>
+
+          {/* Progress Bar & Time */}
+          <div className="w-full mb-6 sm:mb-8">
+            <div className="relative h-1 bg-white/10 rounded-full mb-2.5">
+              <motion.div 
+                className="absolute top-0 left-0 h-full bg-white rounded-full"
+                style={{ width: `${actualProgress}%` }}
+              />
+              <motion.div 
+                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full shadow-[0_0_15px_white] z-20"
+                style={{ left: `${actualProgress}%`, marginLeft: '-5px' }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] sm:text-xs sm:text-lg sm:text-xl font-black tracking-[0.15em] text-white/30">
+              <span>{formatTime(displayPosition)} / {formatTime(displayDuration)}</span>
+            </div>
+          </div>
+
+          {/* Main Playback Controls */}
+          <div className="flex items-center justify-between w-full px-4 sm:px-8 max-w-lg mb-8 sm:mb-12 mt-auto pb-4">
+            {/* Favorite button on the left */}
+            <div className="flex justify-start items-center gap-1 sm:gap-3 w-full pl-1 sm:pl-2">
+              <button 
+                onClick={(e) => {
+                  if (currentTrack && onToggleFavorite) {
+                    onToggleFavorite(currentTrack, e);
+                  }
+                }}
+                className={`p-1 sm:p-2 transition-all transform active:scale-90 flex-shrink-0 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'text-[#1ED760] hover:text-[#17b54e]' : 'text-white/40 hover:text-white'}`}
+                title="Favorito"
+              >
+                <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${currentTrack && favorites.some(t => t.id === currentTrack.id || t.url === currentTrack.url) ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {/* Center Play Controls */}
+            <div className="flex items-center justify-center gap-4 sm:gap-8 flex-shrink-0 min-w-max mx-2 sm:mx-0">
+              <button 
+                onClick={handlePrevTrack}
+                className="p-1 sm:p-2 text-white/80 hover:text-white transition-all transform active:scale-90 flex-shrink-0"
+                title="Anterior"
+              >
+                <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+              
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                whileHover={{ scale: 1.05 }}
+                onClick={toggleRadio}
+                className="rounded-full w-12 h-12 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl flex-shrink-0"
+                title={showPauseIcon ? "Pausar" : "Reproducir"}
+              >
+                {showPauseIcon ? <Pause className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7" /> : <Play className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />}
+              </motion.button>
+              
+              <button 
+                onClick={() => handleNextTrack(true)}
+                className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
+                title="Siguiente"
+              >
+                <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+            </div>
+
+            {/* Volume Adjuster */}
+            <div className="flex justify-end items-center gap-1.5 sm:gap-3 w-full pr-1 sm:pr-2">
+              <div className="flex items-center justify-end gap-1 sm:gap-1.5 group/vol w-[65px] sm:w-[100px]">
+                <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
                 <div
-                  className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
-                  style={{ width: `${volume}%` }}
+                  onPointerDown={handleVolumePointerDown}
+                  className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
                 >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                  <div
+                    className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
+                    style={{ width: `${volume}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         </div>
         </div>
       </div>
