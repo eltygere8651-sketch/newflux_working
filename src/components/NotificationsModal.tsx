@@ -298,6 +298,7 @@ export interface Announcement {
   id: string;
   title: string;
   content: string;
+  videoUrl?: string;
   category: "mantenimiento" | "noticia" | "actualizacion" | "urgente";
   createdAt: any;
   active?: boolean;
@@ -514,6 +515,16 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
                     {isSelected && (
                       <div className="text-[10px] leading-relaxed text-slate-300 font-medium mt-2 pt-2 border-t border-white/5 whitespace-pre-wrap">
+                        {item.videoUrl && (
+                          <div className="mb-3 rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black">
+                            <video 
+                              src={item.videoUrl} 
+                              controls 
+                              className="w-full max-h-[300px] object-contain"
+                              preload="metadata"
+                            />
+                          </div>
+                        )}
                         {item.content}
                       </div>
                     )}

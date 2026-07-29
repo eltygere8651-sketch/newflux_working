@@ -181,9 +181,9 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
         } catch (e) {}
       }
 
-      // Remove locally
-      const newItems = [...activeItems];
-      newItems.splice(currentIndex, 1);
+      // Remove all identical items locally to prevent them from flickering
+      const newItems = activeItems.filter(item => item.playlistId !== activeItem.playlistId);
+      
       if (newItems.length > 0) {
         setActiveItems(newItems);
         if (currentIndex >= newItems.length) {

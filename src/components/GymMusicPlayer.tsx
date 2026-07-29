@@ -7495,8 +7495,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                     <div className="relative aspect-square rounded-xl overflow-hidden mb-2 shadow-lg group-hover/item:shadow-emerald-500/20 transition-all duration-300">
                                       <img src={item.thumbnail} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
                                       <div className="absolute inset-0 bg-black/20 group-hover/item:bg-black/40 transition-colors flex items-center justify-center">
-                                        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all transform scale-75 group-hover/item:scale-100 shadow-xl">
-                                          <Play className="w-5 h-5 text-black fill-black ml-1" />
+                                        <div className="w-12 h-12 rounded-full bg-[#1ED760] flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all transform scale-75 group-hover/item:scale-100 shadow-[0_8px_15px_rgba(30,215,96,0.3)]">
+                                          <Play className="w-6 h-6 text-black fill-black ml-1" />
                                         </div>
                                       </div>
                                     </div>

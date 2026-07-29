@@ -266,6 +266,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   // Announcement composition states
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
+  const [annVideoUrl, setAnnVideoUrl] = useState("");
   const [annCategory, setAnnCategory] = useState<
     "noticia" | "urgente" | "mantenimiento" | "actualizacion"
   >("noticia");
@@ -303,15 +304,20 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       setAnnSuccessMsg("");
       const randId = "ann_" + Math.random().toString(36).substring(2, 11);
       const docRef = doc(db, "announcements", randId);
-      await setDoc(docRef, {
+      const annData: any = {
         title: annTitle.trim(),
         content: annContent.trim(),
         category: annCategory,
         createdAt: new Date(),
         active: true,
-      });
+      };
+      if (annVideoUrl.trim()) {
+        annData.videoUrl = annVideoUrl.trim();
+      }
+      await setDoc(docRef, annData);
       setAnnTitle("");
       setAnnContent("");
+      setAnnVideoUrl("");
       setAnnCategory("noticia");
       setAnnSuccessMsg(
         "¡Comunicado global publicado con éxito en la base de datos de FLUX!",
@@ -1956,6 +1962,19 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                       />
                     </div>
 
+                    {/* Video URL block */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                        URL de Video Guía (Opcional - Cloudinary/MP4)
+                      </label>
+                      <input
+                        type="text"
+                        value={annVideoUrl}
+                        onChange={(e) => setAnnVideoUrl(e.target.value)}
+                        placeholder="https://res.cloudinary.com/..."
+                        className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
+                      />
+                    </div>
                     {/* Content block */}
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
