@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Play, Eye, Sparkles, Volume2, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Play, Eye, X, Sparkles, Volume2, ChevronLeft, ChevronRight } from "lucide-react";
 import { collection, query, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion, AnimatePresence } from "motion/react";
@@ -34,19 +34,6 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [direction, setDirection] = useState(1);
-  const [isInView, setIsInView] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsInView(entry.isIntersecting);
-      },
-      { threshold: 0.1 }
-    );
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const fetchFeaturedUpdates = async () => {
     try {
@@ -110,18 +97,15 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!isVisible || activeItems.length <= 1 || !isInView) return;
+    if (!isVisible || activeItems.length <= 1) return;
     
     const interval = setInterval(() => {
-      // Pause auto-sliding if the tab is not visible or screen is locked
-      if (document.hidden) return;
-      
       setDirection(1);
       setCurrentIndex((prev) => (prev + 1) % activeItems.length);
-    }, 60000);
+    }, 8000);
 
     return () => clearInterval(interval);
-  }, [isVisible, activeItems.length, isInView]);
+  }, [isVisible, activeItems.length]);
 
   const nextItem = () => {
     setDirection(1);
@@ -133,6 +117,19 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
     setCurrentIndex((prev) => (prev - 1 + activeItems.length) % activeItems.length);
   };
 
+  const handleClose = () => {
+    // Only remove locally for this session
+    const newItems = [...activeItems];
+    newItems.splice(currentIndex, 1);
+    if (newItems.length > 0) {
+      setActiveItems(newItems);
+      if (currentIndex >= newItems.length) {
+        setCurrentIndex(0);
+      }
+    } else {
+      setIsVisible(false);
+    }
+  };
 
   const handlePlay = () => {
     const activeItem = activeItems[currentIndex];
@@ -206,7 +203,6 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
 
   return (
     <div 
-      ref={containerRef}
       className="w-full mb-6 transition-all duration-500 animate-in fade-in slide-in-from-top-4"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}

@@ -1241,9 +1241,20 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         loadIframeVideoDirectly(track);
       }
     };
+    
     window.addEventListener('play-track', handlePlayTrackEvent);
     return () => window.removeEventListener('play-track', handlePlayTrackEvent);
   }, []);
+
+  useEffect(() => {
+    const handleSavePlaylistEvent = (e: any) => {
+      if (e.detail) {
+        saveCommunityPlaylistToLibrary(e.detail);
+      }
+    };
+    window.addEventListener('save-playlist-to-library', handleSavePlaylistEvent);
+    return () => window.removeEventListener('save-playlist-to-library', handleSavePlaylistEvent);
+  }, [user, userPlaylists, nicknameInput]);
 
   // --- Single Session Enforcer ---
   const myDeviceIdRef = useRef<string>("");
@@ -1575,6 +1586,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   >(null);
   const [isAddingToPlaylistModalOpen, setIsAddingToPlaylistModalOpen] =
     useState(false);
+  const [playlistToConfirmAdd, setPlaylistToConfirmAdd] = useState<any | null>(null);
+  const [isProcessingAddPlaylist, setIsProcessingAddPlaylist] = useState(false);
   const [modalNewPlaylistName, setModalNewPlaylistName] = useState("");
   const [modalNewPlaylistDesc, setModalNewPlaylistDesc] = useState("");
   const [modalSelectedPlaylistId, setModalSelectedPlaylistId] =
@@ -4263,11 +4276,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     setIsAddingToPlaylistModalOpen(true);
   };
 
-  const saveCommunityPlaylistToLibrary = async (pl: MusicPlaylist) => {
+  const saveCommunityPlaylistToLibrary = (pl: MusicPlaylist) => {
     if (isTemporaryUser) {
         showNotification("Esta función está disponible exclusivamente para usuarios Premium.");
         return;
     }
+    setPlaylistToConfirmAdd(pl);
+  };
+
+  const executeSaveCommunityPlaylistToLibrary = async (pl: MusicPlaylist) => {
+    setIsProcessingAddPlaylist(true);
     try {
       let currentUser = user;
       if (!currentUser) {
@@ -4281,6 +4299,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
       if (!currentUser) {
         showNotification("Debes iniciar sesión para usar la biblioteca.");
+        setIsProcessingAddPlaylist(false);
         return;
       }
 
@@ -4314,9 +4333,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       window.dispatchEvent(new Event("refreshUserPlaylists"));
       window.dispatchEvent(new Event("refreshCommunity"));
       showNotification(`"${pl.name}" guardada en tu biblioteca.`);
+      setPlaylistToConfirmAdd(null);
     } catch (err) {
       console.error(err);
       showNotification("Error guardando playlist.");
+    } finally {
+      setIsProcessingAddPlaylist(false);
     }
   };
 
@@ -8611,6 +8633,15 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                             </button>
                           )}
 
+                          <button
+                            onClick={() => saveCommunityPlaylistToLibrary(previewPlaylist)}
+                            className="md:scale-100 hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 bg-white/10 text-white hover:bg-white/20 border border-white/10 hover:border-white/20 font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-full transition-all duration-300 shadow-xl cursor-pointer"
+                            title="Guardar en mi biblioteca"
+                          >
+                            <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                            <span>Añadir</span>
+                          </button>
+
                           {(() => {
                           })()}
                         </div>
@@ -9437,6 +9468,93 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                       ? "Crear ahora"
                       : "Añadir ahora"}
                   </span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OVERLAY: CONFIRM ADD PLAYLIST MODAL */}
+      <AnimatePresence>
+        {playlistToConfirmAdd && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#121212] border border-[#1ED760]/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col relative"
+            >
+              {/* Glow ambient background */}
+              <div className="absolute -top-12 -left-12 w-32 h-32 bg-[#1ED760]/20 rounded-full blur-2xl pointer-events-none" />
+              
+              {/* Header */}
+              <div className="p-4 flex items-center justify-between border-b border-white/5 bg-white/[0.02] relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-[#1ED760]/10 rounded-lg">
+                    <ListMusic className="w-4 h-4 text-[#1ED760]" />
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase text-white tracking-[0.2em]">
+                    Añadir a Biblioteca
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setPlaylistToConfirmAdd(null)}
+                  disabled={isProcessingAddPlaylist}
+                  className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Content Container */}
+              <div className="p-6 flex flex-col items-center text-center space-y-4 relative z-10">
+                <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl border border-white/10">
+                  <img
+                    src={playlistToConfirmAdd.thumbnail_url || getPlaylistImage(playlistToConfirmAdd) || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300"}
+                    alt={playlistToConfirmAdd.name || playlistToConfirmAdd.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-white mb-1">
+                    {playlistToConfirmAdd.name || playlistToConfirmAdd.title}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    {playlistToConfirmAdd.ownerName || playlistToConfirmAdd.artist || "YouTube Music"}
+                  </p>
+                </div>
+                
+                <p className="text-sm text-slate-300 font-medium">
+                  ¿Estás seguro de que quieres añadir esta playlist a tu biblioteca personal?
+                </p>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 border-t border-white/5 bg-[#18181b] flex items-center justify-end gap-3 relative z-10">
+                <button
+                  onClick={() => setPlaylistToConfirmAdd(null)}
+                  disabled={isProcessingAddPlaylist}
+                  className="text-slate-400 hover:text-white text-[11px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={isProcessingAddPlaylist}
+                  onClick={() => executeSaveCommunityPlaylistToLibrary(playlistToConfirmAdd)}
+                  className="bg-[#1ED760] hover:bg-emerald-400 text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-[#1ED760]/10 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale cursor-pointer"
+                >
+                  {isProcessingAddPlaylist ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 stroke-[3px]" />
+                  )}
+                  <span>Confirmar</span>
                 </button>
               </div>
             </motion.div>

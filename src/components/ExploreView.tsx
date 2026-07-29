@@ -486,12 +486,26 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
           <FeaturedUpdateBanner
             onPlayPlaylist={(update) => {
               if (loadPlaylistAndPlay) {
-                loadPlaylistAndPlay(update.playlistId);
+                loadPlaylistAndPlay({
+                  id: update.playlistId,
+                  title: update.title,
+                  thumbnail: update.image || update.thumbnail,
+                  artist: update.genre,
+                  description: update.description,
+                  isPlaylist: true
+                });
               }
             }}
             onViewPlaylist={(update) => {
               if (loadPlaylistAndPlay) {
-                loadPlaylistAndPlay(update.playlistId);
+                loadPlaylistAndPlay({
+                  id: update.playlistId,
+                  title: update.title,
+                  thumbnail: update.image || update.thumbnail,
+                  artist: update.genre,
+                  description: update.description,
+                  isPlaylist: true
+                });
               }
             }}
           />
@@ -1015,7 +1029,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             }
                           }}
                         />
-                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2">
                           <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
                             {isActive && isPlaying ? (
                               <Pause className="w-5 h-5 text-black fill-black" />
@@ -1023,6 +1037,18 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                               <Play className="w-5 h-5 text-black fill-black ml-0.5" />
                             )}
                           </div>
+                          {item.isPlaylist && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.dispatchEvent(new CustomEvent("save-playlist-to-library", { detail: item.data || item }));
+                              }}
+                              className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl backdrop-blur-md cursor-pointer hover:border-white/50 hover:text-[#1ED760]"
+                              title="Añadir a mi biblioteca"
+                            >
+                              <Plus className="w-5 h-5 text-white stroke-[2.5px] hover:text-[#1ED760] transition-colors" />
+                            </button>
+                          )}
                         </div>
                         <div className="absolute bottom-1.5 right-1.5 bg-black/75 text-[9px] font-bold text-white px-2 py-0.5 rounded-md backdrop-blur-md border border-white/10 shadow-lg flex items-center gap-1">
                           {item.isPlaylist ? (
