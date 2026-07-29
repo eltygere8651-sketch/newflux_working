@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Play, Eye, Sparkles, Volume2, ChevronLeft, ChevronRight } from "lucide-react";
-import { collection, query, getDocs } from "firebase/firestore";
+import { Play, Eye, Sparkles, Volume2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { collection, query, getDocs, doc, deleteDoc, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -23,17 +23,20 @@ export interface FeaturedUpdateItem {
 interface FeaturedUpdateBannerProps {
   onPlayPlaylist: (update: FeaturedUpdateItem) => void;
   onViewPlaylist: (update: FeaturedUpdateItem) => void;
+  isAdmin?: boolean;
 }
 
 export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
   onPlayPlaylist,
   onViewPlaylist,
+  isAdmin = false,
 }) => {
   const [activeItems, setActiveItems] = useState<FeaturedUpdateItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [direction, setDirection] = useState(1);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isInView, setIsInView] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -148,6 +151,55 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
     }
   };
 
+  const handleDeletePermanently = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAdmin) return;
+    const activeItem = activeItems[currentIndex];
+    if (!activeItem || !activeItem.docId) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDelete = async () => {
+    const activeItem = activeItems[currentIndex];
+    if (!activeItem || !activeItem.playlistId) return;
+    try {
+      // Find all featured updates with this playlistId and delete them all (in case there are duplicates)
+      const q = query(
+        collection(db, "featured_updates"),
+        where("playlistId", "==", activeItem.playlistId)
+      );
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(docSnap => 
+        deleteDoc(doc(db, "featured_updates", docSnap.id))
+      );
+      await Promise.all(deletePromises);
+
+      // Fallback: Also try deleting by docId just in case the query failed to match
+      if (activeItem.docId) {
+        try {
+          await deleteDoc(doc(db, "featured_updates", activeItem.docId));
+        } catch (e) {}
+      }
+
+      // Remove locally
+      const newItems = [...activeItems];
+      newItems.splice(currentIndex, 1);
+      if (newItems.length > 0) {
+        setActiveItems(newItems);
+        if (currentIndex >= newItems.length) {
+          setCurrentIndex(0);
+        }
+      } else {
+        setIsVisible(false);
+      }
+      window.dispatchEvent(new Event("refreshFeaturedUpdates"));
+    } catch (error) {
+      console.error("Error al eliminar la promoción:", error);
+    } finally {
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
@@ -212,7 +264,7 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEndHandler}
     >
-      <div className="relative overflow-hidden rounded-2xl bg-[#121212] border border-[#1ED760]/20 shadow-xl group min-h-[110px] sm:min-h-[120px]">
+      <div className="relative overflow-hidden rounded-2xl bg-[#121212] border border-[#1ED760]/20 shadow-xl group min-h-[120px]">
         
         {/* Glow ambient effect */}
         <div className="absolute -top-12 -left-12 w-48 h-48 bg-[#1ED760]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#1ED760]/20 transition-all duration-700" />
@@ -261,7 +313,7 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
             className="relative z-10 flex flex-row items-center gap-3 sm:gap-4 p-3 sm:p-4 h-full w-full"
           >
             {/* Cover image thumbnail */}
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-xl overflow-hidden shadow-md border border-white/10 group-hover:scale-[1.02] transition-transform duration-300">
+            <div className="relative w-24 h-24 shrink-0 rounded-xl overflow-hidden shadow-md border border-white/10 group-hover:scale-[1.02] transition-transform duration-300">
               <img
                 src={imageUrl}
                 alt={activeItem.title}
@@ -313,11 +365,55 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
                   <span className="hidden sm:inline">Ver detalles</span>
                   <span className="sm:hidden">Ver</span>
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={handleDeletePermanently}
+                    className="ml-auto bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300 active:scale-95 text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full transition-all border border-red-500/20 flex items-center gap-1"
+                    title="Eliminar promoción para todos"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span className="hidden sm:inline">Eliminar</span>
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
+      
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Eliminar Promoción
+            </h3>
+            <p className="text-sm text-slate-300 mb-6">
+              ¿Estás seguro de que quieres eliminar esta promoción para todos los usuarios?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(false);
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  executeDelete();
+                }}
+                className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-full hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

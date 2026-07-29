@@ -1560,6 +1560,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const handleUpdateExploreLayout = async (newLayout: any[]) => {
     try {
       await setDoc(doc(db, "admin", `explore_layout_${selectedCountry}`), { sections: newLayout });
+      setExploreLayout(newLayout);
       showNotification("Diseño del explorador actualizado");
       window.dispatchEvent(new Event("refreshExplore"));
     } catch (e: any) {

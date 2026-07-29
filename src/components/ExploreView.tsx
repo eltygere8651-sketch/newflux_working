@@ -17,6 +17,7 @@ import {
   ArrowDown,
   Pencil,
   Check,
+  Trash2,
 } from "lucide-react";
 import { MusicTrack } from "../types";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
@@ -484,6 +485,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
         {/* FEATURED UPDATE PROMOTION BANNER */}
         <div className="px-3">
           <FeaturedUpdateBanner
+            isAdmin={isAdmin}
             onPlayPlaylist={(update) => {
               if (loadPlaylistAndPlay) {
                 loadPlaylistAndPlay({
@@ -512,7 +514,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
         </div>
 
         {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
-        <div className="px-3 flex items-center justify-between">
+        <div className="px-3 flex items-center justify-between gap-3 flex-wrap">
           {setSelectedCountry && selectedCountry && (
             <div className="relative max-w-[200px] w-full">
               <button
@@ -561,20 +563,20 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
           )}
 
           {isAdmin && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setShowAddSectionModal(true)}
                 className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-white/10 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Añadir Categoría</span>
+                <span>Añadir Categoría</span>
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-[#1ED760]/20 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Añadir Lista / Video</span>
+                <span>Añadir Lista / Video</span>
               </button>
             </div>
           )}
@@ -582,7 +584,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
 
         {showAddSectionModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
               <h3 className="text-white font-bold mb-4 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-white" />
                 Nueva Categoría
@@ -627,9 +629,9 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
 
         {itemToDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
               <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                <X className="w-5 h-5 text-red-500" />
+                <Trash2 className="w-5 h-5 text-red-500" />
                 Eliminar Lista
               </h3>
               <p className="text-sm text-slate-300 mb-6">
@@ -665,7 +667,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
 
         {sectionToDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
               <h3 className="text-white font-bold mb-4 flex items-center gap-2">
                 <X className="w-5 h-5 text-red-500" />
                 Eliminar Categoría
@@ -694,7 +696,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
 
         {showAddModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
               <h3 className="text-white font-bold mb-4 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-[#1ED760]" />
                 Añadir al Explorador
@@ -807,7 +809,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                     </h2>
                   )}
                   {isAdmin && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover/section:opacity-100 transition-opacity bg-black/50 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 ml-4">
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity bg-black/50 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 ml-4">
                       <button
                         onClick={() => {
                           setEditingSectionId(section.id);
@@ -855,7 +857,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                           className="p-1 text-red-400 hover:text-red-300 transition-colors"
                           title="Eliminar categoría"
                         >
-                          <X className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -876,7 +878,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                     currentTrack &&
                     (currentTrack.url === item.url ||
                       currentTrack.id === item.id);
-                  const itemId = item.id || item.url;
+                  const itemId = item.id || item.url || item.title || `index-${songIdx}`;
 
                   return (
                     <div
@@ -1030,7 +1032,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                           }}
                         />
                         <div className="absolute inset-0 bg-black/10 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2">
-                          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
                             {isActive && isPlaying ? (
                               <Pause className="w-5 h-5 text-black fill-black" />
                             ) : (
@@ -1043,7 +1045,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                 e.stopPropagation();
                                 window.dispatchEvent(new CustomEvent("save-playlist-to-library", { detail: item.data || item }));
                               }}
-                              className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl backdrop-blur-md cursor-pointer hover:border-white/50 hover:text-[#1ED760]"
+                              className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl backdrop-blur-md cursor-pointer hover:border-white/50 hover:text-[#1ED760]"
                               title="Añadir a mi biblioteca"
                             >
                               <Plus className="w-5 h-5 text-white stroke-[2.5px] hover:text-[#1ED760] transition-colors" />
@@ -1064,7 +1066,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                           )}
                         </div>
                         {isAdmin && (
-                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1076,27 +1078,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                   description: item.description,
                                 });
                               }}
-                              className="bg-black/80 hover:bg-[#1ED760] hover:text-black text-[#1ED760] p-1 rounded-full backdrop-blur-md border border-[#1ED760]/40 shadow-md transition-all scale-95 hover:scale-105"
+                              className="bg-black/80 hover:bg-[#1ED760] hover:text-black text-[#1ED760] p-1.5 rounded-full backdrop-blur-md border border-[#1ED760]/40 shadow-md transition-all scale-95 hover:scale-105"
                               title="Promocionar como destacada 🔥"
                             >
-                              <Sparkles className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (item.docId) {
-                                  setItemToDelete({ docId: item.docId });
-                                } else {
-                                  setItemToDelete({
-                                    sectionId: section.id,
-                                    itemId: item.id || item.url,
-                                  });
-                                }
-                              }}
-                              className="bg-black/60 hover:bg-red-500/80 text-white p-1 rounded-full backdrop-blur-sm shadow-md transition-colors"
-                              title="Eliminar"
-                            >
-                              <X className="w-3 h-3" />
+                              <Sparkles className="w-4 h-4" />
                             </button>
                           </div>
                         )}
@@ -1108,21 +1093,43 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                         >
                           {item.title}
                         </p>
-                        <p className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
-                          {item.isPlaylist ? (
-                            <>
-                              <span>{item.artist || "YouTube Music"}</span>
-                              {Boolean(item.trackCount || item.tracks?.length) && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-[#1ED760]/90 font-semibold">{item.trackCount || item.tracks?.length} canciones</span>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <span>{item.artist || "YouTube"}</span>
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-[10px] text-slate-400 font-medium truncate flex-1 flex items-center gap-1">
+                            {item.isPlaylist ? (
+                              <>
+                                <span>{item.artist || "YouTube Music"}</span>
+                                {Boolean(item.trackCount || item.tracks?.length) && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-[#1ED760]/90 font-semibold">{item.trackCount || item.tracks?.length} canciones</span>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <span>{item.artist || "YouTube"}</span>
+                            )}
+                          </p>
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (item.docId) {
+                                  setItemToDelete({ docId: item.docId });
+                                } else {
+                                  setItemToDelete({
+                                    sectionId: section.id,
+                                    itemId: item.id || item.url || item.title || `index-${songIdx}`,
+                                  });
+                                }
+                              }}
+                              className="text-red-500/70 hover:text-red-500 p-1 rounded transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   );

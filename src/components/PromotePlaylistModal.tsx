@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, X, Loader2, Send, Tag, AlignLeft, Calendar } from "lucide-react";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -80,9 +81,9 @@ export const PromotePlaylistModal: React.FC<PromotePlaylistModalProps> = ({
     }
   };
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#121212] border border-[#1ED760]/30 rounded-2xl p-5 sm:p-6 shadow-2xl relative">
+      <div className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-[#121212] border border-[#1ED760]/30 rounded-2xl p-5 sm:p-6 shadow-2xl relative">
         {/* Glow ambient background */}
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-[#1ED760]/20 rounded-full blur-2xl pointer-events-none" />
 
@@ -172,4 +173,9 @@ export const PromotePlaylistModal: React.FC<PromotePlaylistModalProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+  return null;
 };
