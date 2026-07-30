@@ -48,6 +48,16 @@ function AppContent() {
   const latestAnnouncementIdRef = useRef<string | null>(null);
   const isInitialAnnouncementsLoad = useRef(true);
 
+  useEffect(() => {
+    const handleNewsOpened = () => {
+      setHasUnread(false);
+    };
+    window.addEventListener("news_opened", handleNewsOpened);
+    return () => {
+      window.removeEventListener("news_opened", handleNewsOpened);
+    };
+  }, []);
+
   // States for Premium Ticket Support
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
@@ -957,7 +967,7 @@ function AppContent() {
         <section className="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
           <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 w-full min-h-0 relative overflow-hidden">
-              <GymMusicPlayer unreadRepliesCount={unreadRepliesCount} />
+              <GymMusicPlayer unreadRepliesCount={unreadRepliesCount} hasUnreadNews={hasUnread} />
             </div>
           </div>
         </section>

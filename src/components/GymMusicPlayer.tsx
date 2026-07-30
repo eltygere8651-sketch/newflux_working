@@ -740,9 +740,10 @@ const silentAudioBlobSrc = createSilentAudioBlobURL();
 
 interface GymMusicPlayerProps {
   unreadRepliesCount?: number;
+  hasUnreadNews?: boolean;
 }
 
-export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlayerProps = {}) {
+export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews = false }: GymMusicPlayerProps = {}) {
   const isIOS =
     typeof window !== "undefined" &&
     (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -5263,7 +5264,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }`}
         >
           <span className="flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)] animate-pulse" />
+            <div className="relative">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)] animate-pulse" />
+              {hasUnreadNews && <span className="absolute -top-1 -right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+            </div>
             <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Novedades</span>
           </span>
         </button>

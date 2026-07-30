@@ -183,10 +183,12 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
 
   useEffect(() => {
     setLoading(true);
-    let unsubscribe: () => void;
+    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
     try {
       const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(40));
       import("firebase/firestore").then(({ onSnapshot }) => {
+        if (!isMounted) return;
         unsubscribe = onSnapshot(q, (snap) => {
           const firebaseList: Announcement[] = [];
           const deletedIds = new Set<string>();
@@ -247,6 +249,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     }
     
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, []);
@@ -293,20 +296,6 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             content: formContent.trim(),
           });
         }
-
-        setAnnouncements((prev) =>
-          prev.map((a) =>
-            a.id === docId
-              ? {
-                  ...a,
-                  title: formTitle.trim(),
-                  category: formCategory,
-                  videoUrl: formVideoUrl.trim(),
-                  content: formContent.trim(),
-                }
-              : a
-          )
-        );
       } else {
         const newId = "ann_" + Math.random().toString(36).substring(2, 11);
         const newAnnData = {
@@ -318,12 +307,6 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           active: true,
         };
         await setDoc(doc(db, "announcements", newId), newAnnData);
-
-        const newAnn: Announcement = {
-          id: newId,
-          ...newAnnData,
-        };
-        setAnnouncements((prev) => [newAnn, ...prev]);
       }
       setIsModalOpen(false);
       window.dispatchEvent(new Event("notifications-read"));

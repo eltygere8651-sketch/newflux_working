@@ -369,6 +369,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
     });
 
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, [isOpen]);
