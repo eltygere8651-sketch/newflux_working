@@ -41,6 +41,8 @@ import {
   Users,
   Star,
   Pencil,
+  UploadCloud,
+  Loader2,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
@@ -272,6 +274,51 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
   const [annVideoUrl, setAnnVideoUrl] = useState("");
+  const [isUploadingAnn, setIsUploadingAnn] = useState(false);
+  
+  const handleAnnFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      alert("Por favor configura VITE_CLOUDINARY_CLOUD_NAME y VITE_CLOUDINARY_UPLOAD_PRESET en tus variables de entorno para usar esta función.");
+      return;
+    }
+
+    const isVideo = file.type.startsWith('video/');
+    
+    setIsUploadingAnn(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", uploadPreset);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.secure_url) {
+        setAnnVideoUrl(data.secure_url);
+      } else {
+        throw new Error(data.error?.message || "Error al subir el archivo");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`Error al subir a Cloudinary: ${error.message}`);
+    } finally {
+      setIsUploadingAnn(false);
+    }
+  };
+
   const [annCategory, setAnnCategory] = useState<
     "noticia" | "urgente" | "mantenimiento" | "actualizacion"
   >("noticia");
@@ -1973,15 +2020,39 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     {/* Video URL block */}
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        URL de Video Guía (Opcional - Cloudinary/MP4)
+                        Video o Imagen (Cloudinary / URL)
                       </label>
-                      <input
-                        type="text"
-                        value={annVideoUrl}
-                        onChange={(e) => setAnnVideoUrl(e.target.value)}
-                        placeholder="https://res.cloudinary.com/..."
-                        className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={annVideoUrl}
+                          onChange={(e) => setAnnVideoUrl(e.target.value)}
+                          placeholder="Pegar URL o subir archivo..."
+                          className="flex-1 px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
+                        />
+                        <input
+                          type="file"
+                          id="cloudinary-upload-ann"
+                          accept="image/*,video/*"
+                          className="hidden"
+                          onChange={handleAnnFileUpload}
+                          disabled={isUploadingAnn}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById("cloudinary-upload-ann")?.click()}
+                          disabled={isUploadingAnn}
+                          className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
+                          title="Subir a Cloudinary"
+                        >
+                          {isUploadingAnn ? <Loader2 className="w-4 h-4 animate-spin text-[#1ED760]" /> : <UploadCloud className="w-4 h-4 text-[#1ED760]" />}
+                        </button>
+                      </div>
+                      {isUploadingAnn && (
+                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1">
+                          <div className="h-full bg-[#1ED760] animate-pulse w-full"></div>
+                        </div>
+                      )}
                     </div>
                     {/* Content block */}
                     <div className="space-y-1.5">

@@ -16,8 +16,26 @@ export const LazyImage: React.FC<LazyImageProps> = ({ src, fallbackSrc, classNam
 
   useEffect(() => {
     setCurrentSrc(src);
-    setError(false);
     setIsLoaded(false);
+    if (!src) {
+      if (onImageError && !error) {
+         let updated = false;
+         onImageError({} as any, (newSrc) => {
+           updated = true;
+           setCurrentSrc(newSrc);
+           setError(false);
+         });
+         if (!updated) {
+           setError(true);
+           setIsLoaded(true);
+         }
+      } else {
+        setError(true);
+        setIsLoaded(true);
+      }
+    } else {
+      setError(false);
+    }
   }, [src]);
 
   useEffect(() => {

@@ -13,7 +13,9 @@ import {
   Pencil,
   Plus,
   X,
-  Send
+  Send,
+  UploadCloud,
+  Loader2
 } from "lucide-react";
 import { COMPILED_UPDATES, Announcement } from "./NotificationsModal";
 
@@ -133,6 +135,50 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   const [formVideoUrl, setFormVideoUrl] = useState("");
   const [formContent, setFormContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      alert("Por favor configura VITE_CLOUDINARY_CLOUD_NAME y VITE_CLOUDINARY_UPLOAD_PRESET en tus variables de entorno para usar esta función.");
+      return;
+    }
+
+    const isVideo = file.type.startsWith('video/');
+    
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", uploadPreset);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.secure_url) {
+        setFormVideoUrl(data.secure_url);
+      } else {
+        throw new Error(data.error?.message || "Error al subir el archivo");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`Error al subir a Cloudinary: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -334,47 +380,50 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[350px] bg-[radial-gradient(ellipse_at_top,_rgba(251,191,36,0.1),_rgba(6,182,212,0.04),_transparent_70%)] pointer-events-none z-0" />
 
       {/* TOP SLEEK HEADER */}
-      <header className="sticky top-0 z-50 px-4 sm:px-8 py-3.5 bg-[#070709]/95 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-4 shrink-0 shadow-[0_4px_25px_rgba(0,0,0,0.8)]">
+      <header className="sticky top-0 z-50 px-2 sm:px-8 py-3 bg-[#070709]/95 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-1 sm:gap-4 shrink-0 shadow-[0_4px_25px_rgba(0,0,0,0.8)]">
         {/* Left: Premium Exit Button matching Flux styling */}
         {onClose ? (
           <button
             onClick={onClose}
-            className="group flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/15 via-fuchsia-500/15 to-cyan-500/15 hover:from-amber-500/30 hover:via-fuchsia-500/30 hover:to-cyan-500/30 active:scale-95 border border-white/20 backdrop-blur-xl text-white font-black text-xs shadow-[0_4px_15px_rgba(0,0,0,0.5)] transition-all cursor-pointer"
+            className="group flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-amber-500/15 via-fuchsia-500/15 to-cyan-500/15 hover:from-amber-500/30 hover:via-fuchsia-500/30 hover:to-cyan-500/30 active:scale-95 border border-white/20 backdrop-blur-xl text-white font-black text-xs shadow-[0_4px_15px_rgba(0,0,0,0.5)] transition-all cursor-pointer shrink-0"
             title="Volver"
           >
             <ArrowLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-1 transition-transform" />
-            <span className="uppercase tracking-widest text-[11px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-fuchsia-300 to-cyan-300">
+            <span className="hidden sm:inline uppercase tracking-widest text-[11px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-fuchsia-300 to-cyan-300">
               Volver
             </span>
           </button>
         ) : (
-          <div />
+          <div className="w-8 sm:w-24 shrink-0" />
         )}
 
         {/* Center: Title emblem */}
-        <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-          <h1 className="text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white">
+        <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md min-w-0">
+          <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 animate-pulse shrink-0" />
+          <h1 className="text-[10px] sm:text-sm font-black uppercase tracking-wider sm:tracking-[0.2em] text-white truncate">
             Novedades
           </h1>
         </div>
 
         {/* Right side live status & Admin action */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isAdmin && (
             <button
               onClick={handleOpenCreate}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-[10px] uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden sm:inline">Publicar Novedad</span>
-              <span className="sm:hidden">Publicar</span>
+              <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
+              <span className="hidden md:inline">Publicar Novedad</span>
+              <span className="inline md:hidden">Publicar</span>
             </button>
           )}
 
-          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-white/5 px-3.5 py-1.5 rounded-full border border-white/10">
+          <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-white/5 px-3.5 py-1.5 rounded-full border border-white/10">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="hidden lg:inline">Flux Center</span>
+          </div>
+          <div className="flex sm:hidden items-center justify-center bg-white/5 w-6 h-6 rounded-full border border-white/10 shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="hidden sm:inline">Flux Center</span>
           </div>
         </div>
       </header>
@@ -457,12 +506,20 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                       idx === 0 ? "lg:w-[55%] aspect-video lg:aspect-auto shrink-0" : "w-full aspect-video shrink-0"
                     }`}
                   >
-                    <video
-                      src={item.videoUrl}
-                      controls
-                      preload="metadata"
-                      className="w-full h-full object-cover"
-                    />
+                    {item.videoUrl.includes("/image/") || item.videoUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                      <img
+                        src={item.videoUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <video
+                        src={item.videoUrl}
+                        controls
+                        preload="metadata"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 )}
 
@@ -594,18 +651,42 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
               />
             </div>
 
-            {/* Video URL input */}
+            {/* Media input */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
-                URL de Video (Opcional - MP4 / Cloudinary)
+                Video o Imagen (Cloudinary / URL)
               </label>
-              <input
-                type="text"
-                value={formVideoUrl}
-                onChange={(e) => setFormVideoUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400/50 transition-all font-medium"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={formVideoUrl}
+                  onChange={(e) => setFormVideoUrl(e.target.value)}
+                  placeholder="Pegar URL o subir archivo..."
+                  className="flex-1 px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400/50 transition-all font-medium"
+                />
+                <input
+                  type="file"
+                  id="cloudinary-upload-news"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("cloudinary-upload-news")?.click()}
+                  disabled={isUploading}
+                  className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
+                  title="Subir a Cloudinary"
+                >
+                  {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-cyan-400" /> : <UploadCloud className="w-4 h-4 text-cyan-400" />}
+                </button>
+              </div>
+              {isUploading && (
+                <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1">
+                  <div className="h-full bg-cyan-400 animate-pulse w-full"></div>
+                </div>
+              )}
             </div>
 
             {/* Content input */}

@@ -521,12 +521,20 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
                       <div className="text-[10px] leading-relaxed text-slate-300 font-medium mt-2 pt-2 border-t border-white/5 whitespace-pre-wrap">
                         {item.videoUrl && (
                           <div className="mb-3 rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black">
-                            <video 
-                              src={item.videoUrl} 
-                              controls 
-                              className="w-full max-h-[300px] object-contain"
-                              preload="metadata"
-                            />
+                            {item.videoUrl.includes("/image/") || item.videoUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                              <img
+                                src={item.videoUrl}
+                                alt={item.title}
+                                className="w-full max-h-[300px] object-contain"
+                              />
+                            ) : (
+                              <video 
+                                src={item.videoUrl} 
+                                controls 
+                                className="w-full max-h-[300px] object-contain"
+                                preload="metadata"
+                              />
+                            )}
                           </div>
                         )}
                         {item.content}

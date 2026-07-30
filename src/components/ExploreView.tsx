@@ -116,7 +116,7 @@ const getItemImage = (item: any): string => {
     return `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
   }
   
-  return DEFAULT_MUSIC_COVER;
+  return "";
 };
 
 export const ExploreView: React.FC<ExploreViewProps> = React.memo(
@@ -1053,53 +1053,50 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                       <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#111113] border border-white/5 relative mb-2.5">
                         <LazyImage
                           src={getItemImage(item)}
+                          fallbackSrc={DEFAULT_MUSIC_COVER}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           wrapperClassName="absolute inset-0"
                           referrerPolicy="no-referrer"
                           onImageError={(e, setSrc) => {
+                            const handleSetSrc = (src: string) => {
+                              item.thumbnail = src;
+                              item.imageUrl = src;
+                              setSrc(src);
+                              if (item.docId) {
+                                updateDoc(doc(db, "explore_custom_playlists", item.docId), { thumbnail: src }).catch(() => {});
+                              }
+                            };
                             if (item.id) {
                               const isPlaylist = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE");
-                              const endpoint = isPlaylist 
-                                ? `/api/youtube/playlist-info?id=${item.id}`
-                                : `/api/youtube/video-info?id=${item.id}`;
-                              
-                              fetch(endpoint)
-                                .then(res => {
-                                  if (!res.ok) throw new Error("Backend error");
-                                  return res.json();
-                                })
-                                .then(data => {
-                                  const cUrl = cleanUrl(data.thumbnail);
-                                  if (cUrl && cUrl !== getItemImage(item)) {
-                                    setSrc(cUrl);
-                                  }
-                                })
-                                .catch(() => {
-                                  if (isPlaylist) {
+                              if (isPlaylist) {
+                                fetch(`/api/youtube/playlist?id=${item.id}`)
+                                  .then(res => {
+                                    if (!res.ok) throw new Error("Backend error");
+                                    return res.json();
+                                  })
+                                  .then(tracks => {
+                                    if (Array.isArray(tracks) && tracks.length > 0 && tracks[0].id) {
+                                      handleSetSrc(`https://i.ytimg.com/vi/${tracks[0].id}/hqdefault.jpg`);
+                                    } else {
+                                      throw new Error("No tracks");
+                                    }
+                                  })
+                                  .catch(() => {
                                     const fallbackUrl = `https://pipedapi.kavin.rocks/playlists/${item.id}`;
                                     fetch(fallbackUrl)
                                       .then(r => r.json())
                                       .then(d => {
-                                        if (d && d.thumbnailUrl) {
-                                           setSrc(d.thumbnailUrl);
-                                        } else if (d && d.relatedStreams && d.relatedStreams.length > 0) {
-                                           setSrc(`https://i.ytimg.com/vi/${d.relatedStreams[0].url.replace("/watch?v=", "")}/hqdefault.jpg`);
+                                        if (d && d.relatedStreams && d.relatedStreams.length > 0) {
+                                           handleSetSrc(`https://i.ytimg.com/vi/${d.relatedStreams[0].url.replace("/watch?v=", "")}/hqdefault.jpg`);
+                                        } else if (d && d.thumbnailUrl) {
+                                           handleSetSrc(d.thumbnailUrl);
                                         }
                                       })
                                       .catch(() => {});
-                                  } else {
-                                    const fallbackUrl = `https://noembed.com/embed?dataType=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + item.id)}`;
-                                    fetch(fallbackUrl)
-                                      .then(r => r.json())
-                                      .then(d => {
-                                        if (d && d.thumbnail_url) setSrc(d.thumbnail_url);
-                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
-                                      })
-                                      .catch(() => {
-                                        setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
-                                      });
-                                  }
-                                });
+                                  });
+                              } else {
+                                handleSetSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
+                              }
                             }
                           }}
                         />
@@ -1125,49 +1122,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             </>
                           )}
                         </div>
-                        {isAdmin && (
-                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setTargetSectionId(section.id);
-                                setMoveTarget({
-                                  docId: item.docId,
-                                  itemId: item.id || item.url || item.title || `index-${songIdx}`,
-                                  title: item.title,
-                                  thumbnail: getItemImage(item),
-                                  currentSectionId: section.id,
-                                  url: item.url,
-                                  isPlaylist: item.isPlaylist,
-                                  artist: item.artist,
-                                  trackCount: item.trackCount || item.tracks?.length,
-                                  description: item.description,
-                                });
-                              }}
-                              className="bg-black/80 hover:bg-amber-400 hover:text-black text-amber-400 p-1.5 rounded-full backdrop-blur-md border border-amber-400/40 shadow-md transition-all scale-95 hover:scale-105"
-                              title="Mover a otra categoría 📁"
-                            >
-                              <FolderOutput className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPromoteTarget({
-                                  id: item.id || item.docId || item.url,
-                                  title: item.title,
-                                  thumbnail: getItemImage(item),
-                                  artist: item.artist,
-                                  description: item.description,
-                                });
-                              }}
-                              className="bg-black/80 hover:bg-[#1ED760] hover:text-black text-[#1ED760] p-1.5 rounded-full backdrop-blur-md border border-[#1ED760]/40 shadow-md transition-all scale-95 hover:scale-105"
-                              title="Promocionar como destacada 🔥"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
                       </div>
                       <div className="mt-1 space-y-0.5">
                         <p
@@ -1193,7 +1147,23 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             )}
                           </p>
                           {isAdmin && (
-                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0">
+                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPromoteTarget({
+                                    id: item.id || item.docId || item.url,
+                                    title: item.title,
+                                    thumbnail: getItemImage(item),
+                                    artist: item.artist,
+                                    description: item.description,
+                                  });
+                                }}
+                                className="text-[#1ED760]/80 hover:text-[#1ED760] p-2 sm:p-1 rounded-md bg-black/40 sm:bg-transparent border border-[#1ED760]/20 sm:border-transparent transition-all"
+                                title="Promocionar como destacada 🔥"
+                              >
+                                <Sparkles className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1212,10 +1182,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                     description: item.description,
                                   });
                                 }}
-                                className="text-amber-400/80 hover:text-amber-400 p-1 rounded transition-colors"
+                                className="text-amber-400/80 hover:text-amber-400 p-2 sm:p-1 rounded-md bg-black/40 sm:bg-transparent border border-amber-400/20 sm:border-transparent transition-all"
                                 title="Mover a otra categoría 📁"
                               >
-                                <FolderOutput className="w-3.5 h-3.5" />
+                                <FolderOutput className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
                               </button>
                               <button
                                 onClick={(e) => {
@@ -1230,10 +1200,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                     });
                                   }
                                 }}
-                                className="text-red-500/70 hover:text-red-500 p-1 rounded transition-colors"
+                                className="text-red-500/70 hover:text-red-500 p-2 sm:p-1 rounded-md bg-black/40 sm:bg-transparent border border-red-500/20 sm:border-transparent transition-all"
                                 title="Eliminar"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
                               </button>
                             </div>
                           )}

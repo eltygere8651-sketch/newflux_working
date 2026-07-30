@@ -3,6 +3,7 @@ import { Play, Eye, Sparkles, Volume2, ChevronLeft, ChevronRight, Trash2 } from 
 import { collection, query, getDocs, doc, deleteDoc, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion, AnimatePresence } from "motion/react";
+import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 
 export interface FeaturedUpdateItem {
   id?: string;
@@ -319,7 +320,14 @@ export const FeaturedUpdateBanner: React.FC<FeaturedUpdateBannerProps> = ({
                 alt={activeItem.title}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = `https://i.ytimg.com/vi/${activeItem.playlistId}/hqdefault.jpg`;
+                  const target = e.target as HTMLImageElement;
+                  if (target.src !== DEFAULT_MUSIC_COVER) {
+                    if (activeItem.playlistId && activeItem.playlistId.length === 11) {
+                      target.src = `https://i.ytimg.com/vi/${activeItem.playlistId}/hqdefault.jpg`;
+                    } else {
+                      target.src = DEFAULT_MUSIC_COVER;
+                    }
+                  }
                 }}
               />
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />

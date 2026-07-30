@@ -39,7 +39,7 @@ export const PromotePlaylistModal: React.FC<PromotePlaylistModalProps> = ({
       const featuredDoc = {
         playlistId: playlist.id,
         title: playlist.title || "Nueva Playlist Destacada",
-        image: playlist.thumbnail || `https://i.ytimg.com/vi/${playlist.id}/hqdefault.jpg`,
+        image: playlist.thumbnail || (playlist.id.length === 11 ? `https://i.ytimg.com/vi/${playlist.id}/hqdefault.jpg` : ""),
         genre: "Destacado",
         description: customDescription || "Nueva playlist recomendada",
         publishedAt: now,
@@ -108,7 +108,7 @@ export const PromotePlaylistModal: React.FC<PromotePlaylistModalProps> = ({
         {/* Selected Playlist Preview */}
         <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl mb-5">
           <img
-            src={playlist.thumbnail || `https://i.ytimg.com/vi/${playlist.id}/hqdefault.jpg`}
+            src={playlist.thumbnail || (playlist.id.length === 11 ? `https://i.ytimg.com/vi/${playlist.id}/hqdefault.jpg` : "")}
             alt={playlist.title}
             className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg shrink-0"
           />
