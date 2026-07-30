@@ -775,14 +775,14 @@ function AppContent() {
     >
       {/* PREMIUM STICKY HEADER & LOGO BRAND */}
       <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-4 pb-2 sm:pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <div className="w-full mb-1 sm:mb-3 px-3 sm:px-6 flex items-center justify-between">
+        <div className="w-full mb-1 sm:mb-3 px-4 sm:px-6 flex items-center justify-between relative min-h-[44px]">
           
           {/* LEFT: Menu Toggle */}
-          <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center justify-start">
              <button
                 type="button"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="relative flex items-center justify-center p-1.5 sm:p-2 pr-3.5 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
+                className="relative flex items-center justify-center p-1.5 sm:p-2 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer sm:gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)] aspect-square sm:aspect-auto"
                 title="Menú"
              >
                 {user ? (
@@ -811,7 +811,7 @@ function AppContent() {
                     )}
                   </div>
                 )}
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-300 transition-colors relative">
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-300 transition-colors relative">
                   Menú
                   {unreadRepliesCount > 0 && (
                     <span className={`absolute -top-1.5 -right-5 px-1.5 py-0.5 text-[8px] font-black text-white rounded-full leading-none shadow-md ${isAdmin ? 'bg-amber-500 shadow-amber-500/50' : 'bg-rose-500 shadow-rose-500/50'}`}>
@@ -823,30 +823,21 @@ function AppContent() {
           </div>
 
           {/* CENTER: LOGO BRAND */}
-          <div className="flex flex-col items-center justify-center shrink-0">
+          <div className="shrink-0 flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2">
             <div 
               className="flex items-center gap-2.5 group cursor-default select-none"
             >
               <div className="relative">
                 <FluxLogo className="w-9 h-9" />
               </div>
-              <div className="flex flex-col items-center">
-                <span className="text-2xl font-brand font-black tracking-[-0.05em] uppercase leading-none select-none text-white transition-all duration-700 group-hover:tracking-[0.05em]">
-                  FLUX
-                </span>
-                <div className="flex items-center gap-1.5 mt-0.5 opacity-90">
-                  <div className="h-[1px] w-3 bg-emerald-500/40" />
-                  <span className="text-[7px] font-bold tracking-[0.3em] text-emerald-400 uppercase leading-none">
-                    MUSIC
-                  </span>
-                  <div className="h-[1px] w-3 bg-emerald-500/40" />
-                </div>
-              </div>
+              <span className="text-xl sm:text-2xl font-black tracking-tight text-white transition-colors duration-300 group-hover:text-emerald-400">
+                Flux
+              </span>
             </div>
           </div>
           
           {/* RIGHT: PREMIUM BELL NOTIFICATIONS */}
-          <div className="flex flex-col items-end justify-center relative">
+          <div className="flex-1 flex flex-col items-end justify-center relative">
             <AnimatePresence>
               {canShowInstallHelper && (
                 <motion.div
