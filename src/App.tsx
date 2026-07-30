@@ -660,7 +660,7 @@ function AppContent() {
           const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
 
           // Si el anuncio tiene menos de 7 días y no ha sido desactivado ni descartado
-          if (Date.now() - dbDate.getTime() < 604800000 && data.active !== false) {
+          if (Date.now() - dbDate.getTime() < 604800000 && data.active !== false && !data.deleted) {
             const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
             if (lastSeenId !== newestId) {
               setHasUnread(true);

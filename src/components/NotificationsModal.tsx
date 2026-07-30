@@ -12,7 +12,7 @@ import {
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, doc, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 // Incrementa este número cada vez que agregues una nueva actualización a COMPILED_UPDATES.
@@ -314,29 +314,37 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    let unsubscribe: () => void;
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(20));
     
-    import("firebase/firestore").then(({ getDocs }) => {
-      getDocs(q).then((querySnap) => {
+    import("firebase/firestore").then(({ onSnapshot }) => {
+      unsubscribe = onSnapshot(q, (querySnap) => {
         const firebaseList: Announcement[] = [];
+        const deletedIds = new Set<string>();
         querySnap.forEach((docSnap) => {
           const data = docSnap.data();
-          const ca = data.createdAt;
-          const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
-          firebaseList.push({
-            id: docSnap.id,
-            title: data.title || "Aviso",
-            content: data.content || "",
-            category: data.category || "noticia",
-            createdAt: parsedDate
-          });
+          if (data.deleted) {
+            deletedIds.add(docSnap.id);
+          } else {
+            const ca = data.createdAt;
+            const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
+            firebaseList.push({
+              id: docSnap.id,
+              title: data.title || "Aviso",
+              content: data.content || "",
+              videoUrl: data.videoUrl || "",
+              category: data.category || "noticia",
+              createdAt: parsedDate
+            });
+          }
         });
 
         // Merge realtime database announcements with compiled app updates
-        const combined = [...firebaseList, ...COMPILED_UPDATES];
+        const combined = [...firebaseList, ...COMPILED_UPDATES].filter(item => !deletedIds.has(item.id));
         combined.sort((a, b) => {
           const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
           const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
@@ -353,13 +361,16 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
           }
         }
         setLoading(false);
-      }).catch((err) => {
+      }, (err) => {
         console.error("Error al cargar comunicados:", err);
         setAnnouncements(COMPILED_UPDATES);
         setLoading(false);
       });
     });
 
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [isOpen]);
 
   // Handle marking as read whenever the modal is open and we have announcements
@@ -388,17 +399,31 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
   const handleDeleteAnnouncement = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("¿Seguro que deseas eliminar este anuncio permanentemente?")) return;
+    e.preventDefault();
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id);
+      return;
+    }
+    
+    setDeleteConfirmId(null);
     try {
       const isBuiltIn = id.startsWith("update-v") || id.startsWith("community-") || id.startsWith("featured-") || id.startsWith("guide-");
-      if (!isBuiltIn) {
+      if (isBuiltIn) {
+        await setDoc(doc(db, "announcements", id), { deleted: true, createdAt: new Date() });
+      } else {
         await deleteDoc(doc(db, "announcements", id));
       }
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       window.dispatchEvent(new Event("notifications-read"));
     } catch (err) {
-      alert("No se pudo eliminar el anuncio: " + err);
+      console.error("No se pudo eliminar el anuncio: " + err);
     }
+  };
+  
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDeleteConfirmId(null);
   };
 
   const getCategoryColor = (category: string) => {
@@ -503,12 +528,27 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
                           {formattedTime}
                         </span>
                         {isAdmin && !item.id.startsWith("update-") && (
-                          <button
-                            onClick={(e) => handleDeleteAnnouncement(item.id, e)}
-                            className="text-slate-500 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => handleDeleteAnnouncement(item.id, e)}
+                              className={`transition-all flex items-center gap-1 rounded-full ${
+                                deleteConfirmId === item.id 
+                                ? "bg-rose-500 text-white hover:bg-rose-600 px-1.5 py-0.5" 
+                                : "text-slate-500 hover:text-red-400"
+                              }`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {deleteConfirmId === item.id && <span className="text-[8px] font-bold uppercase">¿Borrar?</span>}
+                            </button>
+                            {deleteConfirmId === item.id && (
+                              <button
+                                onClick={handleCancelDelete}
+                                className="px-1.5 py-0.5 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full text-[8px] font-bold uppercase"
+                              >
+                                X
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

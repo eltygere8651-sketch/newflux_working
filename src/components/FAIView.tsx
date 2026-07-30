@@ -121,6 +121,10 @@ export const FAIView: React.FC<FAIViewProps> = ({
   const isSearchingRef = useRef(false);
   const isFetchingMoreRef = useRef(false);
   const lastPrefetchTimeRef = useRef<number>(0);
+  const selectedGenreRef = useRef(selectedGenre);
+  useEffect(() => {
+    selectedGenreRef.current = selectedGenre;
+  }, [selectedGenre]);
   const handleNextTrackRef = useRef<((isManualParam?: boolean, forceGenre?: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -225,6 +229,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
         if (newTracks.length > 0) {
           const shuffled = newTracks.sort(() => Math.random() - 0.5);
           setGenreBuffer((prev) => {
+            if (activeGenre !== selectedGenreRef.current) return prev;
             const existingIds = new Set(prev.map((p) => p.id));
             const uniqueToAdd = shuffled.filter((s) => !existingIds.has(s.id));
             return [...prev, ...uniqueToAdd];
@@ -349,8 +354,12 @@ export const FAIView: React.FC<FAIViewProps> = ({
                   const unplayed = foundTracks.filter((t) => !playedTrackIdsRef.current.has(t.id) && t.id !== currentTrack?.id);
                   const pool = unplayed.length > 0 ? unplayed : foundTracks;
                   const shuffled = pool.sort(() => Math.random() - 0.5);
-                  next = shuffled[0];
-                  setGenreBuffer(shuffled.slice(1));
+                  if (activeGenre === selectedGenreRef.current) {
+                    next = shuffled[0];
+                    setGenreBuffer(shuffled.slice(1));
+                  } else {
+                    next = null;
+                  }
                 }
               }
             }
@@ -379,6 +388,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
         if (genreBuffer.length < 5) {
           prefetchMoreTracks(activeGenre);
         }
+      } else if (activeGenre !== selectedGenreRef.current) {
+        setTimeout(() => setTriggerPlay(true), 50);
       }
     } catch (e) {
       console.error("FAI handleNextTrack failed", e);
