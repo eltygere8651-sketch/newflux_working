@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, query, orderBy, limit, getDocs, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import {
-  Trash2,
+import { Eye, EyeOff, ChevronUp, ChevronDown, Trash2,
   Clock,
   Sparkles,
   Rocket,
@@ -146,6 +145,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   const [formCategory, setFormCategory] = useState<string>("actualizacion");
   const [formVideoUrl, setFormVideoUrl] = useState("");
   const [formContent, setFormContent] = useState("");
+  const [formActionText, setFormActionText] = useState("");
+  const [formActionUrl, setFormActionUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -276,6 +277,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     setFormCategory(defaultCat);
     setFormVideoUrl("");
     setFormContent("");
+    setFormActionText("");
+    setFormActionUrl("");
     setIsModalOpen(true);
   };
 
@@ -286,6 +289,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     setFormCategory(item.category || "actualizacion");
     setFormVideoUrl(item.videoUrl || "");
     setFormContent(item.content);
+    setFormActionText(item.actionText || "");
+    setFormActionUrl(item.actionUrl || "");
     setIsModalOpen(true);
   };
 
@@ -306,6 +311,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             category: formCategory,
             videoUrl: formVideoUrl.trim(),
             content: formContent.trim(),
+        actionText: formActionText.trim(),
+        actionUrl: formActionUrl.trim(),
           });
         }
       } else {
@@ -315,6 +322,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           category: formCategory,
           videoUrl: formVideoUrl.trim(),
           content: formContent.trim(),
+          actionText: formActionText.trim(),
+          actionUrl: formActionUrl.trim(),
           createdAt: new Date(),
           active: true,
         };
@@ -352,6 +361,48 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     }
   };
   
+  const handleToggleActive = async (item: Announcement, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const newActiveState = item.active === false ? true : false;
+      await updateDoc(doc(db, "announcements", item.id), { active: newActiveState });
+      setAnnouncements(prev => prev.map(a => a.id === item.id ? { ...a, active: newActiveState } : a));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMoveOrder = async (item: Announcement, direction: 'up' | 'down', e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (activeTab !== "onboarding") return;
+    const items = filteredItems;
+    const index = items.findIndex(a => a.id === item.id);
+    if (index < 0) return;
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === items.length - 1) return;
+    
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    const targetItem = items[targetIndex];
+    
+    try {
+      const itemOrder = item.order ?? index;
+      const targetOrder = targetItem.order ?? targetIndex;
+      
+      await updateDoc(doc(db, "announcements", item.id), { order: targetOrder });
+      await updateDoc(doc(db, "announcements", targetItem.id), { order: itemOrder });
+      
+      setAnnouncements(prev => prev.map(a => {
+        if (a.id === item.id) return { ...a, order: targetOrder };
+        if (a.id === targetItem.id) return { ...a, order: itemOrder };
+        return a;
+      }));
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   const handleCancelDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -401,6 +452,11 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
       item.id.startsWith("update-v") ||
       (!item.videoUrl && cat !== "guia" && cat !== "comunidad" && cat !== "destacado" && cat !== "urgente")
     );
+  }).sort((a,b) => {
+    if (a.category === 'onboarding' && b.category === 'onboarding') {
+      return (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt;
+    }
+    return (a.order || 0) - (b.order || 0) || b.createdAt - a.createdAt;
   });
 
   const activeConfig = SUBMENU_CONFIG[activeTab];
@@ -574,7 +630,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             {filteredItems.map((item, idx) => (
               <div
                 key={item.id}
-                className={`group bg-[#111218] rounded-2xl overflow-hidden border border-white/10 hover:border-amber-400/40 transition-all duration-300 flex flex-col shadow-xl relative ${
+                className={`group bg-[#111218] rounded-2xl overflow-hidden border ${item.active === false ? "border-rose-500/50 opacity-60 grayscale-[50%]" : "border-white/10"} hover:border-amber-400/40 transition-all duration-300 flex flex-col shadow-xl relative ${
                   idx === 0 && item.videoUrl ? "md:col-span-2 lg:col-span-3 lg:flex-row" : ""
                 }`}
               >
@@ -627,6 +683,34 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
 
                         {isAdmin && (
                           <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+                            {activeTab === "onboarding" && (
+                              <>
+                                <button
+                                  onClick={(e) => handleMoveOrder(item, 'up', e)}
+                                  disabled={idx === 0}
+                                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/20 rounded-full transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="Mover arriba"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleMoveOrder(item, 'down', e)}
+                                  disabled={idx === filteredItems.length - 1}
+                                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/20 rounded-full transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="Mover abajo"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleToggleActive(item, e)}
+                                  className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/20 rounded-full transition-all cursor-pointer"
+                                  title={item.active === false ? "Activar" : "Desactivar"}
+                                >
+                                  {item.active === false ? <EyeOff className="w-3.5 h-3.5 text-rose-400" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                                <div className="w-px h-3 bg-white/20 mx-1" />
+                              </>
+                            )}
                             <button
                               onClick={(e) => handleOpenEdit(item, e)}
                               className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 rounded-full transition-all cursor-pointer"
@@ -796,6 +880,36 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                 className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-fuchsia-400/50 transition-all font-medium resize-none"
               />
             </div>
+
+            {/* Action Button Inputs */}
+            {formCategory === "onboarding" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Texto del Botón (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formActionText}
+                    onChange={(e) => setFormActionText(e.target.value)}
+                    placeholder="Ej. Saber más"
+                    className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-400/50 transition-all font-medium"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    URL del Botón (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formActionUrl}
+                    onChange={(e) => setFormActionUrl(e.target.value)}
+                    placeholder="Ej. https://..."
+                    className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-400/50 transition-all font-medium"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">

@@ -302,6 +302,9 @@ export interface Announcement {
   category: "mantenimiento" | "noticia" | "actualizacion" | "urgente" | "comunidad" | "destacado" | "guia" | string;
   createdAt: any;
   active?: boolean;
+  order?: number;
+  actionText?: string;
+  actionUrl?: string;
 }
 
 interface NotificationsModalProps {

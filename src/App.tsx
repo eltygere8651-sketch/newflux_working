@@ -74,16 +74,19 @@ function AppContent() {
     window.addEventListener("preview-onboarding", handlePreview);
 
     const unsub2 = onSnapshot(qCards, (snap) => {
-      const cards = snap.docs.map(d => {
+      const cards = snap.docs.filter(d => d.data().active !== false).map(d => {
         const data = d.data();
         return {
           id: d.id,
           title: data.title || "",
           description: data.content || "",
           image: data.videoUrl || "",
-          createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0
+          createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0,
+          order: data.order || 0,
+          actionText: data.actionText || "",
+          actionUrl: data.actionUrl || ""
         };
-      }).sort((a,b) => a.createdAt - b.createdAt);
+      }).sort((a,b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);
       setOnboardingCards(cards);
     });
 
