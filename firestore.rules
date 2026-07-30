@@ -141,6 +141,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // 7.5. Global Config
+    match /config/{docId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // 8. QR Campaigns
     match /qr_campaigns/{campaignId} {
       allow read, create, delete: if isAdmin();

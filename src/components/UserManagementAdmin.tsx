@@ -27,7 +27,6 @@ import {
   Send,
   Save,
   Key,
-  MessageSquare,
   Download,
   ChevronDown,
   ChevronUp,
@@ -40,9 +39,6 @@ import {
   MonitorPlay,
   Users,
   Star,
-  Pencil,
-  UploadCloud,
-  Loader2,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
@@ -270,61 +266,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     };
   }, []);
 
-  // Announcement composition states
-  const [annTitle, setAnnTitle] = useState("");
-  const [annContent, setAnnContent] = useState("");
-  const [annVideoUrl, setAnnVideoUrl] = useState("");
-  const [isUploadingAnn, setIsUploadingAnn] = useState(false);
-  
-  const handleAnnFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset) {
-      alert("Por favor configura VITE_CLOUDINARY_CLOUD_NAME y VITE_CLOUDINARY_UPLOAD_PRESET en tus variables de entorno para usar esta función.");
-      return;
-    }
-
-    const isVideo = file.type.startsWith('video/');
-    
-    setIsUploadingAnn(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", uploadPreset);
-
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      const data = await response.json();
-      
-      if (data.secure_url) {
-        setAnnVideoUrl(data.secure_url);
-      } else {
-        throw new Error(data.error?.message || "Error al subir el archivo");
-      }
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      alert(`Error al subir a Cloudinary: ${error.message}`);
-    } finally {
-      setIsUploadingAnn(false);
-    }
-  };
-
-  const [annCategory, setAnnCategory] = useState<
-    "noticia" | "urgente" | "mantenimiento" | "actualizacion"
-  >("noticia");
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [annSuccessMsg, setAnnSuccessMsg] = useState("");
-
   // System Monitor States
   const [systemHealth, setSystemHealth] = useState<{
     mainLibrary: string;
@@ -346,66 +287,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  const publishAnnouncement = async () => {
-    if (!annTitle.trim() || !annContent.trim()) {
-      alert("Por favor completa el título y el contenido del comunicado.");
-      return;
-    }
-    try {
-      setIsPublishing(true);
-      setAnnSuccessMsg("");
-      const randId = "ann_" + Math.random().toString(36).substring(2, 11);
-      const docRef = doc(db, "announcements", randId);
-      const annData: any = {
-        title: annTitle.trim(),
-        content: annContent.trim(),
-        category: annCategory,
-        createdAt: new Date(),
-        active: true,
-      };
-      if (annVideoUrl.trim()) {
-        annData.videoUrl = annVideoUrl.trim();
-      }
-      await setDoc(docRef, annData);
-      setAnnTitle("");
-      setAnnContent("");
-      setAnnVideoUrl("");
-      setAnnCategory("noticia");
-      setAnnSuccessMsg(
-        "¡Comunicado global publicado con éxito en la base de datos de FLUX!",
-      );
-      setTimeout(() => setAnnSuccessMsg(""), 4500);
-    } catch (err) {
-      console.error("Error publicando anuncio:", err);
-      alert("Error al publicar el anuncio: " + err);
-    } finally {
-      setIsPublishing(false);
-    }
-  };
-
-  const deleteActiveAnnouncement = async () => {
-    try {
-      const { query, collection, orderBy, limit, getDocs, updateDoc } =
-        await import("firebase/firestore");
-      const q = query(
-        collection(db, "announcements"),
-        orderBy("createdAt", "desc"),
-        limit(1),
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        await updateDoc(snap.docs[0].ref, { active: false });
-        alert(
-          "El comunicado activo ha sido eliminado y ocultado de los usuarios (Refresca la app para ver los cambios).",
-        );
-      } else {
-        alert("No hay ningún comunicado activo reciente para eliminar.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error eliminando comunicado");
-    }
-  };
 
   const adminDataLoadedRef = useRef({
     users: false,
@@ -1956,144 +1837,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
             {activeTab === "notifications" && (
               <>
-                {/* SECCIÓN NUEVA: DIFUSION DE COMUNICADOS DEL ADMIN */}
-                <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4 text-left">
-                  <h3 className="text-xs font-black uppercase text-[#1ED760] tracking-wider flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-[#1ED760]" />{" "}
-                    Difundir Comunicado Global (Avisos del Admin)
-                  </h3>
-                  <p className="text-[11px] text-slate-400 leading-relaxed font-semibold">
-                    Publica notificaciones instantáneas, incidencias de
-                    servidores, novedades importantes o parches de
-                    actualización. Todos los clientes verán un punto rojo de
-                    notificación y el mensaje en su centro de avisos.
-                  </p>
-
-                  <div className="space-y-4">
-                    {/* Category Selection for Novedades Submenus */}
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        Submenú de Destino en Novedades
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {[
-                          { id: "actualizacion", title: "Actualizaciones", icon: Rocket, badge: "bg-amber-500/20 text-amber-300 border-amber-500/50" },
-                          { id: "guia", title: "Guías & Videos", icon: MonitorPlay, badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/50" },
-                          { id: "comunidad", title: "Comunidad", icon: Users, badge: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/50" },
-                          { id: "destacado", title: "Destacados", icon: Star, badge: "bg-rose-500/20 text-rose-300 border-rose-500/50" },
-                        ].map((cat) => {
-                          const IconComp = cat.icon;
-                          const isSelected = annCategory === cat.id;
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => setAnnCategory(cat.id)}
-                              className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                isSelected
-                                  ? `${cat.badge} shadow-[0_0_12px_rgba(255,255,255,0.1)] ring-1 ring-white/30 scale-[1.02]`
-                                  : "bg-black/40 border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
-                              }`}
-                            >
-                              <IconComp className="w-4 h-4 shrink-0" />
-                              <span className="text-[10px] font-black uppercase tracking-wider text-center">{cat.title}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Title block */}
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        Título del Aviso
-                      </label>
-                      <input
-                        type="text"
-                        value={annTitle}
-                        onChange={(e) => setAnnTitle(e.target.value)}
-                        placeholder="Ej. Mantenimiento del Sistema o Se ha caído el servidor de transmisión"
-                        className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
-                      />
-                    </div>
-
-                    {/* Video URL block */}
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        Video o Imagen (Cloudinary / URL)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={annVideoUrl}
-                          onChange={(e) => setAnnVideoUrl(e.target.value)}
-                          placeholder="Pegar URL o subir archivo..."
-                          className="flex-1 px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
-                        />
-                        <input
-                          type="file"
-                          id="cloudinary-upload-ann"
-                          accept="image/*,video/*"
-                          className="hidden"
-                          onChange={handleAnnFileUpload}
-                          disabled={isUploadingAnn}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById("cloudinary-upload-ann")?.click()}
-                          disabled={isUploadingAnn}
-                          className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
-                          title="Subir a Cloudinary"
-                        >
-                          {isUploadingAnn ? <Loader2 className="w-4 h-4 animate-spin text-[#1ED760]" /> : <UploadCloud className="w-4 h-4 text-[#1ED760]" />}
-                        </button>
-                      </div>
-                      {isUploadingAnn && (
-                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1">
-                          <div className="h-full bg-[#1ED760] animate-pulse w-full"></div>
-                        </div>
-                      )}
-                    </div>
-                    {/* Content block */}
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        Mensaje / Contenido / Detalles (Corto y Premium)
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={annContent}
-                        onChange={(e) => setAnnContent(e.target.value)}
-                        placeholder="Ej. El servidor CDN maestro está en mantenimiento programado. No debería causar cortes en tu reproductor."
-                        className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold resize-none"
-                      />
-                    </div>
-
-                    {/* Success/Action block */}
-                    {annSuccessMsg && (
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-bold text-center">
-                        {annSuccessMsg}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={publishAnnouncement}
-                      disabled={isPublishing}
-                      className="w-full py-3 bg-[#1ED760] hover:bg-[#1fdf64] disabled:opacity-40 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      {isPublishing
-                        ? "Publicando Aviso..."
-                        : "Publicar Comunicado para Todos"}
-                    </button>
-                    <button
-                      onClick={deleteActiveAnnouncement}
-                      className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center mt-2"
-                    >
-                      X Eliminar Comunicado Activo de Prueba
-                    </button>
-                  </div>
-                </div>
-
                 {/* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM (COLAPSIBLE/DESPLEGABLE PREMIUM) */}
                 <div className="bg-[#121214] border border-white/5 rounded-3xl overflow-hidden mb-2 transition-all duration-300">
                   <button

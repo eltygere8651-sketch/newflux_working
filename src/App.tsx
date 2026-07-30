@@ -34,6 +34,9 @@ import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
 import { APP_UPDATES_VERSION } from "./config/appVersion";
 import { ShareModal } from "./components/ShareModal";
+import { UniversalOnboarding } from "./components/UniversalOnboarding";
+
+export const ONBOARDING_VERSION = 1;
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen, accessData } = useFirebase();
@@ -43,6 +46,49 @@ function AppContent() {
   
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingVersion, setOnboardingVersion] = useState(1);
+  const [onboardingCards, setOnboardingCards] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const unsub1 = onSnapshot(doc(db, "config", "onboarding"), (docSnap) => {
+      if (docSnap.exists()) {
+        const v = docSnap.data().version || 1;
+        setOnboardingVersion(v);
+        const completedVersion = parseInt(localStorage.getItem("flux_onboarding_version") || "0", 10);
+        if (completedVersion < v) {
+          setShowOnboarding(true);
+        }
+      } else {
+        const completedVersion = parseInt(localStorage.getItem("flux_onboarding_version") || "0", 10);
+        if (completedVersion < 1) {
+          setShowOnboarding(true);
+        }
+      }
+    });
+
+    const qCards = query(collection(db, "announcements"), where("category", "==", "onboarding"));
+    const handlePreview = () => {
+      setShowOnboarding(true);
+    };
+    window.addEventListener("preview-onboarding", handlePreview);
+
+    const unsub2 = onSnapshot(qCards, (snap) => {
+      const cards = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          title: data.title || "",
+          description: data.content || "",
+          image: data.videoUrl || "",
+          createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0
+        };
+      }).sort((a,b) => a.createdAt - b.createdAt);
+      setOnboardingCards(cards);
+    });
+
+    return () => { unsub1(); unsub2(); window.removeEventListener("preview-onboarding", handlePreview); };
+  }, []);
   const [hasUnread, setHasUnread] = useState(false);
 
   const latestAnnouncementIdRef = useRef<string | null>(null);
@@ -782,6 +828,21 @@ function AppContent() {
   const isAnonymousExpired = user?.isAnonymous && accessData && !accessData.isValid && accessData.trialStart;
   if (isVIPMode || isAnonymousExpired) {
     return <VIPLandingView />;
+  }
+
+  if (showOnboarding) {
+    return (
+      <UniversalOnboarding 
+        cards={onboardingCards}
+        onComplete={() => {
+          const completedVersion = parseInt(localStorage.getItem("flux_onboarding_version") || "0", 10);
+          if (completedVersion < onboardingVersion) {
+            localStorage.setItem("flux_onboarding_version", onboardingVersion.toString());
+          }
+          setShowOnboarding(false);
+        }} 
+      />
+    );
   }
 
   return (

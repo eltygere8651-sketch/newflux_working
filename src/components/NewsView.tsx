@@ -24,7 +24,7 @@ interface NewsViewProps {
   onClose?: () => void;
 }
 
-export type NewsTabType = "updates" | "guides" | "community" | "featured";
+export type NewsTabType = "updates" | "guides" | "community" | "featured" | "onboarding";
 
 // Compiled extra fallback items to guarantee rich content for all 4 submenus
 const COMPILED_COMMUNITY: Announcement[] = [
@@ -110,6 +110,7 @@ const SUBMENU_CONFIG = {
     colorAccent: "from-fuchsia-500/15 via-fuchsia-500/5 to-transparent border-fuchsia-500/30",
     iconBg: "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/40",
   },
+
   featured: {
     id: "featured" as NewsTabType,
     title: "Destacados",
@@ -120,7 +121,18 @@ const SUBMENU_CONFIG = {
     colorAccent: "from-rose-500/15 via-rose-500/5 to-transparent border-rose-500/30",
     iconBg: "bg-rose-500/20 text-rose-400 border-rose-500/40",
   },
+  onboarding: {
+    id: "onboarding" as NewsTabType,
+    title: "Onboarding",
+    shortTitle: "Onboarding",
+    icon: Sparkles,
+    badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]",
+    description: "Gestión del Centro de Bienvenida. Publica el onboarding para todos los usuarios y organiza las tarjetas modulares.",
+    colorAccent: "from-emerald-500/15 via-emerald-500/5 to-transparent border-emerald-500/30",
+    iconBg: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
+  }
 };
+
 
 export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -377,7 +389,10 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
       return cat === "comunidad" || cat === "anuncio" || cat === "comunicado" || item.id.startsWith("community-");
     }
     if (activeTab === "featured") {
-      return cat === "urgente" || cat === "destacado" || item.id.startsWith("featured-") || item.id === "update-v1.9.0";
+      return cat === "urgente" || cat === "destacado" || cat === "onboarding" || item.id.startsWith("featured-") || item.id === "update-v1.9.0";
+    }
+    if (activeTab === "onboarding") {
+      return cat === "onboarding";
     }
     // Default "updates"
     return (
@@ -448,7 +463,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
       {/* ISOLATED 4 SUBMENUS BAR */}
       <div className="px-3 sm:px-8 py-2.5 sm:py-3 bg-[#0a0b0e] border-b border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0 z-20">
         <div className="grid grid-cols-2 sm:flex bg-[#12131a] p-1.5 sm:p-1 rounded-2xl sm:rounded-full border border-white/10 shrink-0 gap-1.5 sm:gap-1 w-full sm:w-auto">
-          {Object.values(SUBMENU_CONFIG).map((sub) => {
+          {Object.values(SUBMENU_CONFIG).filter(sub => isAdmin || sub.id !== "onboarding").map((sub) => {
             const IconComp = sub.icon;
             const isActive = activeTab === sub.id;
             return (
@@ -492,6 +507,53 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             </p>
           </div>
         </div>
+        {activeTab === "onboarding" && isAdmin && (
+          <div className="mb-6 p-5 rounded-2xl bg-[#08090d] border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+            <div className="flex flex-col gap-2 flex-1">
+              <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Control de Versiones y Despliegue
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+                Actualmente tienes <strong className="text-white">{filteredItems.length}</strong> tarjetas configuradas. Pulsa "Nueva Publicación" para añadir una tarjeta modular. Al publicar, se incrementará la versión y todos los usuarios verán el nuevo onboarding.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <button 
+                onClick={() => {
+                  window.dispatchEvent(new Event("preview-onboarding"));
+                }} 
+                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold rounded-full uppercase tracking-wider transition-all"
+              >
+                Vista Previa
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const configRef = doc(db, "config", "onboarding");
+                    const docSnap = await import("firebase/firestore").then(m => m.getDoc(configRef));
+                    let currentVersion = 1;
+                    if (docSnap.exists()) {
+                      currentVersion = docSnap.data().version || 1;
+                      await import("firebase/firestore").then(m => m.updateDoc(configRef, { version: currentVersion + 1 }));
+                    } else {
+                      await import("firebase/firestore").then(m => m.setDoc(configRef, { version: 2 }));
+                    }
+                    alert(`¡Onboarding publicado correctamente! (Versión ${currentVersion + 1})`);
+                  } catch (e) {
+                    console.error(e);
+                    alert("Error al publicar.");
+                  }
+                }} 
+                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black rounded-full uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
+              >
+                <Send className="w-4 h-4" />
+                Publicar para todos
+              </button>
+            </div>
+          </div>
+        )}
+
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -644,6 +706,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                 {[
                   { id: "actualizacion", label: "Actualizaciones", icon: Rocket, badge: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
                   { id: "guia", label: "Guías & Videos", icon: MonitorPlay, badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" },
+                  { id: "onboarding", label: "Onboarding (Bienvenida)", icon: Sparkles, badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
                   { id: "comunidad", label: "Comunidad", icon: Users, badge: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40" },
                   { id: "destacado", label: "Destacados", icon: Star, badge: "bg-rose-500/20 text-rose-300 border-rose-500/40" },
                 ].map((cat) => {

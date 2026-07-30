@@ -317,6 +317,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     setLoading(true);
     let unsubscribe: () => void;
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(20));
