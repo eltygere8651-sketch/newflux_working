@@ -655,11 +655,19 @@ function AppContent() {
 
     const localUnread = checkLocalUnread();
 
-    // 2. Listener en tiempo real del comunicado más reciente (Bajo consumo: limit(1))
-    let unsub: (() => void) | null = null;
-    try {
-      const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
-      unsub = onSnapshot(q, (snapshot) => {
+    // 2. Comprobación única (Una sola lectura por sesión)
+    const checkAnnouncements = async () => {
+      // Usamos una variable global para garantizar una sola comprobación por carga de aplicación (sesión)
+      if ((window as any).flux_announcements_checked) {
+        return;
+      }
+
+      try {
+        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+        const snapshot = await getDocs(q);
+        
+        (window as any).flux_announcements_checked = true;
+        
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
           const data = newestDoc.data();
@@ -674,31 +682,29 @@ function AppContent() {
             const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
             if (lastSeenId !== newestId) {
               setHasUnread(true);
-              
-              // Sonido solo si NO es la carga inicial de la aplicación
-              if (!isInitialAnnouncementsLoad.current) {
-                playNotificationSound();
-              }
             }
           }
         }
-        isInitialAnnouncementsLoad.current = false;
-      }, (err) => {
-        console.warn("Error al escuchar comunicados en tiempo real:", err);
-      });
-    } catch (err) {
-      console.warn("No se pudo iniciar el listener de anuncios:", err);
+      } catch (err) {
+        console.warn("No se pudo comprobar novedades:", err);
+      }
+    };
+    
+    if (!localUnread) {
+      checkAnnouncements();
     }
 
     const handleRead = () => {
       setHasUnread(false);
+      if (latestAnnouncementIdRef.current) {
+        localStorage.setItem("flux_last_seen_announcement_id", latestAnnouncementIdRef.current);
+      }
     };
+
     window.addEventListener("notifications-read", handleRead);
+
     return () => {
       window.removeEventListener("notifications-read", handleRead);
-      if (unsub) {
-        unsub();
-      }
     };
   }, []);
 

@@ -5250,6 +5250,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             setIsTrackListExpanded(true);
             setShowLibrary(false);
             setIsSidebarExpanded(false);
+            window.dispatchEvent(new Event("notifications-read"));
             if (window.innerWidth < 768) {
               setMobileView("player");
             }
@@ -5260,13 +5261,22 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             !isSidebarExpanded &&
             (window.innerWidth >= 768 || mobileView === "player")
               ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
-              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+              : hasUnreadNews
+                ? "bg-red-500/15 backdrop-blur-md border-red-500/60 hover:bg-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.5)] ring-1 ring-red-500/40 animate-pulse"
+                : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
           }`}
         >
           <span className="flex items-center gap-2">
             <div className="relative">
               <Sparkles className="w-3.5 h-3.5 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)] animate-pulse" />
-              {hasUnreadNews && <span className="absolute -top-1 -right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+              {hasUnreadNews && (
+                <div className="absolute -top-2 -right-3 z-10 flex items-center justify-center">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-100 duration-1000"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-black shadow-[0_0_12px_rgba(239,68,68,1)]"></span>
+                  </span>
+                </div>
+              )}
             </div>
             <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Novedades</span>
           </span>
