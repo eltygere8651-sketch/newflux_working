@@ -727,7 +727,7 @@ function AppContent() {
 
     checkStandalone();
 
-    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isIosDevice = (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !(window as any).MSStream;
     setIsIOS(isIosDevice);
 
     // Listen for the Chrome/Android beforeinstallprompt event
@@ -776,7 +776,7 @@ function AppContent() {
     };
   }, [deferredPrompt, isIOS, isStandalone]);
 
-  const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
+  const canShowInstallHelper = deferredPrompt && !isStandalone && !isIOS;
 
   const isVIPMode = typeof window !== 'undefined' && (window.location.pathname === '/vip' || window.location.search.includes('vip=1'));
   const isAnonymousExpired = user?.isAnonymous && accessData && !accessData.isValid && accessData.trialStart;
