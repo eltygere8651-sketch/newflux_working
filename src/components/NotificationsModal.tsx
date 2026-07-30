@@ -299,7 +299,7 @@ export interface Announcement {
   title: string;
   content: string;
   videoUrl?: string;
-  category: "mantenimiento" | "noticia" | "actualizacion" | "urgente";
+  category: "mantenimiento" | "noticia" | "actualizacion" | "urgente" | "comunidad" | "destacado" | "guia" | string;
   createdAt: any;
   active?: boolean;
 }
@@ -390,7 +390,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
     e.stopPropagation();
     if (!window.confirm("¿Seguro que deseas eliminar este anuncio permanentemente?")) return;
     try {
-      await deleteDoc(doc(db, "announcements", id));
+      const isBuiltIn = id.startsWith("update-v") || id.startsWith("community-") || id.startsWith("featured-") || id.startsWith("guide-");
+      if (!isBuiltIn) {
+        await deleteDoc(doc(db, "announcements", id));
+      }
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       window.dispatchEvent(new Event("notifications-read"));
     } catch (err) {
       alert("No se pudo eliminar el anuncio: " + err);

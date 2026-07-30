@@ -36,6 +36,11 @@ import {
   ChevronLeft,
   ChevronRight,
   QrCode,
+  Rocket,
+  MonitorPlay,
+  Users,
+  Star,
+  Pencil,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
@@ -1918,33 +1923,36 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   </p>
 
                   <div className="space-y-4">
-                    {/* Category Selection */}
-                    <div className="space-y-1.5">
+                    {/* Category Selection for Novedades Submenus */}
+                    <div className="space-y-2">
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                        Categoría del Comunicado
+                        Submenú de Destino en Novedades
                       </label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {(
-                          [
-                            "noticia",
-                            "urgente",
-                            "mantenimiento",
-                            "actualizacion",
-                          ] as const
-                        ).map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => setAnnCategory(cat)}
-                            className={`py-2 px-3 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                              annCategory === cat
-                                ? "bg-[#1ED760] text-black border-[#1ED760] font-black shadow-[0_0_10px_rgba(30,215,96,0.2)]"
-                                : "bg-black/30 border-white/5 text-slate-400 hover:text-white"
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        ))}
+                        {[
+                          { id: "actualizacion", title: "Actualizaciones", icon: Rocket, badge: "bg-amber-500/20 text-amber-300 border-amber-500/50" },
+                          { id: "guia", title: "Guías & Videos", icon: MonitorPlay, badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/50" },
+                          { id: "comunidad", title: "Comunidad", icon: Users, badge: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/50" },
+                          { id: "destacado", title: "Destacados", icon: Star, badge: "bg-rose-500/20 text-rose-300 border-rose-500/50" },
+                        ].map((cat) => {
+                          const IconComp = cat.icon;
+                          const isSelected = annCategory === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setAnnCategory(cat.id)}
+                              className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                isSelected
+                                  ? `${cat.badge} shadow-[0_0_12px_rgba(255,255,255,0.1)] ring-1 ring-white/30 scale-[1.02]`
+                                  : "bg-black/40 border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
+                              }`}
+                            >
+                              <IconComp className="w-4 h-4 shrink-0" />
+                              <span className="text-[10px] font-black uppercase tracking-wider text-center">{cat.title}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

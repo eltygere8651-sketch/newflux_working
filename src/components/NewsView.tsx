@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, orderBy, limit, getDocs, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import {
   Trash2,
   Clock,
   Sparkles,
-  Megaphone,
+  Rocket,
   MonitorPlay,
-  ArrowLeft
+  Users,
+  Star,
+  ArrowLeft,
+  Pencil,
+  Plus,
+  X,
+  Send
 } from "lucide-react";
 import { COMPILED_UPDATES, Announcement } from "./NotificationsModal";
 
@@ -16,16 +22,123 @@ interface NewsViewProps {
   onClose?: () => void;
 }
 
+export type NewsTabType = "updates" | "guides" | "community" | "featured";
+
+// Compiled extra fallback items to guarantee rich content for all 4 submenus
+const COMPILED_COMMUNITY: Announcement[] = [
+  {
+    id: "community-v1",
+    title: "📢 Próximas funciones en desarrollo y participación activa",
+    category: "comunidad",
+    createdAt: new Date("2026-07-28T12:00:00Z"),
+    content: "Estamos trabajando en la integración de nuevas frecuencias de radio personalizadas y optimización multiclave. Tu participación es fundamental: únete a la comunidad de Telegram y comparte vuestras sugerencias para seguir creciendo."
+  },
+  {
+    id: "community-v2",
+    title: "🎉 Comunicado Oficial: ¡Superamos las 10,000 escuchas en Flux Radio!",
+    category: "comunidad",
+    createdAt: new Date("2026-07-20T10:00:00Z"),
+    content: "Agradecemos enormemente a todos los oyentes por formar parte de la familia Flux Music. Gracias a vuestro feedback diario hemos perfeccionado los algoritmos de mezcla y reducido el tiempo de carga a nivel récord."
+  }
+];
+
+const COMPILED_FEATURED: Announcement[] = [
+  {
+    id: "featured-v1",
+    title: "⭐ Lanzamiento Destacado: Modo Karaoke ECO e Inmersión Total",
+    category: "destacado",
+    createdAt: new Date("2026-07-29T10:00:00Z"),
+    content: "Descubre la experiencia definitiva con el Modo Karaoke ECO, diseñado para reproducir letras en tiempo real a pantalla completa con efectos de eco y sin consumir batería extra."
+  },
+  {
+    id: "featured-v2",
+    title: "🔥 Selección Especial: Playlists Recomendadas & Radio Inteligente",
+    category: "destacado",
+    createdAt: new Date("2026-07-25T14:00:00Z"),
+    content: "Explora las listas recomendadas más escuchadas de la semana y disfruta de la frecuencia de radio ininterrumpida curada para ofrecer máxima fidelidad sonora."
+  }
+];
+
+const COMPILED_GUIDES: Announcement[] = [
+  {
+    id: "guide-v1",
+    title: "🎥 Paso a paso: Cómo sacar el máximo partido al Ecualizador y Karaoke",
+    category: "guia",
+    createdAt: new Date("2026-07-26T16:00:00Z"),
+    content: "1. Toca en el botón de ecualizador para ajustar graves y presencia vocal.\n2. Inicia cualquier canción y presiona el icono de Karaoke para ver las letras dinámicas.\n3. Activa los efectos de eco nativos para cantar en tiempo real."
+  },
+  {
+    id: "guide-v2",
+    title: "🎥 Guía rápida: Crear playlists personalizadas y reordenar tu biblioteca",
+    category: "guia",
+    createdAt: new Date("2026-07-22T11:00:00Z"),
+    content: "Aprende a guardar tus canciones favoritas en colecciones propias, fijar listas de YouTube Music y personalizar el orden de las secciones en el Explorador."
+  }
+];
+
+// Configuration dictionary for the 4 submenus
+const SUBMENU_CONFIG = {
+  updates: {
+    id: "updates" as NewsTabType,
+    title: "Actualizaciones",
+    shortTitle: "Actualizaciones",
+    icon: Rocket,
+    badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.2)]",
+    description: "Descubre las nuevas funciones, mejoras, optimizaciones y correcciones que llegan a Flux Music en cada actualización.",
+    colorAccent: "from-amber-500/15 via-amber-500/5 to-transparent border-amber-500/30",
+    iconBg: "bg-amber-500/20 text-amber-400 border-amber-500/40",
+  },
+  guides: {
+    id: "guides" as NewsTabType,
+    title: "Guías & Videos",
+    shortTitle: "Guías",
+    icon: MonitorPlay,
+    badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]",
+    description: "Aprende a sacar el máximo partido a Flux Music con tutoriales, consejos y vídeos explicativos paso a paso.",
+    colorAccent: "from-cyan-500/15 via-cyan-500/5 to-transparent border-cyan-500/30",
+    iconBg: "bg-cyan-500/20 text-cyan-400 border-cyan-500/40",
+  },
+  community: {
+    id: "community" as NewsTabType,
+    title: "Comunidad",
+    shortTitle: "Comunidad",
+    icon: Users,
+    badgeColor: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40 shadow-[0_0_15px_rgba(217,70,239,0.2)]",
+    description: "Mantente informado sobre anuncios importantes, próximas funciones y participa en el crecimiento de Flux Music.",
+    colorAccent: "from-fuchsia-500/15 via-fuchsia-500/5 to-transparent border-fuchsia-500/30",
+    iconBg: "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/40",
+  },
+  featured: {
+    id: "featured" as NewsTabType,
+    title: "Destacados",
+    shortTitle: "Destacados",
+    icon: Star,
+    badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.2)]",
+    description: "Explora las novedades más importantes, playlists recomendadas y el contenido que no te puedes perder.",
+    colorAccent: "from-rose-500/15 via-rose-500/5 to-transparent border-rose-500/30",
+    iconBg: "bg-rose-500/20 text-rose-400 border-rose-500/40",
+  },
+};
+
 export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"updates" | "guides">("updates");
+  const [activeTab, setActiveTab] = useState<NewsTabType>("updates");
+
+  // Admin Create & Edit Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Announcement | null>(null);
+  const [formTitle, setFormTitle] = useState("");
+  const [formCategory, setFormCategory] = useState<string>("actualizacion");
+  const [formVideoUrl, setFormVideoUrl] = useState("");
+  const [formContent, setFormContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchNews = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(30));
+        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(40));
         const snap = await getDocs(q);
         const firebaseList: Announcement[] = [];
         snap.forEach((docSnap) => {
@@ -41,13 +154,30 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           });
         });
 
-        const merged = [...firebaseList, ...COMPILED_UPDATES].sort(
+        const allCombined = [
+          ...firebaseList,
+          ...COMPILED_UPDATES,
+          ...COMPILED_COMMUNITY,
+          ...COMPILED_FEATURED,
+          ...COMPILED_GUIDES,
+        ];
+
+        // Deduplicate by ID
+        const uniqueMap = new Map<string, Announcement>();
+        allCombined.forEach((item) => uniqueMap.set(item.id, item));
+
+        const merged = Array.from(uniqueMap.values()).sort(
           (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
         );
         setAnnouncements(merged);
       } catch (err) {
         console.error("Error fetching news:", err);
-        setAnnouncements(COMPILED_UPDATES);
+        setAnnouncements([
+          ...COMPILED_UPDATES,
+          ...COMPILED_COMMUNITY,
+          ...COMPILED_FEATURED,
+          ...COMPILED_GUIDES,
+        ]);
       } finally {
         setLoading(false);
       }
@@ -55,11 +185,97 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     fetchNews();
   }, []);
 
+  const handleOpenCreate = () => {
+    setEditingItem(null);
+    setFormTitle("");
+    let defaultCat = "actualizacion";
+    if (activeTab === "guides") defaultCat = "guia";
+    if (activeTab === "community") defaultCat = "comunidad";
+    if (activeTab === "featured") defaultCat = "destacado";
+    setFormCategory(defaultCat);
+    setFormVideoUrl("");
+    setFormContent("");
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: Announcement, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingItem(item);
+    setFormTitle(item.title);
+    setFormCategory(item.category || "actualizacion");
+    setFormVideoUrl(item.videoUrl || "");
+    setFormContent(item.content);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formTitle.trim() || !formContent.trim()) {
+      alert("Por favor completa el título y el contenido.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      if (editingItem) {
+        const docId = editingItem.id;
+        const isBuiltIn = docId.startsWith("update-v") || docId.startsWith("community-") || docId.startsWith("featured-") || docId.startsWith("guide-");
+        
+        if (!isBuiltIn) {
+          await updateDoc(doc(db, "announcements", docId), {
+            title: formTitle.trim(),
+            category: formCategory,
+            videoUrl: formVideoUrl.trim(),
+            content: formContent.trim(),
+          });
+        }
+
+        setAnnouncements((prev) =>
+          prev.map((a) =>
+            a.id === docId
+              ? {
+                  ...a,
+                  title: formTitle.trim(),
+                  category: formCategory,
+                  videoUrl: formVideoUrl.trim(),
+                  content: formContent.trim(),
+                }
+              : a
+          )
+        );
+      } else {
+        const newId = "ann_" + Math.random().toString(36).substring(2, 11);
+        const newAnnData = {
+          title: formTitle.trim(),
+          category: formCategory,
+          videoUrl: formVideoUrl.trim(),
+          content: formContent.trim(),
+          createdAt: new Date(),
+          active: true,
+        };
+        await setDoc(doc(db, "announcements", newId), newAnnData);
+
+        const newAnn: Announcement = {
+          id: newId,
+          ...newAnnData,
+        };
+        setAnnouncements((prev) => [newAnn, ...prev]);
+      }
+      setIsModalOpen(false);
+      window.dispatchEvent(new Event("notifications-read"));
+    } catch (err) {
+      alert("Error al guardar: " + err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm("¿Seguro que deseas eliminar esta publicación permanentemente?")) return;
     try {
-      await deleteDoc(doc(db, "announcements", id));
+      const isBuiltIn = id.startsWith("update-v") || id.startsWith("community-") || id.startsWith("featured-") || id.startsWith("guide-");
+      if (!isBuiltIn) {
+        await deleteDoc(doc(db, "announcements", id));
+      }
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       window.dispatchEvent(new Event("notifications-read"));
     } catch (err) {
@@ -68,30 +284,49 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   };
 
   const getCategoryBadge = (category: string) => {
-    switch (category?.toLowerCase()) {
+    const c = category?.toLowerCase();
+    switch (c) {
       case "urgente":
+      case "destacado":
         return "bg-rose-500/15 text-rose-400 border-rose-500/30";
       case "mantenimiento":
         return "bg-amber-500/15 text-amber-400 border-amber-500/30";
       case "actualizacion":
         return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
       case "guia":
+      case "tutorial":
         return "bg-cyan-500/15 text-cyan-400 border-cyan-500/30";
-      default:
+      case "comunidad":
+      case "anuncio":
         return "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30";
+      default:
+        return "bg-slate-500/15 text-slate-300 border-slate-500/30";
     }
   };
 
   // Strictly filter items according to the active tab
   const filteredItems = announcements.filter((item) => {
+    const cat = (item.category || "").toLowerCase();
     if (activeTab === "guides") {
-      // Must have videoUrl or category 'guia'
-      return Boolean(item.videoUrl || item.category === "guia");
-    } else {
-      // Must NOT have videoUrl or category 'guia'
-      return !item.videoUrl && item.category !== "guia";
+      return Boolean(item.videoUrl || cat === "guia" || cat === "tutorial" || item.id.startsWith("guide-"));
     }
+    if (activeTab === "community") {
+      return cat === "comunidad" || cat === "anuncio" || cat === "comunicado" || item.id.startsWith("community-");
+    }
+    if (activeTab === "featured") {
+      return cat === "urgente" || cat === "destacado" || item.id.startsWith("featured-") || item.id === "update-v1.9.0";
+    }
+    // Default "updates"
+    return (
+      cat === "actualizacion" ||
+      cat === "mantenimiento" ||
+      item.id.startsWith("update-v") ||
+      (!item.videoUrl && cat !== "guia" && cat !== "comunidad" && cat !== "destacado" && cat !== "urgente")
+    );
   });
+
+  const activeConfig = SUBMENU_CONFIG[activeTab];
+  const ActiveIcon = activeConfig.icon;
 
   return (
     <div className="w-full h-full flex flex-col bg-[#070709] text-white overflow-hidden relative font-sans">
@@ -117,54 +352,81 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
         )}
 
         {/* Center: Title emblem */}
-        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
           <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
           <h1 className="text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white">
             Novedades
           </h1>
         </div>
 
-        {/* Right side live status pill */}
-        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-white/5 px-3.5 py-1.5 rounded-full border border-white/10">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="hidden sm:inline">Flux Center</span>
+        {/* Right side live status & Admin action */}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={handleOpenCreate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-[10px] uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span className="hidden sm:inline">Publicar Novedad</span>
+              <span className="sm:hidden">Publicar</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-white/5 px-3.5 py-1.5 rounded-full border border-white/10">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">Flux Center</span>
+          </div>
         </div>
       </header>
 
-      {/* ISOLATED SUBMENUS BAR */}
-      <div className="px-4 sm:px-8 py-3 bg-[#0a0b0e] border-b border-white/5 flex items-center justify-between gap-4 shrink-0 z-20">
-        <div className="flex bg-[#12131a] p-1 rounded-full border border-white/10">
-          <button
-            onClick={() => setActiveTab("updates")}
-            className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "updates"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.2)]"
-                : "text-slate-400 hover:text-white border border-transparent"
-            }`}
-          >
-            <Megaphone className="w-3.5 h-3.5" />
-            <span>Actualizaciones</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("guides")}
-            className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "guides"
-                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
-                : "text-slate-400 hover:text-white border border-transparent"
-            }`}
-          >
-            <MonitorPlay className="w-3.5 h-3.5" />
-            <span>Guías & Videos</span>
-          </button>
+      {/* ISOLATED 4 SUBMENUS BAR */}
+      <div className="px-3 sm:px-8 py-2.5 sm:py-3 bg-[#0a0b0e] border-b border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0 z-20">
+        <div className="grid grid-cols-2 sm:flex bg-[#12131a] p-1.5 sm:p-1 rounded-2xl sm:rounded-full border border-white/10 shrink-0 gap-1.5 sm:gap-1 w-full sm:w-auto">
+          {Object.values(SUBMENU_CONFIG).map((sub) => {
+            const IconComp = sub.icon;
+            const isActive = activeTab === sub.id;
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveTab(sub.id)}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2 sm:py-1.5 rounded-xl sm:rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? sub.badgeColor
+                    : "text-slate-400 hover:text-white border border-transparent hover:bg-white/5"
+                }`}
+              >
+                <IconComp className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">{sub.shortTitle}</span>
+                <span className="hidden sm:inline">{sub.title}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden sm:inline-block">
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden md:inline-block shrink-0">
           {filteredItems.length} {filteredItems.length === 1 ? "publicación" : "publicaciones"}
         </span>
       </div>
 
       {/* SCROLLABLE CONTENT */}
       <div className="flex-1 overflow-y-auto premium-scrollbar relative z-10 px-4 sm:px-8 pt-5 pb-20 max-w-[1400px] mx-auto w-full">
+        {/* ACTIVE SUBMENU DESCRIPTION BANNER */}
+        <div
+          className={`mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r ${activeConfig.colorAccent} border backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-xl transition-all duration-300`}
+        >
+          <div className={`p-3 rounded-xl border ${activeConfig.iconBg} shrink-0`}>
+            <ActiveIcon className="w-6 h-6" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm sm:text-base font-black uppercase tracking-widest text-white flex items-center gap-2">
+              {activeConfig.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+              {activeConfig.description}
+            </p>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-10 h-10 border-3 border-amber-500/20 border-t-amber-400 rounded-full animate-spin" />
@@ -227,14 +489,23 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                           }).format(item.createdAt)}
                         </span>
 
-                        {isAdmin && !item.id.startsWith("update-v") && (
-                          <button
-                            onClick={(e) => handleDelete(item.id, e)}
-                            className="p-1 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/20 rounded-full transition-all cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        {isAdmin && (
+                          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+                            <button
+                              onClick={(e) => handleOpenEdit(item, e)}
+                              className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 rounded-full transition-all cursor-pointer"
+                              title="Editar Novedad"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => handleDelete(item.id, e)}
+                              className="p-1 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-full transition-all cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -255,6 +526,124 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           </div>
         )}
       </div>
+
+      {/* ADMIN EDIT / CREATE MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#12131a] border border-white/15 rounded-3xl w-full max-w-lg p-6 flex flex-col gap-5 shadow-[0_10px_40px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                  {editingItem ? "Editar Publicación" : "Nueva Publicación de Novedad"}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Submenu / Category selector */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                Submenú de Destino (Categoría)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "actualizacion", label: "Actualizaciones", icon: Rocket, badge: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+                  { id: "guia", label: "Guías & Videos", icon: MonitorPlay, badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" },
+                  { id: "comunidad", label: "Comunidad", icon: Users, badge: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40" },
+                  { id: "destacado", label: "Destacados", icon: Star, badge: "bg-rose-500/20 text-rose-300 border-rose-500/40" },
+                ].map((cat) => {
+                  const CatIcon = cat.icon;
+                  const isSelected = formCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setFormCategory(cat.id)}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? `${cat.badge} shadow-[0_0_12px_rgba(255,255,255,0.1)] ring-1 ring-white/30`
+                          : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      <CatIcon className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Title input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                Título del Comunicado
+              </label>
+              <input
+                type="text"
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="Ej. Nueva actualización v2.5 o Guía rápida de uso"
+                className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400/50 transition-all font-medium"
+              />
+            </div>
+
+            {/* Video URL input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                URL de Video (Opcional - MP4 / Cloudinary)
+              </label>
+              <input
+                type="text"
+                value={formVideoUrl}
+                onChange={(e) => setFormVideoUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400/50 transition-all font-medium"
+              />
+            </div>
+
+            {/* Content input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                Contenido / Detalles
+              </label>
+              <textarea
+                rows={4}
+                value={formContent}
+                onChange={(e) => setFormContent(e.target.value)}
+                placeholder="Escribe los detalles de la publicación..."
+                className="w-full px-4 py-2.5 bg-[#08090d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-fuchsia-400/50 transition-all font-medium resize-none"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-fuchsia-500 to-cyan-500 hover:opacity-90 active:scale-95 text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.3)] disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{isSaving ? "Guardando..." : "Guardar Publicación"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
