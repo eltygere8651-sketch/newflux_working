@@ -18,7 +18,10 @@ import {
   Pencil,
   Check,
   Trash2,
+  FolderOutput,
 } from "lucide-react";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { MusicTrack } from "../types";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { Carousel } from "./Carousel";
@@ -151,6 +154,22 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       artist?: string;
       description?: string;
     } | null>(null);
+
+    const [moveTarget, setMoveTarget] = useState<{
+      docId?: string;
+      itemId: string;
+      title: string;
+      thumbnail?: string;
+      currentSectionId?: string;
+      url?: string;
+      isPlaylist?: boolean;
+      artist?: string;
+      trackCount?: number;
+      description?: string;
+    } | null>(null);
+    const [targetSectionId, setTargetSectionId] = useState<string>("");
+    const [newCategoryName, setNewCategoryName] = useState<string>("");
+    const [isMoving, setIsMoving] = useState<boolean>(false);
 
     const [itemToDelete, setItemToDelete] = useState<{
       docId?: string;
@@ -478,6 +497,59 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       setNewSectionTitle("");
       setShowAddSectionModal(false);
       setIsAdding(false);
+    };
+
+    const handleConfirmMoveCategory = async () => {
+      if (!moveTarget) return;
+      setIsMoving(true);
+      try {
+        let finalSectionId = targetSectionId;
+
+        if (targetSectionId === "CREATE_NEW") {
+          if (!newCategoryName.trim()) return;
+          finalSectionId = "custom_" + Date.now();
+          if (onUpdateExploreLayout) {
+            const newLayout = [...sortedLayout];
+            newLayout.push({
+              id: finalSectionId,
+              title: newCategoryName.trim(),
+              type: "custom",
+              visible: true,
+              order: newLayout.length,
+            });
+            await onUpdateExploreLayout(newLayout);
+          }
+        }
+
+        if (moveTarget.docId) {
+          const docRef = doc(db, "explore_custom_playlists", moveTarget.docId);
+          await updateDoc(docRef, { sectionId: finalSectionId });
+          showNotification("Playlist movida de categoría correctamente");
+          window.dispatchEvent(new Event("refreshExplore"));
+        } else {
+          const matchCustom = customPlaylists.find(
+            (p: any) => p.id === moveTarget.itemId || p.url === moveTarget.url || (p.title && p.title === moveTarget.title)
+          );
+          if (matchCustom && matchCustom.docId) {
+            const docRef = doc(db, "explore_custom_playlists", matchCustom.docId);
+            await updateDoc(docRef, { sectionId: finalSectionId });
+            showNotification("Playlist movida de categoría correctamente");
+            window.dispatchEvent(new Event("refreshExplore"));
+          } else if (onAddCustomPlaylist) {
+            const targetUrl = moveTarget.url || `https://music.youtube.com/playlist?list=${moveTarget.itemId}`;
+            await onAddCustomPlaylist(targetUrl, finalSectionId);
+            showNotification("Playlist fijada en la nueva categoría");
+            window.dispatchEvent(new Event("refreshExplore"));
+          }
+        }
+      } catch (err: any) {
+        console.error("Error moving playlist category:", err);
+        showNotification("Error al mover categoría: " + (err.message || "Desconocido"));
+      } finally {
+        setIsMoving(false);
+        setMoveTarget(null);
+        setNewCategoryName("");
+      }
     };
 
     return (
@@ -1058,6 +1130,29 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                e.preventDefault();
+                                setTargetSectionId(section.id);
+                                setMoveTarget({
+                                  docId: item.docId,
+                                  itemId: item.id || item.url || item.title || `index-${songIdx}`,
+                                  title: item.title,
+                                  thumbnail: getItemImage(item),
+                                  currentSectionId: section.id,
+                                  url: item.url,
+                                  isPlaylist: item.isPlaylist,
+                                  artist: item.artist,
+                                  trackCount: item.trackCount || item.tracks?.length,
+                                  description: item.description,
+                                });
+                              }}
+                              className="bg-black/80 hover:bg-amber-400 hover:text-black text-amber-400 p-1.5 rounded-full backdrop-blur-md border border-amber-400/40 shadow-md transition-all scale-95 hover:scale-105"
+                              title="Mover a otra categoría 📁"
+                            >
+                              <FolderOutput className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setPromoteTarget({
                                   id: item.id || item.docId || item.url,
                                   title: item.title,
@@ -1098,24 +1193,49 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             )}
                           </p>
                           {isAdmin && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                if (item.docId) {
-                                  setItemToDelete({ docId: item.docId });
-                                } else {
-                                  setItemToDelete({
-                                    sectionId: section.id,
+                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setTargetSectionId(section.id);
+                                  setMoveTarget({
+                                    docId: item.docId,
                                     itemId: item.id || item.url || item.title || `index-${songIdx}`,
+                                    title: item.title,
+                                    thumbnail: getItemImage(item),
+                                    currentSectionId: section.id,
+                                    url: item.url,
+                                    isPlaylist: item.isPlaylist,
+                                    artist: item.artist,
+                                    trackCount: item.trackCount || item.tracks?.length,
+                                    description: item.description,
                                   });
-                                }
-                              }}
-                              className="text-red-500/70 hover:text-red-500 p-1 rounded transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                                }}
+                                className="text-amber-400/80 hover:text-amber-400 p-1 rounded transition-colors"
+                                title="Mover a otra categoría 📁"
+                              >
+                                <FolderOutput className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  if (item.docId) {
+                                    setItemToDelete({ docId: item.docId });
+                                  } else {
+                                    setItemToDelete({
+                                      sectionId: section.id,
+                                      itemId: item.id || item.url || item.title || `index-${songIdx}`,
+                                    });
+                                  }
+                                }}
+                                className="text-red-500/70 hover:text-red-500 p-1 rounded transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1138,6 +1258,93 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
             </Carousel>
           </section>
         ))}
+
+        {/* MOVE PLAYLIST CATEGORY MODAL */}
+        {moveTarget && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#121212] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-3 flex items-center gap-2 text-sm sm:text-base">
+                <FolderOutput className="w-5 h-5 text-amber-400" />
+                Mover Playlist de Categoría
+              </h3>
+
+              <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/10 mb-4">
+                <img
+                  src={moveTarget.thumbnail || DEFAULT_MUSIC_COVER}
+                  alt={moveTarget.title}
+                  className="w-12 h-12 rounded-lg object-cover shrink-0"
+                />
+                <div className="overflow-hidden">
+                  <p className="text-xs font-bold text-white truncate">{moveTarget.title}</p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {moveTarget.artist || "Playlist de YouTube Music"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-xs font-bold text-slate-300 mb-1.5 block">
+                  Categoría de destino:
+                </label>
+                <select
+                  value={targetSectionId}
+                  onChange={(e) => setTargetSectionId(e.target.value)}
+                  className="w-full bg-[#1A1A1A] text-white border border-white/10 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-amber-400 transition-colors"
+                >
+                  {sortedLayout.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title} {s.id === moveTarget.currentSectionId ? "(Actual)" : ""}
+                    </option>
+                  ))}
+                  <option value="CREATE_NEW">+ Crear nueva categoría...</option>
+                </select>
+              </div>
+
+              {targetSectionId === "CREATE_NEW" && (
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-amber-400 mb-1.5 block">
+                    Nombre de la nueva categoría:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Electro Gym, Perreo RKT..."
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="w-full bg-[#1A1A1A] text-white border border-amber-400/40 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-400 transition-colors"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setMoveTarget(null);
+                    setNewCategoryName("");
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                  disabled={isMoving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmMoveCategory}
+                  disabled={
+                    isMoving ||
+                    (targetSectionId === "CREATE_NEW" && !newCategoryName.trim())
+                  }
+                  className="px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-500 text-black text-xs font-bold rounded-full disabled:opacity-50 flex items-center gap-2 hover:brightness-110 transition-all shadow-md cursor-pointer"
+                >
+                  {isMoving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Confirmar Mover"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* PROMOTE PLAYLIST MODAL */}
         {promoteTarget && (

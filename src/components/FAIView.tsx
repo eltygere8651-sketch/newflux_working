@@ -120,6 +120,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
 
   const isSearchingRef = useRef(false);
   const isFetchingMoreRef = useRef(false);
+  const lastPrefetchTimeRef = useRef<number>(0);
   const handleNextTrackRef = useRef<((isManualParam?: boolean, forceGenre?: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -162,7 +163,9 @@ export const FAIView: React.FC<FAIViewProps> = ({
   // Background prefetch function to keep buffer filled with 10-20 tracks
   const prefetchMoreTracks = useCallback(async (forceGenre?: string) => {
     if (isFetchingMoreRef.current) return;
+    if (Date.now() - lastPrefetchTimeRef.current < 15000) return; // Prevent rapid prefetch loops
     isFetchingMoreRef.current = true;
+    lastPrefetchTimeRef.current = Date.now();
     try {
       const activeGenre = forceGenre || selectedGenre;
       const queries = getGenreQueries(activeGenre, topTracks, favorites);
@@ -177,7 +180,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
       const playlists = data.filter((d: any) => d.isPlaylist).sort(() => Math.random() - 0.5);
 
       if (playlists.length > 0) {
-        for (let i = 0; i < Math.min(2, playlists.length); i++) {
+        for (let i = 0; i < Math.min(1, playlists.length); i++) {
           const pl = playlists[i];
           const plResp = await fetch("/api/youtube/playlist?id=" + pl.id);
           if (plResp.ok) {
@@ -540,7 +543,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#0a0a0b] text-white relative overflow-hidden font-sans w-full max-w-full overflow-x-hidden">
       {/* Background Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-gradient-to-b from-fuchsia-600/10 via-cyan-600/5 to-transparent blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-[radial-gradient(ellipse_at_top,_rgba(192,38,211,0.12),_rgba(6,182,212,0.05),_transparent_70%)] pointer-events-none" />
       
       {/* Main Viewport */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-4 pb-4 sm:pt-6 sm:pb-6 z-10 max-w-lg mx-auto w-full overflow-y-auto overflow-x-hidden premium-scrollbar relative">
@@ -550,7 +553,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
         <div className="w-full flex justify-center shrink-0 relative z-20 mb-6 px-2 mt-2">
           <button
             onClick={() => setShowConfig(true)}
-            className="group relative overflow-hidden h-14 sm:h-16 px-5 sm:px-8 rounded-2xl sm:rounded-full flex items-center justify-between gap-3 transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-b from-[#1a1c23]/90 to-black/80 backdrop-blur-2xl border border-white/10 hover:border-[#17d1a5]/50 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_40px_rgba(23,209,165,0.2)] w-full max-w-md mx-auto"
+            className="group relative overflow-hidden h-14 sm:h-16 px-5 sm:px-8 rounded-2xl sm:rounded-full flex items-center justify-between gap-3 transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-b from-[#1a1c23]/90 to-black/80 backdrop-blur-md border border-white/10 hover:border-[#17d1a5]/50 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_40px_rgba(23,209,165,0.2)] w-full max-w-md mx-auto"
             title="Elige tu música"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-[#17d1a5]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -585,7 +588,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
           <motion.div 
             className="relative w-[180px] sm:w-[240px] shrink-0 aspect-square group z-10"
           >
-            <div className="absolute inset-0 bg-fuchsia-500/10 blur-3xl rounded-[2rem] opacity-50 pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(217,70,239,0.15)_0%,_transparent_70%)] rounded-[2rem] pointer-events-none" />
             <div className="relative w-full h-full group">
               <motion.img
                 key={currentTrack?.id || "empty"}
@@ -626,11 +629,11 @@ export const FAIView: React.FC<FAIViewProps> = ({
           {/* Progress Bar & Time */}
           <div className="w-full mb-6 sm:mb-8">
             <div className="relative h-1 bg-white/10 rounded-full mb-2.5">
-              <motion.div 
+              <div 
                 className="absolute top-0 left-0 h-full bg-white rounded-full"
                 style={{ width: `${actualProgress}%` }}
               />
-              <motion.div 
+              <div 
                 className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full shadow-[0_0_15px_white] z-20"
                 style={{ left: `${actualProgress}%`, marginLeft: '-5px' }}
               />
@@ -716,7 +719,7 @@ export const FAIView: React.FC<FAIViewProps> = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex flex-col justify-center items-center"
+              className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex flex-col justify-center items-center"
               onClick={() => setShowConfig(false)}
             >
               <motion.div 
@@ -763,8 +766,8 @@ export const FAIView: React.FC<FAIViewProps> = ({
               </div>
 
               {/* Configuration Panel Content */}
-              <div className="bg-[#1a1c23]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 relative overflow-y-auto premium-scrollbar shadow-inner flex-1 min-h-0">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="bg-[#1a1c23]/90 backdrop-blur-sm border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 relative overflow-y-auto premium-scrollbar shadow-inner flex-1 min-h-0">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-[radial-gradient(circle,_rgba(59,130,246,0.2)_0%,_transparent_70%)] pointer-events-none" />
                  
                  {!genreExploration ? (
                    <>

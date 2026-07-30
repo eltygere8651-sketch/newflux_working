@@ -847,27 +847,6 @@ function AppContent() {
           
           {/* RIGHT: PREMIUM BELL NOTIFICATIONS */}
           <div className="flex flex-col items-end justify-center relative">
-            <button
-              type="button"
-              onClick={() => {
-                setIsNotificationsOpen(true);
-                setHasUnread(false);
-                if (latestAnnouncementIdRef.current) {
-                  localStorage.setItem("flux_last_seen_announcement_id", latestAnnouncementIdRef.current);
-                }
-                localStorage.setItem("flux_updates_version_seen", APP_UPDATES_VERSION.toString());
-              }}
-              className="relative flex items-center justify-center p-2 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.4)] group"
-              title="Avisos e importantes"
-            >
-              <Bell className="w-4 h-4 group-hover:text-amber-400 transition-colors shrink-0" />
-              {hasUnread && (
-                <>
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 border border-[#080809] rounded-full shadow-[0_0_8px_rgba(244,63,94,1)] animate-pulse" />
-                </>
-              )}
-            </button>
             <AnimatePresence>
               {canShowInstallHelper && (
                 <motion.div
@@ -1050,17 +1029,13 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      {/* PREMIUM COMPACT NOTIFICATIONS DIALOG */}
-      <NotificationsModal 
-        isOpen={isNotificationsOpen} 
-        onClose={() => setIsNotificationsOpen(false)} 
-        isAdmin={isAdmin}
-      />
+
 
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
       />
+
 
       {/* SUPPORT TOAST NOTIFICATION */}
       <AnimatePresence>

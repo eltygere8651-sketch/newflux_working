@@ -69,9 +69,10 @@ import { Play,
   Tv,
   GripVertical,
   Globe,
-Mic, Bot } from "lucide-react";
+  Mic, Bot } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
+import { NewsView } from "./NewsView";
 import { selectNextDJTrack, isReasonableTrack } from "../lib/djLogic";
 
 const fetchWithCache = async (cacheKey, ttl, fetcher, forceRefresh = false) => {
@@ -1634,8 +1635,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     }
   }, [trackQueue]);
   const [trackListTab, setTrackListTab] = useState<
-    "playlist" | "search" | "queue" | "entertainment" | "radio-fai" | "karaoke" | "artist"
+    "playlist" | "search" | "queue" | "entertainment" | "radio-fai" | "karaoke" | "artist" | "news"
   >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
+  const [previousTab, setPreviousTab] = useState<string>("search");
   
   const [hasNewExplore, setHasNewExplore] = useState(false);
   const [hasNewCommunity, setHasNewCommunity] = useState(false);
@@ -1998,6 +2000,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   }, [userPlaylists]);
 
   const positionRef = useRef(position);
+  const lastPosUpdateMsRef = useRef<number>(0);
   useEffect(() => {
     positionRef.current = position;
   }, [position]);
@@ -5126,7 +5129,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               }
               const currentPosMs = state.playedSeconds * 1000;
               if (document.visibilityState === "visible") {
-                setPosition(currentPosMs);
+                if (!lastPosUpdateMsRef.current || Math.abs(currentPosMs - lastPosUpdateMsRef.current) >= 500) {
+                  lastPosUpdateMsRef.current = currentPosMs;
+                  setPosition(currentPosMs);
+                }
               }
 
               // Persist locally for seamless restoration, even if backgrounded, throttle to once every 5s
@@ -5230,6 +5236,37 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
       {/* GLOBAL TABS / PILLS HEADER */}
       <Carousel className="px-3 py-2 gap-1.5 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+        {/* Novedades (Moved to 1st position) */}
+        <button
+          onClick={() => {
+            if (trackListTab !== "news") {
+              setPreviousTab(trackListTab);
+            }
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            setTrackListTab("news");
+            setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
+          }}
+          className={`relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+            trackListTab === "news" &&
+            !showLibrary &&
+            !isSidebarExpanded &&
+            (window.innerWidth >= 768 || mobileView === "player")
+              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
+              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)] animate-pulse" />
+            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Novedades</span>
+          </span>
+        </button>
         {/* Explorar - Desktop Only (in bottom bar on mobile) */}
         <button
           onClick={() => {
@@ -5386,9 +5423,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }`}
         >
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
+
         </button>
-
-
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
@@ -5948,7 +5984,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         >
           {/* PLAYER BAR */}
           <div
-            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
           >
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -6504,12 +6540,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           {selectedPlaylist ||
           trackListTab === "search" ||
           trackListTab === "entertainment" ||
+          trackListTab === "news" ||
           trackListTab === "karaoke" ||
           trackListTab === "radio-fai" ? (
             <div
               className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" ? "hidden" : "flex"}`}
             >
-              {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
+              {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                 <div className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40">
                   <div className="flex flex-col w-full">
                     {/* Search Bar matching Tab */}
@@ -6622,9 +6659,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a0b] relative overflow-hidden">
                 {/* Unified ambient background glow matching FAIView (FLUX) tab */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-gradient-to-b from-fuchsia-600/10 via-cyan-600/5 to-transparent blur-[120px] rounded-full pointer-events-none z-0" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-[radial-gradient(ellipse_at_top,_rgba(192,38,211,0.12),_rgba(6,182,212,0.05),_transparent_70%)] pointer-events-none z-0" />
                 <div
-                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
+                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
                 >
                   {trackListTab === "karaoke" ? (
                     <React.Suspense
@@ -6667,6 +6704,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         }}
                       />
                     </React.Suspense>
+                  ) : trackListTab === "news" ? (
+                    <div className="flex-1 overflow-y-auto bg-[#070709]" />
                   ) : trackListTab === "radio-fai" ? (
                     <div className="flex-1 h-full overflow-hidden">
                       <FAIView 
@@ -7945,7 +7984,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   )}
                 </div>
 
-                {trackListTab !== "entertainment" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
+                {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                   <div className="bg-[#050505] border-t border-white/5 flex flex-col shrink-0">
                     <div className="px-3 py-1.5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest">
                       <span>Total: {viewedTracks.length || 0} canciones</span>
@@ -8137,7 +8176,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             </button>
           );
         })()}
-
         {/* Mi Biblioteca */}
         {(() => {
           const isLibraryActive = mobileView === "playlists" && !showLibrary;
@@ -8196,6 +8234,18 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           );
         })()}
       </div>
+
+      {/* IMMERSIVE MODE: NOVEDADES OVERLAY */}
+      {trackListTab === "news" && (
+        <div className="fixed inset-0 z-[99999] bg-[#070709] text-white flex flex-col overflow-hidden animate-in fade-in duration-300">
+          <NewsView
+            isAdmin={isAdmin}
+            onClose={() => {
+              setTrackListTab((previousTab as any) || "search");
+            }}
+          />
+        </div>
+      )}
 
       {showNicknameModal && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/95 ">
@@ -9605,7 +9655,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               exit={{ opacity: 0, y: 30, scale: 0.95 }}
               className="w-full max-w-sm bg-[#121212] border border-[#1ED760]/30 rounded-3xl p-6 sm:p-8 shadow-[0_24px_60px_rgba(30,215,96,0.2)] flex flex-col items-center text-center relative overflow-hidden"
             >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-32 bg-[#1ED760]/20 blur-[50px] pointer-events-none rounded-full" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-32 bg-[radial-gradient(circle,_rgba(30,215,96,0.25)_0%,_transparent_70%)] pointer-events-none rounded-full" />
 
               <div className="w-16 h-16 bg-black rounded-full border border-white/10 flex items-center justify-center mb-5 relative z-10">
                 <Headphones className="w-8 h-8 text-[#1ED760]" />
@@ -9633,7 +9683,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
         <div className="absolute inset-0 z-[99999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
           {/* Authentic Spotify premium subtle ambient green glow */}
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[#1ED760]/10 blur-[120px] pointer-events-none animate-pulse" />
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[radial-gradient(circle,_rgba(30,215,96,0.15)_0%,_transparent_70%)] pointer-events-none" />
 
           <div className="relative z-10 max-w-sm w-full bg-[#121212] border border-white/10 rounded-2xl sm:rounded-[28px] p-4 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.9)] flex flex-col items-center">
             {/* Spotify Brand Emblem / Tech Vibe Dot */}
