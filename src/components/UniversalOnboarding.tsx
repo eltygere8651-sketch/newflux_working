@@ -116,37 +116,28 @@ export function UniversalOnboarding({ onComplete, cards = [], forceIOS, targetOS
                 /* CONTENIDO iOS */
                 <div className="flex flex-col gap-3">
                   <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
-                    En iPhone y iPad, te recomendamos utilizar <strong className="text-white">el navegador Brave</strong> para disfrutar de una reproducción más fluida y optimizada.
+                    Flux Music funciona vía web. Usa <strong className="text-white">el navegador Brave</strong> para habilitar la experiencia completa y el audio en segundo plano.
                   </p>
                   
                   <div className="bg-black/30 rounded-2xl p-3.5 border border-white/5">
-                    <ul className="flex flex-col gap-2.5">
+                    <ul className="flex flex-col gap-2">
                       {[
-                        "Reproducción fluida en segundo plano",
-                        "Música con pantalla bloqueada",
-                        "Mayor estabilidad sin interrupciones",
-                        "Navegación rápida y privada"
+                        "Audio en segundo plano y pantalla bloqueada",
+                        "Reproducción fluida sin cortes",
+                        "Sin descargas: entra directamente a fluxplay.cc"
                       ].map((item, i) => (
-                        <li key={i} className="flex items-start gap-2.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <li key={i} className="flex items-center gap-2.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                           <span className="text-xs sm:text-sm text-slate-300 font-medium leading-snug">{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center shadow-lg">
-                    <p className="text-white font-bold text-xs sm:text-sm mb-1">Para empezar rápidamente:</p>
-                    <p className="text-slate-300 text-xs mb-2.5">Abre Brave e ingresa la dirección:</p>
-                    <div className="bg-black/50 rounded-xl py-2 px-5 inline-block border border-white/10 mb-2 shadow-inner">
-                      <span className="text-emerald-400 font-extrabold text-base tracking-wider">fluxplay.cc</span>
-                    </div>
-                  </div>
-
                   <div className="mt-1 flex justify-center">
                     <button 
                       onClick={() => window.open("https://brave.com/", "_blank")}
-                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-2.5 rounded-full font-bold transition-all text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-6 py-2.5 rounded-full font-bold transition-all text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
                     >
                       <span>Obtener Brave</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
@@ -157,7 +148,7 @@ export function UniversalOnboarding({ onComplete, cards = [], forceIOS, targetOS
                 /* CONTENIDO ANDROID (DEFAULT) */
                 <div className="flex flex-col gap-3">
                   <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
-                    Para disfrutar de la experiencia completa de Flux Music en Android, abre la app desde <strong className="text-white">el navegador Brave</strong>.
+                    Para disfrutar de la experiencia completa de Flux Music en Android, instala Flux desde <strong className="text-white">el navegador Brave</strong>.
                   </p>
                   
                   <div className="bg-black/30 rounded-2xl p-3.5 border border-white/5">

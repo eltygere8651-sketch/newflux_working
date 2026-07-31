@@ -55,30 +55,28 @@ function AppContent() {
   useEffect(() => {
     let isMounted = true;
     
-    const checkOnboarding = async () => {
+    const isIosDevice =
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream;
+
+    const effectiveOS: "ios" | "android" = isIosDevice ? "ios" : "android";
+
+    // 1. Real-time subscription to config/onboarding so publishing triggers instantly
+    const configRef = doc(db, "config", "onboarding");
+    const unsubscribeOnboarding = onSnapshot(configRef, async (docSnap) => {
       try {
-        const isIosDevice =
-          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
-          !(window as any).MSStream;
-
-        const effectiveOS: "ios" | "android" = isIosDevice ? "ios" : "android";
-
         const osStorageKey = `flux_onboarding_version_${effectiveOS}`;
         const completedStr = localStorage.getItem(osStorageKey) || localStorage.getItem("flux_onboarding_version");
         const completedVersion = completedStr ? parseInt(completedStr, 10) : 0;
 
-        // 1. Fetch current version from Firestore ONLY ONCE (no listeners)
-        const configRef = doc(db, "config", "onboarding");
-        const docSnap = await getDoc(configRef);
-        
         let currentVersion = 1;
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (effectiveOS === "ios") {
-            currentVersion = typeof data.version_ios === 'number' ? data.version_ios : 1;
+            currentVersion = typeof data.version_ios === 'number' ? data.version_ios : (typeof data.version === 'number' ? data.version : 1);
           } else {
-            currentVersion = typeof data.version_android === 'number' ? data.version_android : 1;
+            currentVersion = typeof data.version_android === 'number' ? data.version_android : (typeof data.version === 'number' ? data.version : 1);
           }
         }
         
@@ -87,9 +85,8 @@ function AppContent() {
         setOnboardingTargetOS(effectiveOS);
         setForceIOS(isIosDevice);
         
-        // 2. Check if we need to show onboarding
+        // Check if we need to show onboarding
         if (currentVersion > completedVersion || (currentVersion === 1 && completedVersion < 1)) {
-          // Fetch cards ONLY if we are going to show the onboarding
           const qCards = query(collection(db, "announcements"), where("category", "==", "onboarding"));
           const cardsSnap = await getDocs(qCards);
 
@@ -122,11 +119,9 @@ function AppContent() {
           setShowOnboarding(true);
         }
       } catch (e) {
-        console.error("Error comprobando onboarding:", e);
+        console.error("Error en escucha tiempo real de onboarding:", e);
       }
-    };
-
-    checkOnboarding();
+    });
     
     const handlePreview = async (e: Event) => {
       try {
@@ -182,6 +177,7 @@ function AppContent() {
     
     return () => {
       isMounted = false;
+      unsubscribeOnboarding();
       window.removeEventListener("preview-onboarding", handlePreview);
     };
   }, []);
@@ -795,61 +791,49 @@ function AppContent() {
       return false;
     };
 
-    const localUnread = checkLocalUnread();
+    const isIosDevice =
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream;
 
-    // 2. Comprobación única (Una sola lectura por sesión)
-    const checkAnnouncements = async () => {
-      // Usamos una variable global para garantizar una sola comprobación por carga de aplicación (sesión)
-      if ((window as any).flux_announcements_checked) {
-        return;
-      }
+    const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(5));
 
-      try {
-        const isIosDevice =
-          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
-          !(window as any).MSStream;
+    let isInitialAnnounceLoad = true;
+    const unsubscribeAnnouncements = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
 
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(10));
-        const snapshot = await getDocs(q);
-        
-        (window as any).flux_announcements_checked = true;
-        
-        if (!snapshot.empty) {
-          const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
+        const validDoc = snapshot.docs.find(d => {
+          const data = d.data();
+          if (data.deleted || data.active === false) return false;
+          if (data.category === "onboarding") return false;
+          const targetOS = data.targetOS || "all";
+          if (targetOS === "ios" && !isIosDevice) return false;
+          if (targetOS === "android" && isIosDevice) return false;
+          return true;
+        });
 
-          const validDoc = snapshot.docs.find(d => {
-            const data = d.data();
-            if (data.deleted || data.active === false) return false;
-            if (data.category === "onboarding") return false;
-            const targetOS = data.targetOS || "all";
-            if (targetOS === "ios" && !isIosDevice) return false;
-            if (targetOS === "android" && isIosDevice) return false;
-            return true;
-          });
+        if (validDoc) {
+          const newestId = validDoc.id;
+          latestAnnouncementIdRef.current = newestId;
 
-          if (validDoc) {
-            const newestId = validDoc.id;
-            latestAnnouncementIdRef.current = newestId;
+          const data = validDoc.data();
+          const createdAt = data.createdAt;
+          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
 
-            const data = validDoc.data();
-            const createdAt = data.createdAt;
-            const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
-
-            // Si el anuncio tiene menos de 7 días y no ha sido visto
-            if (Date.now() - dbDate.getTime() < 604800000 && lastSeenId !== newestId) {
-              setHasUnread(true);
+          // Si el anuncio tiene menos de 7 días y no ha sido visto
+          if (lastSeenId !== newestId && Date.now() - dbDate.getTime() < 604800000) {
+            setHasUnread(true);
+            if (!isInitialAnnounceLoad) {
+              playNotificationSound();
             }
           }
         }
-      } catch (err) {
-        console.warn("No se pudo comprobar novedades:", err);
       }
-    };
-    
-    if (!localUnread) {
-      checkAnnouncements();
-    }
+      isInitialAnnounceLoad = false;
+    }, (err) => {
+      console.warn("Error escuchando novedades en tiempo real:", err);
+    });
 
     const handleRead = () => {
       setHasUnread(false);
@@ -861,6 +845,7 @@ function AppContent() {
     window.addEventListener("notifications-read", handleRead);
 
     return () => {
+      unsubscribeAnnouncements();
       window.removeEventListener("notifications-read", handleRead);
     };
   }, []);
