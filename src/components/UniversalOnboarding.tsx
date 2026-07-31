@@ -81,7 +81,7 @@ export function UniversalOnboarding({ onComplete, cards = [] }: UniversalOnboard
                   <Smartphone className="w-5 h-5 text-emerald-400" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                  La experiencia completa de Flux Music
+                  {isIOS ? "La mejor experiencia en iPhone y iPad" : "La experiencia completa de Flux Music"}
                 </h2>
               </div>
 
@@ -89,18 +89,17 @@ export function UniversalOnboarding({ onComplete, cards = [] }: UniversalOnboard
                 /* CONTENIDO iOS */
                 <div className="flex flex-col gap-4">
                   <p className="text-slate-300 font-medium leading-relaxed">
-                    En iPhone y iPad, Flux Music ofrece una <strong className="text-white">experiencia nativa y sumamente fluida</strong> directamente desde <strong className="text-white">el navegador Brave</strong>.
+                    En iPhone y iPad, te recomendamos utilizar Flux Music desde <strong className="text-white">Brave (el navegador Brave)</strong> para disfrutar de una experiencia más fluida y optimizada durante la reproducción.
                   </p>
                   
                   <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                    <p className="text-sm font-bold text-slate-200 mb-4">Con Brave en tu dispositivo disfrutarás de:</p>
                     <ul className="flex flex-col gap-3">
                       {[
-                        "Reproducción fluida en segundo plano",
-                        "Música con la pantalla bloqueada",
-                        "Una experiencia premium sin interrupciones",
-                        "Bajo consumo de batería y rendimiento óptimo",
-                        "Acceso seguro e ininterrumpido"
+                        "Reproducción fluida",
+                        "Reproducción en segundo plano y pantalla bloqueada",
+                        "Mayor estabilidad durante la escucha",
+                        "Navegación rápida y segura",
+                        "Experiencia optimizada para Flux Music"
                       ].map((item, i) => (
                         <li key={i} className="flex items-start gap-3">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -110,12 +109,21 @@ export function UniversalOnboarding({ onComplete, cards = [] }: UniversalOnboard
                     </ul>
                   </div>
 
-                  <div className="mt-2">
+                  <div className="mt-2 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 text-center shadow-lg">
+                    <p className="text-white font-bold mb-2">Es muy fácil empezar.</p>
+                    <p className="text-slate-300 text-sm mb-3">Abre Brave (el navegador Brave) y escribe directamente:</p>
+                    <div className="bg-black/40 rounded-xl py-3 px-6 inline-block border border-white/10 mb-3 shadow-inner">
+                      <span className="text-emerald-400 font-bold text-lg tracking-wider">fluxplay.cc</span>
+                    </div>
+                    <p className="text-slate-400 text-xs">En pocos segundos podrás acceder a Flux Music y disfrutar de la experiencia completa.</p>
+                  </div>
+
+                  <div className="mt-2 flex justify-start sm:justify-center">
                     <button 
                       onClick={() => window.open("https://brave.com/", "_blank")}
                       className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-6 py-3 rounded-full font-bold transition-all text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
                     >
-                      <span>Instalar desde Brave</span>
+                      <span>Instalar Brave</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </button>
                   </div>
