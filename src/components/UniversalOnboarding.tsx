@@ -6,10 +6,37 @@ import { CheckCircle2, ChevronRight, Play, Info, Smartphone, ShieldCheck, Sparkl
 interface UniversalOnboardingProps {
   onComplete: () => void;
   cards?: any[];
+  forceIOS?: boolean;
+  targetOS?: "ios" | "android" | "auto";
 }
 
-export function UniversalOnboarding({ onComplete, cards = [] }: UniversalOnboardingProps) {
-  const [isIOS, setIsIOS] = useState(false);
+export function UniversalOnboarding({ onComplete, cards = [], forceIOS, targetOS = "auto" }: UniversalOnboardingProps) {
+  const [isIOS, setIsIOS] = useState<boolean>(() => {
+    if (targetOS === "ios") return true;
+    if (targetOS === "android") return false;
+    if (typeof forceIOS === "boolean") return forceIOS;
+    return (
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream
+    );
+  });
+
+  useEffect(() => {
+    if (targetOS === "ios") {
+      setIsIOS(true);
+    } else if (targetOS === "android") {
+      setIsIOS(false);
+    } else if (typeof forceIOS === "boolean") {
+      setIsIOS(forceIOS);
+    } else {
+      const isIosDevice =
+        (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+        !(window as any).MSStream;
+      setIsIOS(isIosDevice);
+    }
+  }, [forceIOS, targetOS]);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -53,9 +80,18 @@ export function UniversalOnboarding({ onComplete, cards = [] }: UniversalOnboard
             <div className="absolute inset-0 bg-emerald-500/20 blur-[40px] rounded-full" />
             <FluxLogoLarge className="w-24 h-24 relative z-10" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-br from-white to-white/60">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-br from-white to-white/60">
             Bienvenido a Flux Music
           </h1>
+          <div className="mb-4">
+            <span className={`px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest rounded-full border ${
+              isIOS 
+                ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
+                : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+            }`}>
+              {isIOS ? "📱 Experiencia para iOS (iPhone / iPad)" : "🤖 Experiencia para Android"}
+            </span>
+          </div>
           <p className="text-slate-400 text-sm sm:text-base font-medium max-w-md leading-relaxed">
             Antes de comenzar, descubre cómo disfrutar de la mejor experiencia posible con Flux Music.
           </p>

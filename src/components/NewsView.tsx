@@ -138,11 +138,32 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<NewsTabType>("updates");
 
+  // Onboarding Publish Target & Versions
+  const [publishTargetOS, setPublishTargetOS] = useState<"all" | "android" | "ios">("all");
+  const [onboardingVersions, setOnboardingVersions] = useState<{ global: number; android: number; ios: number }>({ global: 1, android: 1, ios: 1 });
+
+  useEffect(() => {
+    if (activeTab === "onboarding" && isAdmin) {
+      import("firebase/firestore").then(({ doc, getDoc }) => {
+        getDoc(doc(db, "config", "onboarding")).then((snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            const a = typeof data.version_android === 'number' ? data.version_android : 1;
+            const i = typeof data.version_ios === 'number' ? data.version_ios : 1;
+            const g = Math.max(a, i);
+            setOnboardingVersions({ global: g, android: a, ios: i });
+          }
+        }).catch(err => console.error("Error fetching onboarding config:", err));
+      });
+    }
+  }, [activeTab, isAdmin]);
+
   // Admin Create & Edit Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Announcement | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formCategory, setFormCategory] = useState<string>("actualizacion");
+  const [formTargetOS, setFormTargetOS] = useState<"all" | "ios" | "android">("all");
   const [formVideoUrl, setFormVideoUrl] = useState("");
   const [formContent, setFormContent] = useState("");
   const [formActionText, setFormActionText] = useState("");
@@ -218,6 +239,9 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                 category: data.category || "noticia",
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
                 active: data.active !== false,
+                actionText: data.actionText || "",
+                actionUrl: data.actionUrl || "",
+                targetOS: data.targetOS || "all",
               });
             }
           });
@@ -279,6 +303,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     setFormContent("");
     setFormActionText("");
     setFormActionUrl("");
+    setFormTargetOS("all");
     setIsModalOpen(true);
   };
 
@@ -287,6 +312,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     setEditingItem(item);
     setFormTitle(item.title);
     setFormCategory(item.category || "actualizacion");
+    setFormTargetOS(item.targetOS || "all");
     setFormVideoUrl(item.videoUrl || "");
     setFormContent(item.content);
     setFormActionText(item.actionText || "");
@@ -313,6 +339,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             content: formContent.trim(),
         actionText: formActionText.trim(),
         actionUrl: formActionUrl.trim(),
+            targetOS: formCategory === "onboarding" ? formTargetOS : "all",
           });
         }
       } else {
@@ -324,6 +351,7 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           content: formContent.trim(),
           actionText: formActionText.trim(),
           actionUrl: formActionUrl.trim(),
+          targetOS: formCategory === "onboarding" ? formTargetOS : "all",
           createdAt: new Date(),
           active: true,
         };
@@ -564,47 +592,143 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           </div>
         </div>
         {activeTab === "onboarding" && isAdmin && (
-          <div className="mb-6 p-5 rounded-2xl bg-[#08090d] border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+          <div className="mb-6 p-5 rounded-2xl bg-[#08090d] border border-emerald-500/30 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
             <div className="flex flex-col gap-2 flex-1">
-              <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                Control de Versiones y Despliegue
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Control de Versiones y Despliegue
+                </h3>
+                <div className="flex items-center gap-2 text-[10px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                    🤖 Android: v{onboardingVersions.android}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                    📱 iOS: v{onboardingVersions.ios}
+                  </span>
+                </div>
+              </div>
               <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Actualmente tienes <strong className="text-white">{filteredItems.length}</strong> tarjetas configuradas. Pulsa "Nueva Publicación" para añadir una tarjeta modular. Al publicar, se incrementará la versión y todos los usuarios verán el nuevo onboarding.
+                Tienes <strong className="text-white">{filteredItems.length}</strong> tarjetas configuradas. Elige el sistema operativo destino para publicar únicamente a ese sistema sin afectar al otro.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <button 
-                onClick={() => {
-                  window.dispatchEvent(new Event("preview-onboarding"));
-                }} 
-                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold rounded-full uppercase tracking-wider transition-all"
-              >
-                Vista Previa
-              </button>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0 w-full xl:w-auto">
+              {/* Preview buttons */}
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("preview-onboarding", { detail: { targetOS: "android", forceIOS: false } }));
+                  }} 
+                  className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
+                  title="Probar vista previa en Android"
+                >
+                  🤖 Previa Android
+                </button>
+                <button 
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("preview-onboarding", { detail: { targetOS: "ios", forceIOS: true } }));
+                  }} 
+                  className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
+                  title="Probar vista previa en iOS"
+                >
+                  📱 Previa iOS
+                </button>
+              </div>
+
+              {/* Target OS Selector */}
+              <div className="flex items-center p-1 bg-white/5 border border-white/10 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPublishTargetOS("all")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    publishTargetOS === "all"
+                      ? "bg-emerald-500 text-black shadow-md"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  🌐 Ambos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPublishTargetOS("android")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    publishTargetOS === "android"
+                      ? "bg-amber-500 text-black shadow-md"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  🤖 Android
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPublishTargetOS("ios")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    publishTargetOS === "ios"
+                      ? "bg-purple-500 text-white shadow-md"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  📱 iOS
+                </button>
+              </div>
+
+              {/* Publish Action Button */}
               <button 
                 onClick={async () => {
                   try {
                     const configRef = doc(db, "config", "onboarding");
                     const docSnap = await import("firebase/firestore").then(m => m.getDoc(configRef));
-                    let currentVersion = 1;
+                    let a = 1, i = 1;
                     if (docSnap.exists()) {
-                      currentVersion = docSnap.data().version || 1;
-                      await import("firebase/firestore").then(m => m.updateDoc(configRef, { version: currentVersion + 1 }));
-                    } else {
-                      await import("firebase/firestore").then(m => m.setDoc(configRef, { version: 2 }));
+                      const data = docSnap.data();
+                      a = typeof data.version_android === 'number' ? data.version_android : 1;
+                      i = typeof data.version_ios === 'number' ? data.version_ios : 1;
                     }
-                    alert(`¡Onboarding publicado correctamente! (Versión ${currentVersion + 1})`);
+
+                    let newA = a;
+                    let newI = i;
+
+                    if (publishTargetOS === "all") {
+                      newA = a + 1;
+                      newI = i + 1;
+                    } else if (publishTargetOS === "android") {
+                      newA = a + 1;
+                    } else if (publishTargetOS === "ios") {
+                      newI = i + 1;
+                    }
+
+                    const newG = Math.max(newA, newI);
+
+                    const payload = {
+                      version: newG,
+                      version_android: newA,
+                      version_ios: newI,
+                      updatedAt: new Date(),
+                    };
+
+                    const setDocFn = await import("firebase/firestore").then(m => m.setDoc);
+                    await setDocFn(configRef, payload, { merge: true });
+
+                    setOnboardingVersions({ global: newG, android: newA, ios: newI });
+
+                    const targetLabel = publishTargetOS === "all" ? "Android e iOS" : publishTargetOS === "android" ? "Android" : "iOS";
+                    alert(`¡Onboarding publicado correctamente para ${targetLabel}!\n\n• Versión Android: v${newA}\n• Versión iOS: v${newI}`);
                   } catch (e) {
                     console.error(e);
-                    alert("Error al publicar.");
+                    alert("Error al publicar el onboarding.");
                   }
                 }} 
-                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black rounded-full uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
+                className={`px-5 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider transition-all flex items-center gap-2 hover:scale-105 active:scale-95 shadow-lg ${
+                  publishTargetOS === "android"
+                    ? "bg-amber-400 hover:bg-amber-300 text-black shadow-amber-500/20"
+                    : publishTargetOS === "ios"
+                    ? "bg-purple-500 hover:bg-purple-400 text-white shadow-purple-500/20"
+                    : "bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20"
+                }`}
               >
                 <Send className="w-4 h-4" />
-                Publicar para todos
+                {publishTargetOS === "all" ? "Publicar para Todos" : publishTargetOS === "android" ? "Publicar para Android" : "Publicar para iOS"}
               </button>
             </div>
           </div>
@@ -663,13 +787,28 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                   <div className="flex flex-col gap-3">
                     {/* Category & Date */}
                     <div className="flex items-center justify-between gap-3">
-                      <span
-                        className={`px-3 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${getCategoryBadge(
-                          item.category
-                        )}`}
-                      >
-                        {item.category}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-3 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${getCategoryBadge(
+                            item.category
+                          )}`}
+                        >
+                          {item.category}
+                        </span>
+                        {activeTab === "onboarding" && (
+                          <span
+                            className={`px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full border ${
+                              item.targetOS === "ios"
+                                ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
+                                : item.targetOS === "android"
+                                ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                            }`}
+                          >
+                            {item.targetOS === "ios" ? "📱 Solo iOS" : item.targetOS === "android" ? "🤖 Solo Android" : "🌐 Ambos"}
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
@@ -883,6 +1022,34 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
 
             {/* Action Button Inputs */}
             {formCategory === "onboarding" && (
+              <>
+              <div className="grid grid-cols-1 gap-3 mb-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Dispositivos Destino
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: "all", label: "Ambos" },
+                      { id: "android", label: "Solo Android" },
+                      { id: "ios", label: "Solo iOS" }
+                    ].map(os => (
+                      <button
+                        key={os.id}
+                        type="button"
+                        onClick={() => setFormTargetOS(os.id as any)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          formTargetOS === os.id 
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.1)] ring-1 ring-emerald-500/30" 
+                          : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {os.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
@@ -909,8 +1076,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
                   />
                 </div>
               </div>
+              </>
             )}
-
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
               <button

@@ -47,6 +47,8 @@ function AppContent() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [forceIOS, setForceIOS] = useState(false);
+  const [onboardingTargetOS, setOnboardingTargetOS] = useState<"ios" | "android" | "auto">("auto");
   const [onboardingVersion, setOnboardingVersion] = useState(1);
   const [onboardingCards, setOnboardingCards] = useState<any[]>([]);
   
@@ -55,42 +57,65 @@ function AppContent() {
     
     const checkOnboarding = async () => {
       try {
-        const completedStr = localStorage.getItem("flux_onboarding_version");
+        const isIosDevice =
+          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+          !(window as any).MSStream;
+
+        const effectiveOS: "ios" | "android" = isIosDevice ? "ios" : "android";
+
+        const osStorageKey = `flux_onboarding_version_${effectiveOS}`;
+        const completedStr = localStorage.getItem(osStorageKey) || localStorage.getItem("flux_onboarding_version");
         const completedVersion = completedStr ? parseInt(completedStr, 10) : 0;
-        
+
         // 1. Fetch current version from Firestore ONLY ONCE (no listeners)
         const configRef = doc(db, "config", "onboarding");
         const docSnap = await getDoc(configRef);
         
         let currentVersion = 1;
         if (docSnap.exists()) {
-          const v = docSnap.data().version;
-          if (typeof v === 'number' && !isNaN(v)) {
-            currentVersion = v;
+          const data = docSnap.data();
+          if (effectiveOS === "ios") {
+            currentVersion = typeof data.version_ios === 'number' ? data.version_ios : 1;
+          } else {
+            currentVersion = typeof data.version_android === 'number' ? data.version_android : 1;
           }
         }
         
         if (!isMounted) return;
         setOnboardingVersion(currentVersion);
+        setOnboardingTargetOS(effectiveOS);
+        setForceIOS(isIosDevice);
         
         // 2. Check if we need to show onboarding
         if (currentVersion > completedVersion || (currentVersion === 1 && completedVersion < 1)) {
           // Fetch cards ONLY if we are going to show the onboarding
           const qCards = query(collection(db, "announcements"), where("category", "==", "onboarding"));
           const cardsSnap = await getDocs(qCards);
-          const cards = cardsSnap.docs.filter(d => d.data().active !== false).map(d => {
-            const data = d.data();
-            return {
-              id: d.id,
-              title: data.title || "",
-              description: data.content || "",
-              image: data.videoUrl || "",
-              createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0,
-              order: data.order || 0,
-              actionText: data.actionText || "",
-              actionUrl: data.actionUrl || ""
-            };
-          }).sort((a,b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);
+
+          const cards = cardsSnap.docs
+            .filter(d => {
+              const data = d.data();
+              if (data.active === false) return false;
+              const targetOS = data.targetOS || "all";
+              if (targetOS === "ios" && !isIosDevice) return false;
+              if (targetOS === "android" && isIosDevice) return false;
+              return true;
+            })
+            .map(d => {
+              const data = d.data();
+              return {
+                id: d.id,
+                title: data.title || "",
+                description: data.content || "",
+                image: data.videoUrl || "",
+                createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0,
+                order: data.order || 0,
+                actionText: data.actionText || "",
+                actionUrl: data.actionUrl || ""
+              };
+            })
+            .sort((a,b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);
           
           if (!isMounted) return;
           setOnboardingCards(cards);
@@ -103,23 +128,48 @@ function AppContent() {
 
     checkOnboarding();
     
-    const handlePreview = async () => {
+    const handlePreview = async (e: Event) => {
       try {
+        const detail = (e as CustomEvent).detail;
+        let requestedOS: "ios" | "android" = "android";
+        if (detail?.targetOS === "ios" || detail?.targetOS === "android") {
+          requestedOS = detail.targetOS;
+        } else if (detail?.forceIOS === true) {
+          requestedOS = "ios";
+        } else if (detail?.forceIOS === false) {
+          requestedOS = "android";
+        }
+
+        setOnboardingTargetOS(requestedOS);
+        setForceIOS(requestedOS === "ios");
+
         const qCards = query(collection(db, "announcements"), where("category", "==", "onboarding"));
         const cardsSnap = await getDocs(qCards);
-        const cards = cardsSnap.docs.filter(d => d.data().active !== false).map(d => {
-          const data = d.data();
-          return {
-            id: d.id,
-            title: data.title || "",
-            description: data.content || "",
-            image: data.videoUrl || "",
-            createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0,
-            order: data.order || 0,
-            actionText: data.actionText || "",
-            actionUrl: data.actionUrl || ""
-          };
-        }).sort((a,b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);
+        
+        // Filter cards strictly for requestedOS (keep "all" or matching requestedOS)
+        const cards = cardsSnap.docs
+          .filter(d => {
+            const data = d.data();
+            if (data.active === false) return false;
+            const targetOS = data.targetOS || "all";
+            if (targetOS === "ios" && requestedOS !== "ios") return false;
+            if (targetOS === "android" && requestedOS !== "android") return false;
+            return true;
+          })
+          .map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              title: data.title || "",
+              description: data.content || "",
+              image: data.videoUrl || "",
+              createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime()) : 0,
+              order: data.order || 0,
+              actionText: data.actionText || "",
+              actionUrl: data.actionUrl || ""
+            };
+          })
+          .sort((a,b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);
         
         setOnboardingCards(cards);
         setShowOnboarding(true);
@@ -755,24 +805,39 @@ function AppContent() {
       }
 
       try {
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+        const isIosDevice =
+          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+          !(window as any).MSStream;
+
+        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(10));
         const snapshot = await getDocs(q);
         
         (window as any).flux_announcements_checked = true;
         
         if (!snapshot.empty) {
-          const newestDoc = snapshot.docs[0];
-          const data = newestDoc.data();
-          const newestId = newestDoc.id;
-          latestAnnouncementIdRef.current = newestId;
+          const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
 
-          const createdAt = data.createdAt;
-          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
+          const validDoc = snapshot.docs.find(d => {
+            const data = d.data();
+            if (data.deleted || data.active === false) return false;
+            if (data.category === "onboarding") return false;
+            const targetOS = data.targetOS || "all";
+            if (targetOS === "ios" && !isIosDevice) return false;
+            if (targetOS === "android" && isIosDevice) return false;
+            return true;
+          });
 
-          // Si el anuncio tiene menos de 7 días y no ha sido desactivado ni descartado
-          if (Date.now() - dbDate.getTime() < 604800000 && data.active !== false && !data.deleted) {
-            const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
-            if (lastSeenId !== newestId) {
+          if (validDoc) {
+            const newestId = validDoc.id;
+            latestAnnouncementIdRef.current = newestId;
+
+            const data = validDoc.data();
+            const createdAt = data.createdAt;
+            const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
+
+            // Si el anuncio tiene menos de 7 días y no ha sido visto
+            if (Date.now() - dbDate.getTime() < 604800000 && lastSeenId !== newestId) {
               setHasUnread(true);
             }
           }
@@ -879,14 +944,18 @@ function AppContent() {
   if (showOnboarding) {
     return (
       <UniversalOnboarding 
+        targetOS={onboardingTargetOS}
+        forceIOS={forceIOS}
         cards={onboardingCards}
         onComplete={() => {
           try {
-            const completedStr = localStorage.getItem("flux_onboarding_version");
-            const completedVersion = completedStr ? parseInt(completedStr, 10) : 0;
-            if (completedVersion < onboardingVersion) {
-              localStorage.setItem("flux_onboarding_version", onboardingVersion.toString());
-            }
+            const isIos =
+              (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+              !(window as any).MSStream;
+            const osKey = `flux_onboarding_version_${isIos ? "ios" : "android"}`;
+            localStorage.setItem(osKey, onboardingVersion.toString());
+            localStorage.setItem("flux_onboarding_version", onboardingVersion.toString());
           } catch(e) {
             console.error("Error saving onboarding state:", e);
           }

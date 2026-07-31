@@ -305,6 +305,7 @@ export interface Announcement {
   order?: number;
   actionText?: string;
   actionUrl?: string;
+  targetOS?: "all" | "ios" | "android";
 }
 
 interface NotificationsModalProps {
@@ -325,6 +326,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
     let unsubscribe: () => void;
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(20));
     
+    const isIosDevice =
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream;
+
     import("firebase/firestore").then(({ onSnapshot }) => {
       unsubscribe = onSnapshot(q, (querySnap) => {
         const firebaseList: Announcement[] = [];
@@ -333,7 +339,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
           const data = docSnap.data();
           if (data.deleted) {
             deletedIds.add(docSnap.id);
-          } else {
+          } else if (data.active !== false && data.category !== "onboarding") {
+            const targetOS = data.targetOS || "all";
+            if (targetOS === "ios" && !isIosDevice) return;
+            if (targetOS === "android" && isIosDevice) return;
+
             const ca = data.createdAt;
             const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
             firebaseList.push({
