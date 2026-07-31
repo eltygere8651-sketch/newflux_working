@@ -495,16 +495,19 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
       {/* Ambient glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[350px] bg-[radial-gradient(ellipse_at_top,_rgba(251,191,36,0.1),_rgba(6,182,212,0.04),_transparent_70%)] pointer-events-none z-0" />
 
-      {/* TOP SLEEK HEADER */}
-      <header className="sticky top-0 z-50 px-2 sm:px-8 py-3 bg-[#070709]/95 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-1 sm:gap-4 shrink-0 shadow-[0_4px_25px_rgba(0,0,0,0.8)]">
+      {/* TOP SLEEK HEADER WITH IOS SAFE AREA INSET */}
+      <header 
+        className="sticky top-0 z-50 px-3 sm:px-8 py-3 bg-[#070709]/95 backdrop-blur-2xl border-b border-white/10 flex items-center justify-between gap-2 sm:gap-4 shrink-0 shadow-[0_4px_25px_rgba(0,0,0,0.8)]"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         {/* Left: Premium Exit Button matching Flux styling */}
         {onClose ? (
           <button
             onClick={onClose}
-            className="group flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-amber-500/15 via-fuchsia-500/15 to-cyan-500/15 hover:from-amber-500/30 hover:via-fuchsia-500/30 hover:to-cyan-500/30 active:scale-95 border border-white/20 backdrop-blur-xl text-white font-black text-xs shadow-[0_4px_15px_rgba(0,0,0,0.5)] transition-all cursor-pointer shrink-0"
+            className="group flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-500/15 via-fuchsia-500/15 to-cyan-500/15 hover:from-amber-500/30 hover:via-fuchsia-500/30 hover:to-cyan-500/30 active:scale-95 border border-white/20 backdrop-blur-xl text-white font-black text-xs shadow-[0_4px_15px_rgba(0,0,0,0.5)] transition-all cursor-pointer shrink-0"
             title="Volver"
           >
-            <ArrowLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-1 transition-transform shrink-0" />
             <span className="hidden sm:inline uppercase tracking-widest text-[11px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-fuchsia-300 to-cyan-300">
               Volver
             </span>
@@ -514,9 +517,9 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
         )}
 
         {/* Center: Title emblem */}
-        <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md min-w-0">
-          <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 animate-pulse shrink-0" />
-          <h1 className="text-[10px] sm:text-sm font-black uppercase tracking-wider sm:tracking-[0.2em] text-white truncate">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md min-w-0">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+          <h1 className="text-[11px] sm:text-sm font-black uppercase tracking-wider sm:tracking-[0.2em] text-white truncate">
             Novedades
           </h1>
         </div>
@@ -526,11 +529,11 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           {isAdmin && (
             <button
               onClick={handleOpenCreate}
-              className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1 sm:gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-[10px] sm:text-[10px] uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer shrink-0 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
-              <span className="hidden md:inline">Publicar Novedad</span>
-              <span className="inline md:hidden">Publicar</span>
+              <span className="hidden sm:inline">Publicar Novedad</span>
+              <span className="inline sm:hidden">Publicar</span>
             </button>
           )}
 
@@ -538,15 +541,15 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
             <span className="hidden lg:inline">Flux Center</span>
           </div>
-          <div className="flex sm:hidden items-center justify-center bg-white/5 w-6 h-6 rounded-full border border-white/10 shrink-0">
+          <div className="flex sm:hidden items-center justify-center bg-white/5 w-7 h-7 rounded-full border border-white/10 shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </div>
         </div>
       </header>
 
-      {/* ISOLATED 4 SUBMENUS BAR */}
-      <div className="px-3 sm:px-8 py-2.5 sm:py-3 bg-[#0a0b0e] border-b border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0 z-20">
-        <div className="grid grid-cols-2 sm:flex bg-[#12131a] p-1.5 sm:p-1 rounded-2xl sm:rounded-full border border-white/10 shrink-0 gap-1.5 sm:gap-1 w-full sm:w-auto">
+      {/* ISOLATED SLEEK SUBMENUS TAB BAR FOR MOBILE & DESKTOP */}
+      <div className="px-3 sm:px-8 py-2 sm:py-3 bg-[#0a0b0e] border-b border-white/5 flex items-center justify-between gap-2.5 sm:gap-4 shrink-0 z-20 overflow-hidden">
+        <div className="flex overflow-x-auto no-scrollbar bg-[#12131a] p-1.5 sm:p-1 rounded-2xl sm:rounded-full border border-white/10 shrink-0 gap-1.5 sm:gap-1 w-full sm:w-auto touch-pan-x">
           {Object.values(SUBMENU_CONFIG).filter(sub => isAdmin || sub.id !== "onboarding").map((sub) => {
             const IconComp = sub.icon;
             const isActive = activeTab === sub.id;
@@ -554,15 +557,14 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
               <button
                 key={sub.id}
                 onClick={() => setActiveTab(sub.id)}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2 sm:py-1.5 rounded-xl sm:rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-1.5 rounded-xl sm:rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   isActive
                     ? sub.badgeColor
                     : "text-slate-400 hover:text-white border border-transparent hover:bg-white/5"
                 }`}
               >
                 <IconComp className="w-3.5 h-3.5 shrink-0" />
-                <span className="sm:hidden">{sub.shortTitle}</span>
-                <span className="hidden sm:inline">{sub.title}</span>
+                <span>{sub.title}</span>
               </button>
             );
           })}
@@ -573,8 +575,11 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
         </span>
       </div>
 
-      {/* SCROLLABLE CONTENT */}
-      <div className="flex-1 overflow-y-auto premium-scrollbar relative z-10 px-4 sm:px-8 pt-5 pb-20 max-w-[1400px] mx-auto w-full">
+      {/* SCROLLABLE CONTENT WITH IOS SAFE BOTTOM INSET */}
+      <div 
+        className="flex-1 overflow-y-auto premium-scrollbar relative z-10 px-4 sm:px-8 pt-5 max-w-[1400px] mx-auto w-full"
+        style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
+      >
         {/* ACTIVE SUBMENU DESCRIPTION BANNER */}
         <div
           className={`mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r ${activeConfig.colorAccent} border backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-xl transition-all duration-300`}

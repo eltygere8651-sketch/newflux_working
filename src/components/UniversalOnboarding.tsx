@@ -71,29 +71,20 @@ export function UniversalOnboarding({ onComplete, cards = [], forceIOS, targetOS
         
         {/* HEADER */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col items-center text-center mb-12"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col items-center text-center mb-6 pt-2"
         >
-          <div className="mb-4 relative">
-            <div className="absolute inset-0 bg-emerald-500/20 blur-[40px] rounded-full" />
-            <FluxLogoLarge className="w-24 h-24 relative z-10" />
+          <div className="mb-3 relative">
+            <div className="absolute inset-0 bg-emerald-500/20 blur-[30px] rounded-full" />
+            <FluxLogoLarge className="w-16 h-16 sm:w-20 sm:h-20 relative z-10" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-br from-white to-white/60">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
             Bienvenido a Flux Music
           </h1>
-          <div className="mb-4">
-            <span className={`px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest rounded-full border ${
-              isIOS 
-                ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
-                : "bg-amber-500/15 border-amber-500/30 text-amber-300"
-            }`}>
-              {isIOS ? "📱 Experiencia para iOS (iPhone / iPad)" : "🤖 Experiencia para Android"}
-            </span>
-          </div>
-          <p className="text-slate-400 text-sm sm:text-base font-medium max-w-md leading-relaxed">
-            Antes de comenzar, descubre cómo disfrutar de la mejor experiencia posible con Flux Music.
+          <p className="text-slate-400 text-xs sm:text-sm font-medium max-w-md leading-relaxed px-2">
+            Descubre cómo disfrutar de la mejor experiencia de audio e interacciones.
           </p>
         </motion.div>
 
@@ -123,78 +114,75 @@ export function UniversalOnboarding({ onComplete, cards = [], forceIOS, targetOS
 
               {isIOS ? (
                 /* CONTENIDO iOS */
-                <div className="flex flex-col gap-4">
-                  <p className="text-slate-300 font-medium leading-relaxed">
-                    En iPhone y iPad, te recomendamos utilizar Flux Music desde <strong className="text-white">Brave (el navegador Brave)</strong> para disfrutar de una experiencia más fluida y optimizada durante la reproducción.
+                <div className="flex flex-col gap-3">
+                  <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
+                    En iPhone y iPad, te recomendamos utilizar <strong className="text-white">el navegador Brave</strong> para disfrutar de una reproducción más fluida y optimizada.
                   </p>
                   
-                  <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                    <ul className="flex flex-col gap-3">
+                  <div className="bg-black/30 rounded-2xl p-3.5 border border-white/5">
+                    <ul className="flex flex-col gap-2.5">
                       {[
-                        "Reproducción fluida",
-                        "Reproducción en segundo plano y pantalla bloqueada",
-                        "Mayor estabilidad durante la escucha",
-                        "Navegación rápida y segura",
-                        "Experiencia optimizada para Flux Music"
+                        "Reproducción fluida en segundo plano",
+                        "Música con pantalla bloqueada",
+                        "Mayor estabilidad sin interrupciones",
+                        "Navegación rápida y privada"
                       ].map((item, i) => (
-                        <li key={i} className="flex items-start gap-3">
+                        <li key={i} className="flex items-start gap-2.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span className="text-sm text-slate-400 font-medium leading-snug">{item}</span>
+                          <span className="text-xs sm:text-sm text-slate-300 font-medium leading-snug">{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="mt-2 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 text-center shadow-lg">
-                    <p className="text-white font-bold mb-2">Es muy fácil empezar.</p>
-                    <p className="text-slate-300 text-sm mb-3">Abre Brave (el navegador Brave) y escribe directamente:</p>
-                    <div className="bg-black/40 rounded-xl py-3 px-6 inline-block border border-white/10 mb-3 shadow-inner">
-                      <span className="text-emerald-400 font-bold text-lg tracking-wider">fluxplay.cc</span>
+                  <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center shadow-lg">
+                    <p className="text-white font-bold text-xs sm:text-sm mb-1">Para empezar rápidamente:</p>
+                    <p className="text-slate-300 text-xs mb-2.5">Abre Brave e ingresa la dirección:</p>
+                    <div className="bg-black/50 rounded-xl py-2 px-5 inline-block border border-white/10 mb-2 shadow-inner">
+                      <span className="text-emerald-400 font-extrabold text-base tracking-wider">fluxplay.cc</span>
                     </div>
-                    <p className="text-slate-400 text-xs">En pocos segundos podrás acceder a Flux Music y disfrutar de la experiencia completa.</p>
                   </div>
 
-                  <div className="mt-2 flex justify-start sm:justify-center">
+                  <div className="mt-1 flex justify-center">
                     <button 
                       onClick={() => window.open("https://brave.com/", "_blank")}
-                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-6 py-3 rounded-full font-bold transition-all text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-2.5 rounded-full font-bold transition-all text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
                     >
-                      <span>Instalar Brave</span>
+                      <span>Obtener Brave</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </button>
                   </div>
                 </div>
               ) : (
                 /* CONTENIDO ANDROID (DEFAULT) */
-                <div className="flex flex-col gap-4">
-                  <p className="text-slate-300 font-medium leading-relaxed">
-                    Para disfrutar de la experiencia completa de Flux Music, instala la aplicación desde <strong className="text-white">Brave (el navegador Brave)</strong>.
+                <div className="flex flex-col gap-3">
+                  <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
+                    Para disfrutar de la experiencia completa de Flux Music en Android, abre la app desde <strong className="text-white">el navegador Brave</strong>.
                   </p>
                   
-                  <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                    <p className="text-sm font-bold text-slate-200 mb-4">Con Brave podrás disfrutar de:</p>
-                    <ul className="flex flex-col gap-3">
+                  <div className="bg-black/30 rounded-2xl p-3.5 border border-white/5">
+                    <p className="text-xs font-bold text-slate-200 mb-2.5">Ventajas al usar Brave:</p>
+                    <ul className="flex flex-col gap-2.5">
                       {[
                         "Reproducción en segundo plano",
-                        "Música con la pantalla bloqueada",
-                        "Una experiencia más fluida",
-                        "Acceso rápido desde tu dispositivo",
-                        "Funcionamiento como una aplicación de streaming completa"
+                        "Escucha con la pantalla bloqueada",
+                        "Experiencia fluida como app nativa",
+                        "Acceso directo y respuesta inmediata"
                       ].map((item, i) => (
-                        <li key={i} className="flex items-start gap-3">
+                        <li key={i} className="flex items-start gap-2.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span className="text-sm text-slate-400 font-medium leading-snug">{item}</span>
+                          <span className="text-xs sm:text-sm text-slate-300 font-medium leading-snug">{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="mt-2">
+                  <div className="mt-1 flex justify-center">
                     <button 
                       onClick={() => window.open("https://brave.com/", "_blank")}
-                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-6 py-3 rounded-full font-bold transition-all text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-2.5 rounded-full font-bold transition-all text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
                     >
-                      <span>Instalar desde Brave</span>
+                      <span>Obtener Brave</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </button>
                   </div>
