@@ -4871,25 +4871,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   }, []);
 
-  const playBraveInfoAudio = useCallback(() => {
+  const updateMediaSessionForBrave = useCallback(() => {
     const isBrave = (navigator as any).brave !== undefined;
     const now = Date.now();
-    const lastSpoken = (window as any)._lastSpokenBrave || 0;
+    const lastNotified = (window as any)._lastBraveNotificationTime || 0;
 
-    if (!isBrave && (now - lastSpoken > 60000)) {
-      (window as any)._lastSpokenBrave = now;
-      console.log("[AUDIO_INFO] Intentando reproducir MP3");
-      const audio = new Audio("/audio-informativo-bloqueo.mp3");
-      audio.onended = () => {
-        console.log("[AUDIO_INFO] MP3 finalizado");
-        audio.src = "";
-      };
-      audio.play().then(() => {
-        console.log("[AUDIO_INFO] MP3 iniciado");
-      }).catch((err) => {
-        console.log("[AUDIO_INFO] Error al reproducir MP3:", err);
-      });
-      
+    if (!isBrave && (now - lastNotified > 60000)) {
+      (window as any)._lastBraveNotificationTime = now;
       if ("mediaSession" in navigator) {
         try {
           navigator.mediaSession.metadata = new MediaMetadata({
@@ -5064,7 +5052,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 wasUnexpectedlyPausedRef.current = true;
 
                 if (document.hidden) {
-                  playBraveInfoAudio();
+                  updateMediaSessionForBrave();
                 }
 
                 if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
