@@ -1981,12 +1981,42 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     return () => window.removeEventListener("online", handleOnline);
   }, [position]);
 
+  const isBraveBrowserRef = useRef<boolean | null>(null);
+  const lastLockAudioTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    const checkBrave = async () => {
+      if ((navigator as any).brave && typeof (navigator as any).brave.isBrave === "function") {
+        try {
+          isBraveBrowserRef.current = await (navigator as any).brave.isBrave();
+        } catch (e) {
+          isBraveBrowserRef.current = false;
+        }
+      } else {
+        isBraveBrowserRef.current = false;
+      }
+    };
+    checkBrave();
+  }, []);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && wasUnexpectedlyPausedRef.current) {
-        showNotification(
-          "Si iOS pausa el audio en reposo, recuerda que puedes pulsar Play desde el centro de control o la pantalla de bloqueo.",
-        );
+      if (document.hidden && expectedPlayingRef.current) {
+        // Reproducir MP3 si el usuario no usa Brave y se bloquea la pantalla/se va a segundo plano
+        if (isBraveBrowserRef.current === false) {
+          const now = Date.now();
+          if (now - lastLockAudioTimeRef.current > 60000) {
+            lastLockAudioTimeRef.current = now;
+            const audio = new Audio("/audio-informativo-bloqueo.mp3");
+            audio.play().catch(() => {});
+            audio.onended = () => {
+              audio.src = "";
+              audio.load();
+            };
+          }
+        }
+      } else if (!document.hidden) {
+        // Limpiar el estado de pausa inesperada para no hacer nada más
         wasUnexpectedlyPausedRef.current = false;
       }
     };

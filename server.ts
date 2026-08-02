@@ -7,6 +7,8 @@ import dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
+import multer from "multer";
+
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
@@ -347,6 +349,61 @@ app.get("/api/explore/custom-playlists", async (req, res) => {
 });
 
 // Endpoint to send FCM push notification to topic "all_users" when a playlist is featured
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = path.join(process.cwd(), "public");
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname); 
+  }
+});
+const upload = multer({ storage: storage });
+
+app.post("/api/admin/upload-audio", upload.single("audio"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+  return res.json({ success: true, filename: req.file.filename, url: `/${req.file.filename}` });
+});
+
+
+app.get("/api/admin/system-audio", (req, res) => {
+  try {
+    const dir = path.join(process.cwd(), "public");
+    if (!fs.existsSync(dir)){
+        return res.json({ files: [] });
+    }
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.mp3') || f.endsWith('.wav'));
+    res.json({ files: files.map(f => ({ name: f, url: `/${f}`, size: fs.statSync(path.join(dir, f)).size })) });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/admin/system-audio/:filename", (req, res) => {
+  try {
+    const filename = req.params.filename;
+    // Basic security check to prevent directory traversal
+    if (filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+    const filepath = path.join(process.cwd(), "public", filename);
+    if (fs.existsSync(filepath)) {
+      fs.unlinkSync(filepath);
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: "File not found" });
+    }
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/admin/notify-featured-topic", async (req, res) => {
   try {
     const { title, body, playlistId, image } = req.body || {};
