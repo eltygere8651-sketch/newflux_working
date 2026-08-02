@@ -4861,54 +4861,74 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   };
 
   // --- ECO-FRIENDLY WATCHDOG FOR YOUTUBE IFRAME STALLS (1-2 Hours Bug) ---
-  // Optimized to use minimal CPU and battery resources
-  const stuckBufferingTimeRef = useRef(0);
-  useEffect(() => {
-    // 15 seconds interval is extremely low frequency, virtually 0 impact on battery/CPU
-    const watchdog = setInterval(() => {
-      // Fast exit loop (nanoseconds execution if paused) to preserve battery tightly
-      if (!expectedPlayingRef.current || !youtubePlayerRef.current) {
-        stuckBufferingTimeRef.current = 0;
-        return;
+  // Optimized to use minimal CPU and battery resources (Event-based)
+  const stuckBufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearStuckBufferingTimeout = useCallback(() => {
+    if (stuckBufferingTimeoutRef.current) {
+      clearTimeout(stuckBufferingTimeoutRef.current);
+      stuckBufferingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const playBraveInfoAudio = useCallback(() => {
+    const isBrave = (navigator as any).brave !== undefined;
+    const now = Date.now();
+    const lastSpoken = (window as any)._lastSpokenBrave || 0;
+
+    if (!isBrave && (now - lastSpoken > 60000)) {
+      (window as any)._lastSpokenBrave = now;
+      console.log("[AUDIO_INFO] Intentando reproducir MP3");
+      const audio = new Audio("/audio-informativo-bloqueo.mp3");
+      audio.onended = () => {
+        console.log("[AUDIO_INFO] MP3 finalizado");
+        audio.src = "";
+      };
+      audio.play().then(() => {
+        console.log("[AUDIO_INFO] MP3 iniciado");
+      }).catch((err) => {
+        console.log("[AUDIO_INFO] Error al reproducir MP3:", err);
+      });
+      
+      if ("mediaSession" in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: "USA EL NAVEGADOR BRAVE PARA PANTALLA BLOQUEADA",
+            artist: "Instala Flux desde Brave para evitar cortes",
+            artwork: [{ src: displayArtwork, sizes: "512x512", type: "image/jpeg" }]
+          });
+        } catch (e) {}
       }
+    }
+  }, [displayArtwork]);
 
-      try {
-        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-        if (intPlayer && typeof intPlayer.getPlayerState === "function") {
-          const state = intPlayer.getPlayerState();
-
-          // Estado 2: Pausado. Si el iframe se pausó solo (límite de inactividad de YouTube o suspensión del navegador)
-          if (state === 2) {
-            if (typeof intPlayer.playVideo === "function") {
-              intPlayer.playVideo();
-            }
-            stuckBufferingTimeRef.current = 0;
+  const handleStuckBuffering = useCallback(() => {
+    if (!expectedPlayingRef.current || !youtubePlayerRef.current) return;
+    
+    try {
+      const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+      if (intPlayer && typeof intPlayer.getPlayerState === "function") {
+        const state = intPlayer.getPlayerState();
+        if (state === 3 || state === -1) {
+          // Force a tiny seek to unstick
+          const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+          if (typeof youtubePlayerRef.current.seekTo === "function") {
+            youtubePlayerRef.current.seekTo(currentSec + 0.1, "seconds");
           }
-          // Estado 3: Buffering o -1: Sin empezar. A veces YouTube se queda colgado cargando infinitamente.
-          else if (state === 3 || state === -1) {
-            stuckBufferingTimeRef.current += 15000;
-            if (stuckBufferingTimeRef.current >= 30000) {
-              // Si lleva más de 30 segundos atascado en buffer, forzamos un seek minúsculo para destrabar
-              const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
-              if (typeof youtubePlayerRef.current.seekTo === "function") {
-                youtubePlayerRef.current.seekTo(currentSec + 0.1, "seconds");
-              }
-              if (typeof intPlayer.playVideo === "function") {
-                intPlayer.playVideo();
-              }
-              stuckBufferingTimeRef.current = 0;
-            }
-          } else {
-            stuckBufferingTimeRef.current = 0;
+          if (typeof intPlayer.playVideo === "function") {
+            intPlayer.playVideo();
           }
         }
-      } catch (e) {
-        // Ignorar errores silenciosamente
       }
-    }, 15000);
-
-    return () => clearInterval(watchdog);
+    } catch (e) {}
   }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      clearStuckBufferingTimeout();
+    };
+  }, [clearStuckBufferingTimeout]);
 
   // --- DERIVED UI STATES (already defined above) ---
 
@@ -4983,9 +5003,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             }}
             onBuffer={() => {
               isBufferingRef.current = true;
+              clearStuckBufferingTimeout();
+              stuckBufferingTimeoutRef.current = setTimeout(handleStuckBuffering, 15000);
             }}
             onBufferEnd={() => {
               isBufferingRef.current = false;
+              clearStuckBufferingTimeout();
               if (expectedPlayingRef.current && youtubePlayerRef.current) {
                 try {
                   const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -5000,6 +5023,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
               }
             }}
             onPlay={() => {
+              clearStuckBufferingTimeout();
               isBufferingRef.current = false;
               wasUnexpectedlyPausedRef.current = false;
               consecutiveErrorsRef.current = 0;
@@ -5040,25 +5064,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 wasUnexpectedlyPausedRef.current = true;
 
                 if (document.hidden) {
-                  const isBrave = (navigator as any).brave !== undefined;
-                  if (!isBrave && !(window as any)._hasSpokenBrave) {
-                    (window as any)._hasSpokenBrave = true;
-                    const msg = "Importante: para escuchar música con la pantalla bloqueada, usa el navegador Brave. En iPhone, escucha Flux Music desde el navegador Brave. En Android, instálala desde Brave o escúchala también desde ese navegador.";
-                    const utterance = new SpeechSynthesisUtterance(msg);
-                    utterance.lang = "es-ES";
-                    utterance.rate = 1.05;
-                    window.speechSynthesis.speak(utterance);
-                    
-                    if ("mediaSession" in navigator) {
-                      try {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                          title: "USA BRAVE PARA PANTALLA BLOQUEADA",
-                          artist: "Instala Flux desde Brave para evitar cortes",
-                          artwork: [{ src: displayArtwork, sizes: "512x512", type: "image/jpeg" }]
-                        });
-                      } catch (e) {}
-                    }
-                  }
+                  playBraveInfoAudio();
                 }
 
                 if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
