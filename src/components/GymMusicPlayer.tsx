@@ -1985,7 +1985,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     const handleVisibilityChange = () => {
       if (!document.hidden && wasUnexpectedlyPausedRef.current) {
         showNotification(
-          "Si iOS pausa el audio en reposo, recuerda que puedes pulsar Play desde el centro de control o la pantalla de bloqueo.",
+          "Importante: para escuchar música con la pantalla bloqueada, usa el navegador Brave. En iPhone, escucha Flux Music desde el navegador Brave. En Android, instálala desde Brave o escúchala también desde ese navegador.",
         );
         wasUnexpectedlyPausedRef.current = false;
       }
@@ -5038,6 +5038,28 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
               // If we expect to be playing, never let the iframe stay paused
               if (expectedPlayingRef.current) {
                 wasUnexpectedlyPausedRef.current = true;
+
+                if (document.hidden) {
+                  const isBrave = (navigator as any).brave !== undefined;
+                  if (!isBrave && !(window as any)._hasSpokenBrave) {
+                    (window as any)._hasSpokenBrave = true;
+                    const msg = "Importante: para escuchar música con la pantalla bloqueada, usa el navegador Brave. En iPhone, escucha Flux Music desde el navegador Brave. En Android, instálala desde Brave o escúchala también desde ese navegador.";
+                    const utterance = new SpeechSynthesisUtterance(msg);
+                    utterance.lang = "es-ES";
+                    utterance.rate = 1.05;
+                    window.speechSynthesis.speak(utterance);
+                    
+                    if ("mediaSession" in navigator) {
+                      try {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                          title: "USA BRAVE PARA PANTALLA BLOQUEADA",
+                          artist: "Instala Flux desde Brave para evitar cortes",
+                          artwork: [{ src: displayArtwork, sizes: "512x512", type: "image/jpeg" }]
+                        });
+                      } catch (e) {}
+                    }
+                  }
+                }
 
                 if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                   fallbackSilentAudioRef.current.play().catch(() => {});
