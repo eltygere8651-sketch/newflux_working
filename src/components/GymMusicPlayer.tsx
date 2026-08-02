@@ -5252,7 +5252,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       </div>
 
       {/* GLOBAL TABS / PILLS HEADER */}
-      <Carousel className="px-3 py-2 gap-1.5 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+      <Carousel className={`px-3 py-2 gap-1.5 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full ${!isTrackListExpanded ? "hidden md:flex" : "flex"}`}>
         {/* Novedades (Moved to 1st position) */}
         <button
           onClick={() => {
@@ -6014,7 +6014,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         >
           {/* PLAYER BAR */}
           <div
-            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-hidden md:overflow-y-auto md:overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85 border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
           >
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -6200,57 +6200,55 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
                 {/* 2. DYNAMIC FULL SCREEN LAYOUT (Shown on Mobile always when expanded, or Desktop when maximized) */}
                 {!isTrackListExpanded && (
-                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1 relative pt-12 sm:pt-6">
-                    {/* Global Player Header: Minimize (Left) & Tabs Switcher (Center) decoupled */}
-                    <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 grid grid-cols-[3rem_1fr_3rem] sm:grid-cols-[3.5rem_1fr_3.5rem] items-center z-50 shrink-0 gap-2">
-                      {/* Left: Minimize button - Decoupled and easily accessible at the top left */}
-                      <div className="flex items-center justify-start">
-                        <button
-                          onClick={() => {
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                            setIsTrackListExpanded(true);
-                          }}
-                          title="Minimizar reproductor"
-                          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-black/40 backdrop-blur-md border border-white/10 hover:bg-white/20 active:scale-95 rounded-full transition-all text-white shadow-xl cursor-pointer"
-                        >
-                          <ChevronDown className="w-6 h-6 sm:w-7 sm:h-7" />
-                        </button>
-                      </div>
+                  <div className="flex flex-col items-center justify-start w-full max-w-2xl mx-auto h-full flex-1 min-h-0 relative pt-4 pb-2 px-2">
+                    {/* Global Player Header: Minimize (Left) & Tabs Switcher (Center) */}
+                    <div className="w-full flex items-center justify-between z-50 shrink-0 gap-2 mb-2">
+                      {/* Left: Minimize button */}
+                      <button
+                        onClick={() => {
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                          setIsTrackListExpanded(true);
+                        }}
+                        title="Minimizar reproductor"
+                        className="flex items-center justify-center w-10 h-10 bg-black/40 backdrop-blur-md border border-white/10 hover:bg-white/20 active:scale-95 rounded-full transition-all text-white shadow-xl cursor-pointer shrink-0"
+                      >
+                        <ChevronDown className="w-6 h-6" />
+                      </button>
 
                       {/* Center: Tabs Switcher */}
-                      <div className="flex items-center justify-center w-full min-w-0">
-                        <div className="flex items-center gap-1 bg-white/5 backdrop-blur-md max-w-full p-1 rounded-full border border-white/5 mx-auto overflow-x-auto premium-scrollbar">
+                      <div className="flex flex-1 items-center justify-center min-w-0">
+                        <div className="flex items-center gap-1 bg-white/5 backdrop-blur-md max-w-full p-1 rounded-full border border-white/5 overflow-x-auto premium-scrollbar">
                           <button
                             onClick={() => setPlayerTab("artwork")}
-                            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "artwork" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                            className={`px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "artwork" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
                           >
-                            Carátula
+                            Reproductor
                           </button>
                           <button
                             onClick={() => setPlayerTab("siguiente")}
-                            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "siguiente" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                            className={`px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "siguiente" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
                           >
                             Siguiente
                           </button>
                           <button
                             onClick={() => setPlayerTab("cola")}
-                            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "cola" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                            className={`px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "cola" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
                           >
                             Cola
                           </button>
                         </div>
                       </div>
 
-                      {/* Right Placeholder to balance CSS Grid */}
-                      <div />
+                      {/* Right Placeholder for balance */}
+                      <div className="w-10 h-10 shrink-0" />
                     </div>
 
                     {/* Artwork & Title centrally stacked */}
-                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-6 sm:mt-8">
+                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center">
                       <div className="flex flex-col items-center justify-center w-full flex-1 min-h-0">
                         {/* Contents according to tab */}
                         {playerTab === "artwork" && (
-                          <div className="relative shrink-0 flex items-center justify-center min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto">
+                          <div className="relative flex items-center justify-center min-h-0 min-w-0 w-full max-w-[85vw] max-h-[38vh] sm:max-w-[400px] sm:max-h-[400px] aspect-square mb-2 mx-auto">
                             <AnimatePresence>
                               {isPlaying && !isEcoMode && (
                                 <motion.div
@@ -6262,7 +6260,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                               )}
                             </AnimatePresence>
                             <div
-                              className={`relative z-10 w-full h-full rounded-2xl overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}
+                              className={`relative z-10 w-full h-full rounded-[16px] sm:rounded-[24px] overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}
                             >
                               <img
                                 src={displayArtwork}
@@ -6277,7 +6275,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         )}
 
                         {playerTab === "siguiente" && (
-                          <div className="relative shrink-0 flex items-center justify-start min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-black/50 rounded-2xl border border-white/10 flex-col overflow-hidden">
+                          <div className="relative flex items-center justify-start min-h-0 min-w-0 w-full max-w-[85vw] max-h-[38vh] sm:max-w-[400px] sm:max-h-[400px] aspect-square mb-2 mx-auto bg-black/50 rounded-2xl border border-white/10 flex-col overflow-hidden">
                             <div className="p-3 border-b border-white/10 bg-white/5 w-full shrink-0 flex items-center justify-between z-10">
                               <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider truncate mr-2">
                                 {playingPlaylist
@@ -6353,7 +6351,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         )}
 
                         {playerTab === "cola" && (
-                          <div className="relative shrink-0 flex items-center justify-start min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-black/50 rounded-2xl border border-white/10 flex-col overflow-hidden">
+                          <div className="relative flex items-center justify-start min-h-0 min-w-0 w-full max-w-[85vw] max-h-[38vh] sm:max-w-[400px] sm:max-h-[400px] aspect-square mb-2 mx-auto bg-black/50 rounded-2xl border border-white/10 flex-col overflow-hidden">
                             <div className="p-3 border-b border-white/10 bg-white/5 w-full shrink-0 flex items-center justify-between z-10">
                               <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
                                 A continuación
@@ -6404,7 +6402,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         )}
 
                         {/* Title details & Heart favorite button stacked horizontally */}
-                        <div className="flex items-center justify-between w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] px-1 mb-2 sm:mb-4">
+                        <div className="flex items-center justify-between w-full max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] px-1 mb-1 sm:mb-6">
                           <div className="flex flex-col min-w-0 text-left">
                             <div className="flex items-center gap-1.5 overflow-hidden">
                               <h1 className="font-black text-white uppercase tracking-tight text-xl sm:text-2xl truncate max-w-[55vw] sm:max-w-[300px]">
@@ -6453,7 +6451,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                     </div>
 
                     {/* Timeline slider + Control knobs combined */}
-                    <div className="flex flex-col w-full px-1 sm:px-0 mx-auto max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] gap-2.5 sm:gap-4 mb-2 sm:mb-4">
+                    <div className="flex flex-col w-full px-1 sm:px-0 mx-auto max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] gap-2.5 sm:gap-4 mb-1 sm:mb-4">
                       {/* Timeline */}
                       <div className="flex flex-col w-full gap-2">
                         <div
@@ -6483,73 +6481,67 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       </div>
 
                       {/* Buttons controls */}
-                      <div className="grid grid-cols-[0.8fr_auto_1.2fr] sm:grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
-                        {/* Shuffle + Repeat */}
-                        <div className="flex justify-start items-center gap-1.5 sm:gap-3">
-                          <button
-                            onClick={() => setIsShuffle(!isShuffle)}
-                            title="Aleatorio"
-                            className={`p-1 sm:p-2 transition-all transform active:scale-95 ${isShuffle ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
-                          >
-                            <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                          
-                          <button
-                            onClick={() => setIsRepeat(!isRepeat)}
-                            title="Repetir"
-                            className={`p-1 sm:p-2 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
-                          >
-                            <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                        </div>
-
-                        {/* Prev - Play - Next */}
-                        <div className="flex items-center justify-center gap-4 sm:gap-8">
+                      <div className="flex items-center justify-between w-full px-2 sm:px-6 mb-2 sm:mb-6">
+                        <button
+                          onClick={() => setIsShuffle(!isShuffle)}
+                          title="Aleatorio"
+                          className={`p-2 transition-all transform active:scale-95 ${isShuffle ? "text-[#1ED760]" : "text-white hover:text-[#1ED760]"}`}
+                        >
+                          <Shuffle className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </button>
+                        
+                        <div className="flex items-center justify-center gap-6 sm:gap-10">
                           <button
                             onClick={handlePrev}
                             title="Anterior"
-                            className="p-1 sm:p-2 text-white hover:text-blue-400 transition-all transform active:scale-90 flex-shrink-0"
+                            className="p-2 text-white hover:text-gray-300 transition-all transform active:scale-90 flex-shrink-0"
                           >
-                            <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
+                            <SkipBack className="fill-current w-8 h-8 sm:w-10 sm:h-10" />
                           </button>
 
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             whileHover={{ scale: 1.05 }}
                             onClick={togglePlayback}
-                            className="rounded-full w-12 h-12 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl"
+                            className="rounded-full w-16 h-16 sm:w-20 sm:h-20 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl"
                           >
                             {isPlaying ? (
-                              <Pause className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7" />
+                              <Pause className="fill-current text-black w-7 h-7 sm:w-9 sm:h-9" />
                             ) : (
-                              <Play className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />
+                              <Play className="fill-current text-black w-7 h-7 sm:w-9 sm:h-9 ml-1 sm:ml-2" />
                             )}
                           </motion.button>
 
                           <button
                             onClick={handleNext}
                             title="Siguiente"
-                            className="p-1 sm:p-2 text-white hover:text-blue-400 transition-all transform active:scale-90 flex-shrink-0"
+                            className="p-2 text-white hover:text-gray-300 transition-all transform active:scale-90 flex-shrink-0"
                           >
-                            <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
+                            <SkipForward className="fill-current w-8 h-8 sm:w-10 sm:h-10" />
                           </button>
                         </div>
 
-                        {/* Volume Adjuster */}
-                        <div className="flex justify-end items-center gap-1.5 sm:gap-3 w-full pr-1 sm:pr-2">
-                          <div className="flex items-center justify-end gap-1 sm:gap-1.5 group/vol w-[65px] sm:w-[100px]">
-                            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
-                            <div
-                              onPointerDown={handleVolumePointerDown}
-                              className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
-                            >
-                              <div
-                                className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
-                                style={{ width: `${volume}%` }}
-                              >
-                                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
-                              </div>
-                            </div>
+                        <button
+                          onClick={() => setIsRepeat(!isRepeat)}
+                          title="Repetir"
+                          className={`p-2 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-white hover:text-[#1ED760]"}`}
+                        >
+                          <Repeat className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </button>
+                      </div>
+
+                      {/* Volume Adjuster */}
+                      <div className="flex items-center w-full gap-3 px-2 sm:px-6 group/vol">
+                        <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover/vol:text-white transition-colors shrink-0" />
+                        <div
+                          onPointerDown={handleVolumePointerDown}
+                          className="w-full h-1.5 sm:h-2 bg-white/30 rounded-full relative cursor-pointer transition-all touch-none flex items-center"
+                        >
+                          <div
+                            className="absolute left-0 h-full rounded-full bg-white pointer-events-none transition-colors"
+                            style={{ width: `${volume}%` }}
+                          >
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
                           </div>
                         </div>
                       </div>
@@ -8053,10 +8045,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
       {currentTrack &&
-        isTrackListExpanded &&
-        trackListTab !== "entertainment" &&
-        trackListTab !== "radio-fai" &&
-        trackListTab !== "karaoke" && (
+        isTrackListExpanded && (
           <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">
             <div
               onClick={() => {
@@ -8144,7 +8133,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden flex h-[62px] bg-[#0c0c0d]/95 border-t border-white/5 shrink-0 justify-around items-center px-2 pb-1.5 pt-1.5 gap-1.5 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+      <div className={`md:hidden ${!isTrackListExpanded ? "hidden" : "flex"} h-[62px] bg-[#0c0c0d]/95 border-t border-white/5 shrink-0 justify-around items-center px-2 pb-1.5 pt-1.5 gap-1.5 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]`}>
         
         {/* Explorar */}
         {(() => {

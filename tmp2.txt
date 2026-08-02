@@ -1,0 +1,146 @@
+1216-      console.error("Error moving playlist:", e);
+1217-    }
+1218-  };
+1219-
+1220-  const [showLibrary, setShowLibrary] = useState(false);
+1221:  const [isTrackListExpanded, setIsTrackListExpanded] = useState<boolean>(true);
+1222-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
+1223-  const [previewPlaylist, setPreviewPlaylist] = useState<MusicPlaylist | null>(
+1224-    null,
+1225-  );
+1226-  const [folderExpanded, setFolderExpanded] = useState<boolean>(() => {
+1227-    const saved = localStorage.getItem("gym_music_folder_expanded");
+1228-    return saved !== "false";
+1229-  });
+1230-  const [localFoldersMap, setLocalFoldersMap] = useState<
+1231-    Record<string, string>
+--
+6012-        <div
+6013-          className={`${mobileView === "player" ? "flex" : "hidden md:flex"} flex-col-reverse md:flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}
+6014-        >
+6015-          {/* PLAYER BAR */}
+6016-          <div
+6017:            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+6018-          >
+6019-            {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
+6020-              <div className="w-full flex-1 flex flex-col min-h-0">
+6021-                {/* 1. PC COMPACT / MINIMIZED LAYOUT (Shown only on Desktop when minimized) */}
+6022:                {isTrackListExpanded && (
+6023-                  <div className="hidden md:flex items-center justify-between w-full h-[86px] px-4 bg-[#000000] border-t border-white/5 relative z-50">
+6024-                    {/* Left: Artwork + Title + Artist + Heart icon */}
+6025-                    <div className="flex items-center gap-4 min-w-[200px] w-1/4">
+6026-                      <div className="relative shrink-0 flex items-center justify-center min-h-0 w-16 h-16">
+6027-                        <div
+6028-                          className={`relative z-10 w-full h-full rounded-xl overflow-hidden ${isEcoMode ? "shadow-sm" : "shadow-lg"} border border-white/5`}
+6029-                        >
+6030-                          <img
+6031-                            src={displayArtwork}
+6032-                            alt="Artwork"
+--
+6132-
+6133-                    {/* Right: Actions + Volume */}
+6134-                    <div className="flex justify-end items-center gap-4 min-w-[200px] w-1/4">
+6135-                      <button
+6136-                        onClick={() =>
+6137:                          setIsTrackListExpanded(!isTrackListExpanded)
+6138-                        }
+6139-                        className="p-1.5 text-[#b3b3b3] hover:text-white transition-colors outline-none cursor-pointer"
+6140-                        title={
+6141:                          isTrackListExpanded ? "Pantalla Completa" : "Contraer"
+6142-                        }
+6143-                      >
+6144:                        {isTrackListExpanded ? (
+6145-                          <Maximize2 className="w-4 h-4" />
+6146-                        ) : (
+6147-                          <Minimize2 className="w-4 h-4" />
+6148-                        )}
+6149-                      </button>
+6150-
+6151-                      {/* Heart Icon to like instantly */}
+6152-                      <button
+6153-                        onClick={(e) => handleToggleFavorite(currentTrack, e)}
+6154-                        className="p-2 text-slate-400 hover:text-pink-500 active:scale-90 transition-all cursor-pointer rounded-full bg-white/5"
+--
+6197-                    </div>
+6198-                  </div>
+6199-                )}
+6200-
+6201-                {/* 2. DYNAMIC FULL SCREEN LAYOUT (Shown on Mobile always when expanded, or Desktop when maximized) */}
+6202:                {!isTrackListExpanded && (
+6203-                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1 relative pt-12 sm:pt-6">
+6204-                    {/* Global Player Header: Minimize (Left) & Tabs Switcher (Center) decoupled */}
+6205-                    <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 grid grid-cols-[3rem_1fr_3rem] sm:grid-cols-[3.5rem_1fr_3.5rem] items-center z-50 shrink-0 gap-2">
+6206-                      {/* Left: Minimize button - Decoupled and easily accessible at the top left */}
+6207-                      <div className="flex items-center justify-start">
+6208-                        <button
+6209-                          onClick={() => {
+6210-                            window.scrollTo({ top: 0, behavior: "smooth" });
+6211-                            setIsTrackListExpanded(true);
+6212-                          }}
+--
+6566-          trackListTab === "entertainment" ||
+6567-          trackListTab === "news" ||
+6568-          trackListTab === "karaoke" ||
+6569-          trackListTab === "radio-fai" ? (
+6570-            <div
+6571:              className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" ? "hidden" : "flex"}`}
+6572-            >
+6573-              {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
+6574-                <div className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40">
+6575-                  <div className="flex flex-col w-full">
+6576-                    {/* Search Bar matching Tab */}
+6577-                    <div className="flex items-center gap-2 w-full">
+6578-                      {(trackListTab === "playlist" ||
+6579-                        trackListTab === "queue") && (
+6580-                        <button
+6581-                          onClick={() => {
+--
+8045-        </div>
+8046-      </div>
+8047-
+8048-      {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
+8049-      {currentTrack &&
+8050:        isTrackListExpanded &&
+8051-        trackListTab !== "entertainment" &&
+8052-        trackListTab !== "radio-fai" &&
+8053-        trackListTab !== "karaoke" && (
+8054-          <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">
+8055-            <div
+8056-              onClick={() => {
+8057-                setMobileView("player");
+8058-                setIsTrackListExpanded(false);
+8059-              }}
+8060-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0e0e11]/98 backdrop-blur-md border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
+--
+8229-          );
+8230-        })()}
+8231-
+8232-        {/* Reproductor / Activo */}
+8233-        {(() => {
+8234:          const isActiveTrackActive = mobileView === "player" && (currentTrack || isPlaying || overrideCurrentTrack) && !isTrackListExpanded && !showLibrary;
+8235-          return (
+8236-            <button
+8237-              onClick={() => {
+8238-                setShowLibrary(false);
+8239-                setMobileView("player");
+8240-                if (currentTrack || isPlaying || overrideCurrentTrack) {
+8241-                  setIsTrackListExpanded(false);
+8242-                }
+8243-              }}
+8244-              className={`relative group flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer ${
+8245-                isActiveTrackActive
+8246-                  ? "bg-white/10 backdrop-blur-xl shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+8247-                  : "bg-transparent hover:bg-white/5"
+8248-              }`}
+8249-            >
+8250:              {isPlaying && (mobileView !== "player" || isTrackListExpanded || showLibrary) && (
+8251-                <div className="absolute top-1 right-2 w-2 h-2 bg-emerald-500 rounded-full border border-[#0c0c0d]" />
+8252-              )}
+8253-              <Music className={`w-4 h-4 transition-transform relative z-10 ${isActiveTrackActive ? "scale-110" : ""} text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]`} />
+8254-              <span className="text-[8px] font-black uppercase tracking-widest mt-0.5 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+8255-                Activo
+8256-              </span>
+8257-            </button>
+8258-          );
+8259-        })()}
+8260-      </div>

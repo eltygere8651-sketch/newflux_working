@@ -1,0 +1,54 @@
+48:6248-                    {/* Artwork & Title centrally stacked */}
+49-6249-                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-3 sm:mt-6">
+50-6250-                      <div className="flex flex-col items-center justify-center w-full flex-1 min-h-0">
+51-6251-                        {/* Contents according to tab */}
+52-6252-                        {playerTab === "artwork" && (
+53-6253-                          <div className="relative shrink-0 flex items-center justify-center min-h-0 flex-1 w-full max-w-[280px] sm:max-w-[400px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[50vh] lg:max-h-[55vh] aspect-square mb-3 sm:mb-6 mx-auto">
+54-6254-                            <AnimatePresence>
+55-6255-                              {isPlaying && !isEcoMode && (
+56-6256-                                <motion.div
+57-6257-                                  initial={{ scale: 0.8, opacity: 0 }}
+58-6258-                                  animate={{ scale: 1.1, opacity: 1 }}
+59-6259-                                  exit={{ scale: 0.8, opacity: 0 }}
+60-6260-                                  className="absolute -inset-1.5 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
+61-6261-                                />
+62-6262-                              )}
+63-6263-                            </AnimatePresence>
+64-6264-                            <div
+65-6265-                              className={`relative z-10 w-full h-full rounded-[24px] sm:rounded-[32px] overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}
+66-6266-                            >
+67-6267-                              <img
+68-6268-                                src={displayArtwork}
+69-6269-                                alt="Artwork"
+70-6270-                                className="w-full h-full object-cover transition-opacity duration-300"
+71-6271-                                referrerPolicy="no-referrer"
+72-6272-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+73-6273-                              />
+74-6274-                              <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
+75-6275-                            </div>
+76-6276-                          </div>
+77-6277-                        )}
+78-6278-
+79-6279-                        {playerTab === "siguiente" && (
+80-6280-                          <div className="relative shrink-0 flex items-center justify-start min-h-0 flex-1 w-full max-w-[280px] sm:max-w-[400px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[50vh] lg:max-h-[55vh] aspect-square mb-3 sm:mb-6 mx-auto bg-black/50 rounded-2xl border border-white/10 flex-col overflow-hidden">
+81-6281-                            <div className="p-3 border-b border-white/10 bg-white/5 w-full shrink-0 flex items-center justify-between z-10">
+82-6282-                              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider truncate mr-2">
+83-6283-                                {playingPlaylist
+84-6284-                                  ? playingPlaylist.name
+85-6285-                                  : "Playlist"}
+86-6286-                              </span>
+87-6287-                              <span className="text-[10px] text-slate-400 font-bold shrink-0">
+88-6288-                                {playingPlaylist
+89-6289-                                  ? playingPlaylist.tracks.length
+90-6290-                                  : 0}{" "}
+91-6291-                                canciones
+92-6292-                              </span>
+93-6293-                            </div>
+94-6294-                            <div className="w-full flex-1 min-h-0 overflow-y-auto premium-scrollbar p-2 flex flex-col gap-1">
+95-6295-                              {!playingPlaylist ||
+96-6296-                              playingPlaylist.tracks.length === 0 ? (
+97-6297-                                <div className="h-full flex flex-col items-center justify-center text-slate-500">
+98-6298-                                  <ListMusic className="w-8 h-8 opacity-40 mb-2" />
+99-6299-                                  <p className="text-xs uppercase font-bold tracking-wider text-center">
+100-6300-                                    No estás reproduciendo
+101-6301-                                    <br />
