@@ -69,7 +69,7 @@ import { Play,
   Tv,
   GripVertical,
   Globe,
-  Mic, Bot } from "lucide-react";
+  Mic, Bot, Youtube } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { NewsView } from "./NewsView";
@@ -742,6 +742,17 @@ interface GymMusicPlayerProps {
   unreadRepliesCount?: number;
   hasUnreadNews?: boolean;
 }
+
+const isRealVideo = (track: any) => {
+  if (!track) return false;
+  const artist = (track.artist || "").toLowerCase();
+  const title = (track.title || "").toLowerCase();
+  
+  if (artist.includes("- topic")) return false;
+  if (title.includes("audio oficial") || title.includes("official audio") || title.includes("art track")) return false;
+  
+  return true;
+};
 
 export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews = false }: GymMusicPlayerProps = {}) {
   const isIOS =
@@ -1861,8 +1872,22 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     volume > 0 ? volume : 70,
   );
   const volumeRef = useRef(volume);
+  const previousVolumeRef = useRef(volume > 0 ? volume : 70);
+
+  const toggleMute = () => {
+    if (volume === 0) {
+      setVolume(previousVolumeRef.current > 0 ? previousVolumeRef.current : 70);
+    } else {
+      previousVolumeRef.current = volume;
+      setVolume(0);
+    }
+  };
+
   useEffect(() => {
     volumeRef.current = volume;
+    if (volume > 0) {
+      previousVolumeRef.current = volume;
+    }
     localStorage.setItem("gym_music_volume", volume.toString());
   }, [volume]);
   const [position, setPosition] = useState(() => {
@@ -1881,6 +1906,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     const saved = localStorage.getItem("gym_music_is_repeat");
     return saved === "true";
   });
+  const [isVideoMode, setIsVideoMode] = useState(false);
+  useEffect(() => {
+    if (isTrackListExpanded) {
+      setIsVideoMode(false);
+    }
+  }, [isTrackListExpanded]);
   const isShuffleRef = useRef(isShuffle);
 
   // Refs for snapshot syncing to avoid React closure stale state
@@ -4937,16 +4968,85 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
-      <div className="absolute top-[-300px] left-[-300px] w-[300px] h-[300px] overflow-hidden pointer-events-none select-none z-[-1] opacity-[0.01]">
+      {/* Invisible embedding of YouTube ReactPlayer (or Video Mode overlay) and background thread preservation audio */}
+      <div 
+        id="video-mode-container"
+        className={isVideoMode && !isTrackListExpanded
+          ? "absolute inset-0 z-[60] bg-black flex flex-col pointer-events-auto transition-opacity duration-300 opacity-100"
+          : "absolute top-[-300px] left-[-300px] w-[300px] h-[300px] overflow-hidden pointer-events-none select-none z-[-1] opacity-[0.01]"}
+      >
         <audio
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}
           playsInline
           loop
         />
+        {isVideoMode && !isTrackListExpanded && (
+          <div className="absolute top-0 left-0 w-full p-4 pt-6 flex justify-between items-center bg-black/95 backdrop-blur-3xl z-[30] pointer-events-auto h-32 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-b border-white/5">
+            <button 
+              onClick={(e) => { e.stopPropagation(); setIsVideoMode(false); }}
+              className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-xl text-white transition-all active:scale-95 cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+            >
+              <ChevronDown className="w-7 h-7" />
+            </button>
+            <div className="flex flex-col items-center flex-1 px-4 justify-center">
+              <span className="text-sm sm:text-base font-bold text-white truncate max-w-full drop-shadow-md">{displayTitle}</span>
+            </div>
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                const elem = document.getElementById("video-mode-container");
+                if (elem) {
+                  if (!document.fullscreenElement) {
+                    elem.requestFullscreen().catch(err => {});
+                  } else {
+                    document.exitFullscreen();
+                  }
+                }
+              }}
+              className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-xl text-white transition-all active:scale-95 cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.5)] hidden md:flex"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+            <div className="w-12 h-12 shrink-0 md:hidden" />
+          </div>
+        )}
+        {isVideoMode && !isTrackListExpanded && (
+           <div 
+             className="absolute inset-0 z-[25] cursor-pointer flex items-center justify-center bg-black/0"
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               if (handlersRef.current && handlersRef.current.togglePlayback) {
+                 handlersRef.current.togglePlayback();
+               } else {
+                 setIsPlaying(!isPlaying);
+               }
+             }}
+           >
+             <AnimatePresence>
+               {!isPlaying && (
+                 <motion.div 
+                   initial={{ opacity: 0, scale: 0.8 }}
+                   animate={{ opacity: 1, scale: 1 }}
+                   exit={{ opacity: 0, scale: 0.8 }}
+                   className="w-24 h-24 sm:w-28 sm:h-28 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-full flex items-center justify-center text-white shadow-[0_0_50px_rgba(0,0,0,0.9)]"
+                 >
+                   <Play className="w-12 h-12 sm:w-14 sm:h-14 ml-2 fill-current" />
+                 </motion.div>
+               )}
+             </AnimatePresence>
+           </div>
+        )}
+        {isVideoMode && !isTrackListExpanded && (
+          <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black via-black/90 to-transparent z-[20] pointer-events-none" />
+        )}
+        {isVideoMode && !isTrackListExpanded && !isPlaying && (
+          <div className="absolute inset-0 z-[10] bg-black/70 backdrop-blur-xl transition-all duration-500 pointer-events-none" />
+        )}
         {currentUrl && (
-          <ReactPlayer
+          <div className={isVideoMode && !isTrackListExpanded ? "w-full h-full flex flex-col md:pt-[128px] md:pb-[96px]" : "w-full h-full flex flex-col"}>
+            <ReactPlayer
             ref={youtubePlayerRef}
             url={currentUrl}
             playing={isPlaying}
@@ -5245,9 +5345,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
               }
             }}
             config={reactPlayerConfig}
-            width="300px"
-            height="300px"
+            width={isVideoMode && !isTrackListExpanded ? "100%" : "300px"}
+            height={isVideoMode && !isTrackListExpanded ? "100%" : "300px"}
+            style={{ 
+              pointerEvents: 'none', 
+              opacity: isVideoMode && !isTrackListExpanded ? 1 : 0.01,
+              transform: isVideoMode && !isTrackListExpanded ? (typeof window !== 'undefined' && window.innerWidth < 768 ? 'scale(1.15)' : 'scale(1)') : 'scale(1)',
+              transition: 'transform 0.5s ease-in-out'
+            }}
           />
+          </div>
         )}
       </div>
 
@@ -6180,20 +6287,33 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       
 
                       {/* Volume Adjuster */}
-                      <div className="flex items-center justify-end gap-2 group/vol w-[100px]">
-                        <Volume2 className="w-4 h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
-                        <div
-                          onPointerDown={handleVolumePointerDown}
-                          className="w-full h-1.5 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-2 transition-all touch-none flex items-center"
-                        >
-                          <div
-                            className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-[#1ED760] pointer-events-none transition-colors"
-                            style={{ width: `${volume}%` }}
-                          >
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow opacity-0 group-hover/vol:opacity-100 transition-opacity translate-x-1" />
+                      {!isIOS && (
+                        <div className="flex items-center justify-end gap-2 group/vol w-[100px]">
+                          <button onClick={toggleMute} className="shrink-0 outline-none">
+                            {volume === 0 ? (
+                              <VolumeX className="w-4 h-4 text-slate-400 group-hover/vol:text-white transition-colors" />
+                            ) : (
+                              <Volume2 className="w-4 h-4 text-slate-400 group-hover/vol:text-white transition-colors" />
+                            )}
+                          </button>
+                          <div className="w-full h-1.5 bg-white/20 rounded-full relative group-hover/vol:h-2 transition-all flex items-center">
+                            <div
+                              className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-[#1ED760] pointer-events-none transition-colors"
+                              style={{ width: `${volume}%` }}
+                            >
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow opacity-0 group-hover/vol:opacity-100 transition-opacity translate-x-1 pointer-events-none" />
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={volume}
+                              onChange={(e) => handleVolumeChange(parseInt(e.target.value, 10))}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -6216,7 +6336,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       </button>
 
                       {/* Center: Tabs Switcher */}
-                      <div className="flex flex-1 items-center justify-center min-w-0">
+                      <div className="flex flex-1 items-center justify-center min-w-0 z-50 relative">
                         <div className="flex items-center gap-1 bg-white/5 backdrop-blur-md max-w-full p-1 rounded-full border border-white/5 overflow-x-auto premium-scrollbar">
                           <button
                             onClick={() => setPlayerTab("artwork")}
@@ -6248,7 +6368,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       <div className="flex flex-col items-center justify-center w-full flex-1 min-h-0">
                         {/* Contents according to tab */}
                         {playerTab === "artwork" && (
-                          <div className="relative flex items-center justify-center min-h-0 min-w-0 w-full max-w-[85vw] max-h-[38vh] sm:max-w-[400px] sm:max-h-[400px] aspect-square mb-2 mx-auto">
+                          <div className={`relative flex items-center justify-center min-h-0 min-w-0 w-full max-w-[85vw] max-h-[38vh] sm:max-w-[400px] sm:max-h-[400px] aspect-square mb-2 mx-auto transition-all duration-500 ${isVideoMode ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
                             <AnimatePresence>
                               {isPlaying && !isEcoMode && (
                                 <motion.div
@@ -6260,7 +6380,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                               )}
                             </AnimatePresence>
                             <div
-                              className={`relative z-10 w-full h-full rounded-[16px] sm:rounded-[24px] overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}
+                              className={`relative z-10 w-full h-full rounded-[16px] sm:rounded-[24px] overflow-hidden ${isEcoMode ? "shadow-lg" : "shadow-2xl"} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] group/artwork`}
                             >
                               <img
                                 src={displayArtwork}
@@ -6270,6 +6390,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
+                              {currentUrl && currentTrack && isRealVideo(currentTrack) && (
+                                <button
+                                  onClick={() => setIsVideoMode(true)}
+                                  className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer z-20 shadow-xl opacity-80 hover:opacity-100"
+                                >
+                                  Video
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
@@ -6402,7 +6530,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         )}
 
                         {/* Title details & Heart favorite button stacked horizontally */}
-                        <div className="flex items-center justify-between w-full max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] px-1 mb-1 sm:mb-6">
+                        <div className="flex items-center justify-between w-full max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] px-1 mb-1 sm:mb-6 z-50 relative mt-auto md:mt-0">
                           <div className="flex flex-col min-w-0 text-left">
                             <div className="flex items-center gap-1.5 overflow-hidden">
                               <h1 className="font-black text-white uppercase tracking-tight text-xl sm:text-2xl truncate max-w-[55vw] sm:max-w-[300px]">
@@ -6451,7 +6579,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                     </div>
 
                     {/* Timeline slider + Control knobs combined */}
-                    <div className="flex flex-col w-full px-1 sm:px-0 mx-auto max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] gap-2.5 sm:gap-4 mb-1 sm:mb-4">
+                    <div className="flex flex-col w-full px-1 sm:px-0 mx-auto max-w-[85vw] sm:max-w-[400px] lg:max-w-[460px] gap-2.5 sm:gap-4 mb-1 sm:mb-4 z-50 relative">
                       {/* Timeline */}
                       <div className="flex flex-col w-full gap-2">
                         <div
@@ -6531,20 +6659,33 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       </div>
 
                       {/* Volume Adjuster */}
-                      <div className="flex items-center w-full gap-3 px-2 sm:px-6 group/vol">
-                        <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover/vol:text-white transition-colors shrink-0" />
-                        <div
-                          onPointerDown={handleVolumePointerDown}
-                          className="w-full h-1.5 sm:h-2 bg-white/30 rounded-full relative cursor-pointer transition-all touch-none flex items-center"
-                        >
-                          <div
-                            className="absolute left-0 h-full rounded-full bg-white pointer-events-none transition-colors"
-                            style={{ width: `${volume}%` }}
-                          >
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                      {!isIOS && (
+                        <div className="flex items-center w-full gap-3 px-2 sm:px-6 group/vol">
+                          <button onClick={toggleMute} className="shrink-0 outline-none">
+                            {volume === 0 ? (
+                              <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover/vol:text-white transition-colors" />
+                            ) : (
+                              <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover/vol:text-white transition-colors" />
+                            )}
+                          </button>
+                          <div className="w-full h-1.5 sm:h-2 bg-white/30 rounded-full relative transition-all flex items-center">
+                            <div
+                              className="absolute left-0 h-full rounded-full bg-white pointer-events-none transition-colors"
+                              style={{ width: `${volume}%` }}
+                            >
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1 pointer-events-none" />
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={volume}
+                              onChange={(e) => handleVolumeChange(parseInt(e.target.value, 10))}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -8045,7 +8186,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
       {currentTrack &&
-        isTrackListExpanded && (
+        isTrackListExpanded &&
+        trackListTab !== "radio-fai" && (
           <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">
             <div
               onClick={() => {
