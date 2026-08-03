@@ -749,7 +749,7 @@ const isRealVideo = (track: any) => {
   const title = (track.title || "").toLowerCase();
   
   if (artist.includes("- topic")) return false;
-  if (title.includes("audio oficial") || title.includes("official audio") || title.includes("art track")) return false;
+  if (title.includes("audio oficial") || title.includes("official audio") || title.includes("art track") || title.includes("lyric") || title.includes("letra") || title.includes("audio")) return false;
   
   return true;
 };
@@ -1331,6 +1331,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
+  const [videoTabQuery, setVideoTabQuery] = useState("");
+  const [videoTabResults, setVideoTabResults] = useState<any[]>([]);
+  const [isSearchingVideoTab, setIsSearchingVideoTab] = useState(false);
   const [artistDetails, setArtistDetails] = useState<any>(null);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
   const [exploreData, setExploreData] = useState<{
@@ -6344,23 +6347,32 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                           >
                             Reproductor
                           </button>
+                          {currentUrl && currentTrack && isRealVideo(currentTrack) && (
+                            <button
+                              onClick={() => setIsVideoMode(true)}
+                              className="px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap text-emerald-400 hover:text-emerald-300 hover:bg-white/5"
+                            >
+                              Video
+                            </button>
+                          )}
                           <button
                             onClick={() => setPlayerTab("siguiente")}
                             className={`px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "siguiente" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
                           >
                             Siguiente
                           </button>
-                          <button
-                            onClick={() => setPlayerTab("cola")}
-                            className={`px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all truncate whitespace-nowrap ${playerTab === "cola" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
-                          >
-                            Cola
-                          </button>
                         </div>
                       </div>
 
-                      {/* Right Placeholder for balance */}
-                      <div className="w-10 h-10 shrink-0" />
+                      {/* Right Placeholder / Cola Button */}
+                      <div className="w-10 h-10 shrink-0 flex items-center justify-end z-50">
+                        <button
+                          onClick={() => setPlayerTab("cola")}
+                          className={`p-2 rounded-full transition-all ${playerTab === "cola" ? "bg-white/10 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                        >
+                          <ListMusic className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Artwork & Title centrally stacked */}
@@ -6390,14 +6402,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
-                              {currentUrl && currentTrack && isRealVideo(currentTrack) && (
-                                <button
-                                  onClick={() => setIsVideoMode(true)}
-                                  className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer z-20 shadow-xl opacity-80 hover:opacity-100"
-                                >
-                                  Video
-                                </button>
-                              )}
                             </div>
                           </div>
                         )}
