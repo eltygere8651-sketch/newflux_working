@@ -122,6 +122,7 @@ export const VideoView = ({
   const [activeCategory, setActiveCategory] = useState("Todos");
   const [isLoading, setIsLoading] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const [videoHistory, setVideoHistory] = useState<VideoItem[]>([]);
 
   // Player state
@@ -279,22 +280,35 @@ export const VideoView = ({
     await fetchVideosForQuery(searchQuery.trim());
   };
 
-  const handlePlayVideo = (video: VideoItem) => {
+  const playNextVideo = () => {
+    if (!currentVideo) return;
+    const currentIndex = videos.findIndex(v => v.id === currentVideo.id);
+    if (currentIndex !== -1 && currentIndex < videos.length - 1) {
+      const nextVid = videos[currentIndex + 1];
+      
+      const positions = getSavedPositions();
+      const savedSecs = positions[nextVid.id] || nextVid.savedTime || 0;
+      initialSeekTimeRef.current = savedSecs;
+      
+      setCurrentVideo(nextVid);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+      setCurrentVideo(null);
+      setPlayingId(null);
+    }
+  };
+
+  const handlePlayVideo = (video: VideoItem, sourceId: string) => {
     pauseBackgroundMusic();
     const positions = getSavedPositions();
     const savedSecs = positions[video.id] || video.savedTime || 0;
 
     initialSeekTimeRef.current = savedSecs;
     setCurrentVideo(video);
+    setPlayingId(sourceId);
     setIsPlaying(true);
     setIsMinimized(false);
-
-    setTimeout(() => {
-      playerContainerRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 100);
   };
 
   const handleMinimize = () => {
@@ -422,7 +436,7 @@ export const VideoView = ({
                   playing={isPlaying}
                   onProgress={handleProgress}
                   onReady={handlePlayerReady}
-                  onEnded={() => setIsPlaying(false)}
+                  onEnded={playNextVideo}
                   controls={false}
                   playsinline
                   config={{
@@ -493,81 +507,6 @@ export const VideoView = ({
         )}
 
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8">
-          {/* Active Expanded Video Player */}
-          {currentVideo && !isMinimized && (
-            <div
-              ref={playerContainerRef}
-              className="w-full max-w-4xl mx-auto bg-[#0a0a0f] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-2 sm:p-4 transition-all duration-300 shrink-0"
-            >
-              <div className="w-full bg-black rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-                <div className="relative pt-[56.25%] bg-black w-full overflow-hidden max-h-[60vh] sm:max-h-[65vh]">
-                  <ReactPlayer
-                    ref={playerRef}
-                    url={`https://www.youtube.com/watch?v=${currentVideo.id}`}
-                    width="100%"
-                    height="100%"
-                    className="absolute top-0 left-0 w-full h-full"
-                    playing={isPlaying}
-                    onProgress={handleProgress}
-                    onReady={handlePlayerReady}
-                    onEnded={() => setIsPlaying(false)}
-                    controls={true}
-                    playsinline
-                    config={{
-                      youtube: {
-                        playerVars: {
-                          autoplay: 1,
-                          modestbranding: 1,
-                          rel: 0,
-                          iv_load_policy: 3,
-                          cc_load_policy: 0,
-                          fs: 1,
-                          playsinline: 1,
-                        },
-                      },
-                    }}
-                  />
-                </div>
-
-                {/* Player Action Bar & Metadata */}
-                <div className="p-3 sm:p-4 bg-[#0e0e14] flex items-center justify-between border-t border-white/5 gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-bold text-xs sm:text-sm text-white tracking-tight line-clamp-1">
-                      {currentVideo.title}
-                    </h3>
-                    <p className="text-[10px] sm:text-xs text-slate-400 font-semibold mt-0.5 truncate">
-                      {currentVideo.artist}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={handleMinimize}
-                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] sm:text-xs font-bold rounded-xl transition-colors border border-white/10 flex items-center gap-1 cursor-pointer"
-                      title="Minimizar para seguir buscando"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Minimizar</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setCurrentVideo(null);
-                        setIsPlaying(false);
-                        setIsMinimized(false);
-                      }}
-                      className="p-1.5 sm:px-2.5 sm:py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-[11px] sm:text-xs font-bold rounded-xl transition-colors border border-red-500/20 flex items-center gap-1 cursor-pointer"
-                      title="Cerrar vídeo"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Cerrar</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* YouTube Music Premium Style: Continuar Viendo (Horizontal Smooth Carousel) */}
           {videoHistory.length > 0 && (
             <div className="bg-gradient-to-r from-red-950/20 via-slate-900/40 to-transparent p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-red-500/10 backdrop-blur-md">
@@ -622,61 +561,101 @@ export const VideoView = ({
                 className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory touch-pan-x -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth"
               >
                 {videoHistory.map((item) => {
-                  const savedStr = formatTime(item.savedTime);
-                  const highResImg = getHighResVideoThumbnail(item.thumbnail, item.id);
+                  const isThisTheActivePlayer = playingId === `hist-${item.id}` && !isMinimized;
+                  const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : item;
+
+                  const savedStr = formatTime(displayVideo.savedTime);
+                  const highResImg = getHighResVideoThumbnail(displayVideo.thumbnail, displayVideo.id);
                   const progressPct =
-                    item.duration && item.savedTime
-                      ? Math.min(100, Math.max(5, (item.savedTime / item.duration) * 100))
+                    displayVideo.duration && displayVideo.savedTime
+                      ? Math.min(100, Math.max(5, (displayVideo.savedTime / displayVideo.duration) * 100))
                       : null;
 
                   return (
                     <div
                       key={`hist-${item.id}`}
-                      onClick={() => handlePlayVideo(item)}
+                      onClick={(e) => {
+                        const sourceId = `hist-${item.id}`;
+                        if (isThisTheActivePlayer) {
+                          return; // Let ReactPlayer handle clicks
+                        }
+                        handlePlayVideo(item, sourceId);
+                      }}
                       className="shrink-0 w-[210px] sm:w-[250px] group cursor-pointer bg-slate-900/60 hover:bg-slate-800/80 border border-white/10 hover:border-red-500/40 rounded-2xl p-2.5 transition-all duration-300 shadow-xl hover:shadow-red-500/10 flex flex-col justify-between snap-start"
                     >
                       <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-950 mb-2 shadow-md border border-white/5">
-                        <img
-                          src={highResImg}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
-                        
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                          <div className="w-10 h-10 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
-                            <Play className="w-4 h-4 text-white fill-current ml-0.5" />
-                          </div>
-                        </div>
-
-                        {savedStr && (
-                          <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-red-300 border border-red-500/30 flex items-center gap-1 shadow-sm">
-                            <Clock className="w-2.5 h-2.5 text-red-400" />
-                            {savedStr}
-                          </div>
-                        )}
-
-                        {/* YouTube Style Progress Line */}
-                        {progressPct !== null && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-red-600 via-rose-500 to-red-400 rounded-r-full"
-                              style={{ width: `${progressPct}%` }}
+                        {isThisTheActivePlayer ? (
+                          <ReactPlayer
+                            ref={playerRef}
+                            url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
+                            width="100%"
+                            height="100%"
+                            className="absolute top-0 left-0 w-full h-full"
+                            playing={isPlaying}
+                            onProgress={handleProgress}
+                            onReady={handlePlayerReady}
+                            onEnded={playNextVideo}
+                            controls={true}
+                            playsinline
+                            config={{
+                              youtube: {
+                                playerVars: {
+                                  autoplay: 1,
+                                  modestbranding: 1,
+                                  rel: 0,
+                                  iv_load_policy: 3,
+                                  cc_load_policy: 0,
+                                  fs: 1,
+                                  playsinline: 1,
+                                },
+                              },
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <img
+                              src={highResImg}
+                              alt={displayVideo.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                              }}
                             />
-                          </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
+                            
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+                              <div className="w-10 h-10 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
+                                <Play className="w-4 h-4 text-white fill-current ml-0.5" />
+                              </div>
+                            </div>
+
+                            {savedStr && (
+                              <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-red-300 border border-red-500/30 flex items-center gap-1 shadow-sm">
+                                <Clock className="w-2.5 h-2.5 text-red-400" />
+                                {savedStr}
+                              </div>
+                            )}
+
+                            {/* YouTube Style Progress Line */}
+                            {progressPct !== null && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-red-600 via-rose-500 to-red-400 rounded-r-full"
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
 
                       <div className="min-w-0">
                         <h5 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">
-                          {item.title}
+                          {displayVideo.title}
                         </h5>
                         <p className="text-[11px] text-slate-400 font-medium truncate mt-1 flex items-center gap-1">
                           <PlayCircle className="w-3 h-3 text-red-500 shrink-0" />
-                          <span className="truncate">{item.artist}</span>
+                          <span className="truncate">{displayVideo.artist}</span>
                         </p>
                       </div>
                     </div>
@@ -709,50 +688,90 @@ export const VideoView = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {videos.map((video) => {
-                const durationStr = formatTime(video.duration);
-                const highResThumbnail = getHighResVideoThumbnail(video.thumbnail, video.id);
+                const isThisTheActivePlayer = playingId === `grid-${video.id}` && !isMinimized;
+                const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : video;
+
+                const durationStr = formatTime(displayVideo.duration);
+                const highResThumbnail = getHighResVideoThumbnail(displayVideo.thumbnail, displayVideo.id);
 
                 return (
                   <div
                     key={video.id}
                     className={`flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2.5 sm:p-3 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
-                      currentVideo?.id === video.id
+                      currentVideo?.id === displayVideo.id
                         ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50"
                         : ""
                     }`}
-                    onClick={() => handlePlayVideo(video)}
+                    onClick={(e) => {
+                      const sourceId = `grid-${video.id}`;
+                      if (isThisTheActivePlayer) {
+                        return; // Let ReactPlayer handle clicks
+                      }
+                      handlePlayVideo(video, sourceId);
+                    }}
                   >
                     <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-white/5 shadow-md">
-                      <img
-                        src={highResThumbnail}
-                        alt={video.title}
-                        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
-                      
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                        <div className="w-11 h-11 bg-red-600/90 rounded-full flex items-center justify-center backdrop-blur-md shadow-[0_0_20px_rgba(220,38,38,0.8)] scale-90 group-hover:scale-100 transition-all">
-                          <Play className="w-5 h-5 text-white fill-current ml-0.5" />
-                        </div>
-                      </div>
+                      {isThisTheActivePlayer ? (
+                        <ReactPlayer
+                          ref={playerRef}
+                          url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
+                          width="100%"
+                          height="100%"
+                          className="absolute top-0 left-0 w-full h-full"
+                          playing={isPlaying}
+                          onProgress={handleProgress}
+                          onReady={handlePlayerReady}
+                          onEnded={playNextVideo}
+                          controls={true}
+                          playsinline
+                          config={{
+                            youtube: {
+                              playerVars: {
+                                autoplay: 1,
+                                modestbranding: 1,
+                                rel: 0,
+                                iv_load_policy: 3,
+                                cc_load_policy: 0,
+                                fs: 1,
+                                playsinline: 1,
+                              },
+                            },
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <img
+                            src={highResThumbnail}
+                            alt={displayVideo.title}
+                            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
+                          
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+                            <div className="w-11 h-11 bg-red-600/90 rounded-full flex items-center justify-center backdrop-blur-md shadow-[0_0_20px_rgba(220,38,38,0.8)] scale-90 group-hover:scale-100 transition-all">
+                              <Play className="w-5 h-5 text-white fill-current ml-0.5" />
+                            </div>
+                          </div>
 
-                      {durationStr ? (
-                        <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-bold text-white border border-white/10">
-                          {durationStr}
-                        </div>
-                      ) : null}
+                          {durationStr ? (
+                            <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-bold text-white border border-white/10">
+                              {durationStr}
+                            </div>
+                          ) : null}
+                        </>
+                      )}
                     </div>
 
                     <div className="flex flex-col min-w-0">
                       <h4 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
-                        {video.title}
+                        {displayVideo.title}
                       </h4>
                       <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />
-                        <span className="truncate">{video.artist}</span>
+                        <span className="truncate">{displayVideo.artist}</span>
                       </p>
                     </div>
                   </div>
