@@ -35,6 +35,7 @@ const VIDEO_QUERIES = [
 
 const VIDEO_CATEGORIES = [
   "Todos",
+  "Continuar Viendo",
   "Entrevistas",
   "Podcasts",
   "La Resistencia",
@@ -123,6 +124,7 @@ export const VideoView = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [isPlayerInView, setIsPlayerInView] = useState(true);
   const [videoHistory, setVideoHistory] = useState<VideoItem[]>([]);
 
   // Player state
@@ -136,6 +138,30 @@ export const VideoView = ({
   const lastSavedTimeRef = useRef<number>(0);
 
   useDraggable(historyScrollRef);
+
+  // Observer to track if the active playing element is visible
+  useEffect(() => {
+    if (!playingId || isMinimized || !currentVideo) {
+      setIsPlayerInView(true);
+      return;
+    }
+
+    const el = document.getElementById(playingId);
+    if (!el) {
+      setIsPlayerInView(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsPlayerInView(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [playingId, isMinimized, currentVideo, videos, videoHistory, activeCategory]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -266,6 +292,9 @@ export const VideoView = ({
     if (cat === "Todos") {
       setSearchQuery("");
       await loadRecommendations();
+    } else if (cat === "Continuar Viendo") {
+      setSearchQuery("");
+      setVideos([]); // Clear videos to just show history
     } else {
       setSearchQuery(cat);
       const catQuery = getCategoryQuery(cat);
@@ -282,15 +311,20 @@ export const VideoView = ({
 
   const playNextVideo = () => {
     if (!currentVideo) return;
-    const currentIndex = videos.findIndex(v => v.id === currentVideo.id);
-    if (currentIndex !== -1 && currentIndex < videos.length - 1) {
-      const nextVid = videos[currentIndex + 1];
+    
+    const activeList = activeCategory === "Continuar Viendo" ? videoHistory : videos;
+    const sourcePrefix = activeCategory === "Continuar Viendo" ? "hist" : "grid";
+    
+    const currentIndex = activeList.findIndex(v => v.id === currentVideo.id);
+    if (currentIndex !== -1 && currentIndex < activeList.length - 1) {
+      const nextVid = activeList[currentIndex + 1];
       
       const positions = getSavedPositions();
       const savedSecs = positions[nextVid.id] || nextVid.savedTime || 0;
       initialSeekTimeRef.current = savedSecs;
       
       setCurrentVideo(nextVid);
+      setPlayingId(`${sourcePrefix}-${nextVid.id}`);
       setIsPlaying(true);
     } else {
       setIsPlaying(false);
@@ -309,6 +343,18 @@ export const VideoView = ({
     setPlayingId(sourceId);
     setIsPlaying(true);
     setIsMinimized(false);
+  };
+
+  const scrollToActiveVideo = () => {
+    if (!playingId) return;
+    const el = document.getElementById(playingId);
+    if (el) {
+      el.scrollIntoView({ behavior: "auto", block: "center" });
+    } else {
+      // If the element is no longer in the DOM (e.g. they searched for something else)
+      // fallback to minimizing it so they can see it
+      setIsMinimized(true);
+    }
   };
 
   const handleMinimize = () => {
@@ -506,60 +552,52 @@ export const VideoView = ({
           </div>
         )}
 
+        {/* Floating "Ver" Button (When active video scrolls out of view) */}
+        {currentVideo && !isMinimized && !isPlayerInView && (
+          <button
+            onClick={scrollToActiveVideo}
+            className="fixed bottom-[66px] right-2 sm:right-6 sm:bottom-[30px] z-[80] bg-black/80 backdrop-blur-xl border border-white/10 hover:bg-black hover:border-red-500/50 shadow-[0_8px_32px_rgba(0,0,0,0.8)] rounded-full px-3 py-1.5 flex items-center gap-1.5 animate-in slide-in-from-bottom-4 fade-in duration-300 transition-all cursor-pointer group active:scale-95"
+          >
+            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,1)]" />
+            <span className="text-[9px] text-white font-black uppercase tracking-[0.2em] group-hover:text-red-400 transition-colors">
+              Ver
+            </span>
+          </button>
+        )}
+
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8">
-          {/* YouTube Music Premium Style: Continuar Viendo (Horizontal Smooth Carousel) */}
-          {videoHistory.length > 0 && (
-            <div className="bg-gradient-to-r from-red-950/20 via-slate-900/40 to-transparent p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-red-500/10 backdrop-blur-md">
-              <div className="flex items-center justify-between mb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30">
+          {/* Continuar Viendo Grid View */}
+          {activeCategory === "Continuar Viendo" && videoHistory.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
                     <History className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
+                    <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
                       Continuar Viendo
-                      <span className="text-[10px] font-mono text-slate-400 font-normal lowercase">
-                        • {videoHistory.length}
+                      <span className="text-[11px] font-mono text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                        {videoHistory.length} VÍDEOS
                       </span>
                     </h2>
-                    <p className="text-[10px] sm:text-xs text-slate-400 font-medium">
+                    <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
                       Continúa donde lo dejaste
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={clearHistory}
-                    className="p-1.5 text-slate-400 hover:text-red-400 transition-colors text-xs font-semibold mr-1 flex items-center gap-1 rounded-lg hover:bg-white/5 cursor-pointer"
-                    title="Borrar historial de vídeos"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Borrar</span>
-                  </button>
-
-                  <button
-                    onClick={() => scrollHistory("left")}
-                    className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-white transition-all cursor-pointer border border-white/10 active:scale-95"
-                    title="Anterior"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => scrollHistory("right")}
-                    className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-white transition-all cursor-pointer border border-white/10 active:scale-95"
-                    title="Siguiente"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={clearHistory}
+                  className="px-3 py-1.5 text-slate-300 hover:text-red-400 hover:bg-red-500/10 transition-colors text-xs font-semibold flex items-center gap-1.5 rounded-lg border border-transparent hover:border-red-500/20 cursor-pointer"
+                  title="Borrar historial de vídeos"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Borrar Historial</span>
+                </button>
               </div>
 
-              {/* Smooth Touch Horizontal Scroll Carousel */}
-              <div
-                ref={historyScrollRef}
-                className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory touch-pan-x -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth"
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {videoHistory.map((item) => {
                   const isThisTheActivePlayer = playingId === `hist-${item.id}` && !isMinimized;
                   const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : item;
@@ -574,6 +612,7 @@ export const VideoView = ({
                   return (
                     <div
                       key={`hist-${item.id}`}
+                      id={`hist-${item.id}`}
                       onClick={(e) => {
                         const sourceId = `hist-${item.id}`;
                         if (isThisTheActivePlayer) {
@@ -581,9 +620,9 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className="shrink-0 w-[210px] sm:w-[250px] group cursor-pointer bg-slate-900/60 hover:bg-slate-800/80 border border-white/10 hover:border-red-500/40 rounded-2xl p-2.5 transition-all duration-300 shadow-xl hover:shadow-red-500/10 flex flex-col justify-between snap-start"
+                      className="flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2.5 sm:p-3 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1"
                     >
-                      <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-950 mb-2 shadow-md border border-white/5">
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-white/5 shadow-md">
                         {isThisTheActivePlayer ? (
                           <ReactPlayer
                             ref={playerRef}
@@ -624,8 +663,8 @@ export const VideoView = ({
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
                             
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                              <div className="w-10 h-10 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
-                                <Play className="w-4 h-4 text-white fill-current ml-0.5" />
+                              <div className="w-11 h-11 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
+                                <Play className="w-5 h-5 text-white fill-current ml-0.5" />
                               </div>
                             </div>
 
@@ -649,12 +688,12 @@ export const VideoView = ({
                         )}
                       </div>
 
-                      <div className="min-w-0">
-                        <h5 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">
+                      <div className="flex flex-col min-w-0">
+                        <h4 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
                           {displayVideo.title}
-                        </h5>
-                        <p className="text-[11px] text-slate-400 font-medium truncate mt-1 flex items-center gap-1">
-                          <PlayCircle className="w-3 h-3 text-red-500 shrink-0" />
+                        </h4>
+                        <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
+                          <PlayCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                           <span className="truncate">{displayVideo.artist}</span>
                         </p>
                       </div>
@@ -665,26 +704,36 @@ export const VideoView = ({
             </div>
           )}
 
-          {/* Main Videos Grid (Recomendados / Búsqueda) */}
-          <div>
-            <div className="flex items-center justify-between mb-3 sm:mb-5">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-red-500" />
-                <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
-                  {searchQuery
-                    ? `Resultados: "${searchQuery}"`
-                    : activeCategory !== "Todos"
-                    ? `Vídeos de ${activeCategory}`
-                    : "Vídeos Recomendados HD"}
-                </span>
-              </div>
-              {isLoading && (
-                <div className="flex items-center gap-2 text-xs text-red-400 font-semibold">
-                  <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
-                  <span className="hidden sm:inline">Cargando alta definición...</span>
-                </div>
-              )}
+          {activeCategory === "Continuar Viendo" && videoHistory.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-white/5 border border-white/10 rounded-2xl p-6">
+              <p className="text-slate-300 font-semibold text-sm flex items-center justify-center gap-2">
+                <History className="w-5 h-5 text-red-500" />
+                No tienes vídeos en tu historial de continuación.
+              </p>
             </div>
+          )}
+
+          {/* Main Videos Grid (Recomendados / Búsqueda) */}
+          {activeCategory !== "Continuar Viendo" && (
+            <div>
+              <div className="flex items-center justify-between mb-3 sm:mb-5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-red-500" />
+                  <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
+                    {searchQuery
+                      ? `Resultados: "${searchQuery}"`
+                      : activeCategory !== "Todos"
+                      ? `Vídeos de ${activeCategory}`
+                      : "Vídeos Recomendados HD"}
+                  </span>
+                </div>
+                {isLoading && (
+                  <div className="flex items-center gap-2 text-xs text-red-400 font-semibold">
+                    <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
+                    <span className="hidden sm:inline">Cargando alta definición...</span>
+                  </div>
+                )}
+              </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {videos.map((video) => {
@@ -697,6 +746,7 @@ export const VideoView = ({
                 return (
                   <div
                     key={video.id}
+                    id={`grid-${video.id}`}
                     className={`flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2.5 sm:p-3 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
                       currentVideo?.id === displayVideo.id
                         ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50"
@@ -787,6 +837,7 @@ export const VideoView = ({
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>
