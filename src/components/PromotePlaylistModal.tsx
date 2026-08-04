@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Sparkles, X, Loader2, Send, Tag, AlignLeft, Calendar } from "lucide-react";
+import { Sparkles, X, Loader2, Send, AlignLeft, Calendar } from "lucide-react";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../lib/firebase";
 

@@ -16,12 +16,10 @@ import {
   Trash2, 
   Flame, 
   Sparkles, 
-  Volume2, 
   ChevronLeft,
   Library,
   Heart,
-  ListPlus,
-  PlaySquare
+  ListPlus
 } from "lucide-react";
 
 const createSilentAudioBlobURL = (): string => {
@@ -96,8 +94,8 @@ export const FluxKaraoke = () => {
   useEffect(() => { localStorage.setItem('flux_karaoke_favorites', JSON.stringify(favoriteTracks)); }, [favoriteTracks]);
   useEffect(() => { localStorage.setItem('flux_karaoke_playlists', JSON.stringify(playlists)); }, [playlists]);
 
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [, setIsPlayerReady] = useState(false);
+  const [, setIsBuffering] = useState(false);
 
   // Immersive player controls visibility states for mobile
   const [showMobileControls, setShowMobileControls] = useState(true);

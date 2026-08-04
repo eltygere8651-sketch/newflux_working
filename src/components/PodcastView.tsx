@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Search, Play, Pause, Loader2, ChevronLeft, ChevronDown, Headphones, Radio, Heart, Bookmark, Library, Clock, CheckCircle } from 'lucide-react';
+import { Search, Play, Pause, Loader2, ChevronLeft, ChevronDown, Radio, Heart, Bookmark, Library, Clock, CheckCircle } from 'lucide-react';
 import { useFirebase } from "./FirebaseProvider";
-import { getDoc, setDoc, updateDoc, doc } from "firebase/firestore";
+import { getDoc, updateDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 interface Podcast {
@@ -331,7 +331,13 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
     }
   };
 
-  const playEpisode = (episode: Episode, forcePodcastCtx?: Podcast | null) => {
+  const playEpisode = (episode: Episode, forcePodcastCtx?: any) => {
+    if (forcePodcastCtx) {
+      setSelectedPodcast(forcePodcastCtx);
+      try {
+        localStorage.setItem("gymapp_podcast_current_context", JSON.stringify(forcePodcastCtx));
+      } catch(e){}
+    }
     if (currentEpisode?.id === episode.id) {
       if (isPlaying) {
         audioRef.current?.pause();

@@ -1,18 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Loader2, ArrowRight, MessageSquare, Info, LogOut, Mail } from 'lucide-react';
+import { Check, Loader2, ArrowRight, Info, LogOut } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInAnonymously, signOut, EmailAuthProvider, linkWithCredential, linkWithPopup, GoogleAuthProvider, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInAnonymously, signOut, updateProfile } from 'firebase/auth';
 import { generateDeviceHash } from '../lib/deviceHash';
-
-const getOrCreateDeviceId = () => {
-  let id = localStorage.getItem('flux_vip_device_id');
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem('flux_vip_device_id', id);
-  }
-  return id;
-};
 
 type TrialState = 'loading' | 'new' | 'active' | 'expired' | 'link-email';
 
@@ -203,27 +194,6 @@ export const VIPLandingView = () => {
       setIsLoading(false);
     }
   };
-
-  const handleLinkGoogle = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-    try {
-      const provider = new GoogleAuthProvider();
-      if (auth.currentUser) {
-        await linkWithPopup(auth.currentUser, provider);
-        window.history.replaceState({}, '', '/');
-        window.location.reload();
-      }
-    } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/credential-already-in-use') {
-         setErrorMsg("Esta cuenta de Google ya está en uso.");
-      } else {
-         setErrorMsg(err.message || "Error al conectar con Google.");
-      }
-      setIsLoading(false);
-    }
-  };
   
   const handleLinkEmail = async (e: React.FormEvent) => {
      e.preventDefault();
@@ -330,8 +300,6 @@ export const VIPLandingView = () => {
   }
 
   if (trialState === 'expired') {
-
-    const isAnonymous = auth.currentUser?.isAnonymous;
     return (
       <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center px-6 text-center font-sans relative">
         <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />

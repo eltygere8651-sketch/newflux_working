@@ -8,7 +8,7 @@ import React, {
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { Play,
   Pause,
@@ -17,30 +17,21 @@ import { Play,
   Music,
   ListMusic,
   Volume2,
-  Volume1,
   VolumeX,
   Maximize2,
   Minimize2,
   Sparkles,
-  Disc,
   Plus,
-  Minus,
   Edit2,
   Trash2,
   X,
   Loader2,
-  Bug,
   Radio,
-  Send,
-  MessageSquare,
-  MessageCircle,
   Shuffle,
   Repeat,
   Shield,
-  ShieldAlert,
   LogOut,
   Heart,
-  Star,
   LogIn,
   Headphones,
   Save,
@@ -51,29 +42,20 @@ import { Play,
   ListPlus,
   Compass,
   PlusCircle,
-  LayoutGrid,
   FolderPlus,
   FolderMinus,
-  Folder,
   ChevronRight,
   Check,
   BadgeCheck,
-  Bookmark,
-  Trophy,
-  Download,
-  Users,
   User,
   UserPlus,
   Library,
-  FileText,
-  Tv,
-  GripVertical,
   Globe,
-  Mic, Bot, Youtube } from "lucide-react";
+  Mic, Youtube } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { NewsView } from "./NewsView";
-import { selectNextDJTrack, isReasonableTrack } from "../lib/djLogic";
+import { isReasonableTrack } from "../lib/djLogic";
 
 const fetchWithCache = async (cacheKey, ttl, fetcher, forceRefresh = false) => {
   if (!forceRefresh) {
@@ -101,31 +83,26 @@ import { collection,
   deleteDoc,
   doc,
   serverTimestamp,
-  orderBy,
-  collectionGroup,
   getDocs,
   getDoc,
   where,
   setDoc,
-  limit,
-  onSnapshot,
 } from "firebase/firestore";
-import { db, loginWithGoogle, logout } from "../lib/firebase";
+import { db } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
 import { recordTrackPlay,
   recordTrackSkip,
-  getTasteDiagnostics,
-  getMusicRecommendations,
   getPlayHistory,
-  TasteDiagnostics,
-  RecommendedTrack,
 } from "../lib/recommendationEngine";
 const LazyExploreView = React.lazy(() =>
   import("./ExploreView").then((m) => ({ default: m.ExploreView })),
 );
 const LazyPodcastView = React.lazy(() =>
   import("./PodcastView").then((m) => ({ default: m.PodcastView })),
+);
+const LazyVideoView = React.lazy(() =>
+  import("./VideoView").then((m) => ({ default: m.VideoView })),
 );
 const LazyFluxKaraoke = React.lazy(() => import("./FluxKaraoke"));
 const LazyUserManagementAdmin = React.lazy(() =>
@@ -136,165 +113,6 @@ const LazyUserManagementAdmin = React.lazy(() =>
 const LazyUserProfileModal = React.lazy(() =>
   import("./UserProfileModal").then((m) => ({ default: m.UserProfileModal })),
 );
-
-const COVER_THEMES = [
-  {
-    name: "Cyberpunk Pulse",
-    bgStart: "#0a0519",
-    bgEnd: "#140a28",
-    glowColor: "#ff007f",
-    accentColor: "#00ffff",
-    grid: true,
-    radial: true,
-    rings: "concentric",
-  },
-  {
-    name: "Golden Retro",
-    bgStart: "#140f05",
-    bgEnd: "#2d1e0a",
-    glowColor: "#ffaa00",
-    accentColor: "#ff3300",
-    grid: false,
-    radial: true,
-    rings: "solar",
-  },
-  {
-    name: "Emerald Synthwave",
-    bgStart: "#050f0a",
-    bgEnd: "#0f1914",
-    glowColor: "#1ED760",
-    accentColor: "#00f5ff",
-    grid: true,
-    radial: false,
-    rings: "waves",
-  },
-  {
-    name: "Electric Chill",
-    bgStart: "#060b1e",
-    bgEnd: "#121b3a",
-    glowColor: "#3b82f6",
-    accentColor: "#8b5cf6",
-    grid: true,
-    radial: true,
-    rings: "spherical",
-  },
-  {
-    name: "Crimson Brutalist",
-    bgStart: "#1a0505",
-    bgEnd: "#2c0c0c",
-    glowColor: "#ef4444",
-    accentColor: "#f97316",
-    grid: false,
-    radial: false,
-    rings: "brutalist",
-  },
-];
-
-const generateSVGDataURI = (title: string, themeIndex: number) => {
-  const theme = COVER_THEMES[themeIndex % COVER_THEMES.length];
-  const cleanedTitle = (title || "").trim();
-  let initials = "MX";
-  if (cleanedTitle) {
-    const words = cleanedTitle.split(/\s+/);
-    if (words.length >= 2) {
-      initials = (words[0][0] + words[1][0]).toUpperCase();
-    } else if (words[0] && words[0].length >= 2) {
-      initials = words[0].substring(0, 2).toUpperCase();
-    } else if (words[0]) {
-      initials = words[0][0].toUpperCase() + "X";
-    }
-  }
-
-  const gridLine = theme.grid
-    ? `
-    <pattern id="grid" width="16" height="16" patternUnits="userSpaceOnUse">
-      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.7"/>
-    </pattern>
-    <rect width="100%" height="100%" fill="url(#grid)" />
-  `
-    : "";
-
-  let ringsGraphic = "";
-  if (theme.rings === "concentric") {
-    ringsGraphic = `
-      <circle cx="200" cy="200" r="140" fill="none" stroke="${theme.glowColor}" stroke-dasharray="4,8" stroke-width="1" opacity="0.4"/>
-      <circle cx="200" cy="200" r="110" fill="none" stroke="${theme.accentColor}" stroke-dasharray="1,5" stroke-width="2" opacity="0.6"/>
-      <circle cx="200" cy="200" r="80" fill="none" stroke="${theme.glowColor}" stroke-width="1.5" opacity="0.3"/>
-    `;
-  } else if (theme.rings === "solar") {
-    ringsGraphic = `
-      <circle cx="200" cy="200" r="120" fill="none" stroke="${theme.glowColor}" stroke-width="4" opacity="0.15"/>
-      <circle cx="200" cy="240" r="90" fill="none" stroke="${theme.accentColor}" stroke-width="3" opacity="0.3"/>
-      <line x1="80" y1="200" x2="320" y2="200" stroke="${theme.glowColor}" stroke-width="2" opacity="0.4"/>
-      <line x1="80" y1="220" x2="320" y2="220" stroke="${theme.accentColor}" stroke-width="1" opacity="0.3"/>
-    `;
-  } else if (theme.rings === "waves") {
-    ringsGraphic = `
-      <path d="M 60 200 Q 130 140 200 200 T 340 200" fill="none" stroke="${theme.glowColor}" stroke-width="2" opacity="0.5"/>
-      <path d="M 60 220 Q 130 160 200 220 T 340 220" fill="none" stroke="${theme.accentColor}" stroke-width="1.5" opacity="0.4"/>
-      <path d="M 60 180 Q 130 120 200 180 T 340 180" fill="none" stroke="${theme.accentColor}" stroke-width="1" opacity="0.3"/>
-    `;
-  } else if (theme.rings === "spherical") {
-    ringsGraphic = `
-      <circle cx="200" cy="200" r="90" fill="none" stroke="${theme.glowColor}" stroke-width="1" opacity="0.5"/>
-      <ellipse cx="200" cy="200" rx="90" ry="30" fill="none" stroke="${theme.accentColor}" stroke-width="1.5" opacity="0.6" transform="rotate(30, 200, 200)"/>
-      <ellipse cx="200" cy="200" rx="90" ry="30" fill="none" stroke="${theme.accentColor}" stroke-width="1.5" opacity="0.4" transform="rotate(-30, 200, 200)"/>
-    `;
-  } else {
-    ringsGraphic = `
-      <rect x="70" y="70" width="260" height="260" fill="none" stroke="${theme.accentColor}" stroke-width="1.5" opacity="0.3"/>
-      <line x1="50" y1="50" x2="350" y2="350" stroke="${theme.glowColor}" stroke-width="1" opacity="0.3" />
-      <line x1="350" y1="50" x2="50" y2="350" stroke="${theme.glowColor}" stroke-width="1" opacity="0.3" />
-    `;
-  }
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
-      <defs>
-        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="${theme.bgStart}"/>
-          <stop offset="100%" stop-color="${theme.bgEnd}"/>
-        </linearGradient>
-        <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="${theme.glowColor}" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="${theme.glowColor}" stop-opacity="0"/>
-        </radialGradient>
-        <filter id="neonFilter">
-          <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-
-      <rect width="400" height="400" fill="url(#bgGrad)"/>
-      
-      ${theme.radial ? `<circle cx="200" cy="200" r="180" fill="url(#glowGrad)"/>` : ""}
-      
-      ${gridLine}
-      
-      <g>
-        ${ringsGraphic}
-      </g>
-      
-      <g filter="url(#neonFilter)">
-        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="900" font-size="76" fill="#ffffff" letter-spacing="2">
-          ${initials}
-        </text>
-      </g>
-      
-      <text x="24" y="376" font-family="monospace" font-size="9" font-weight="bold" fill="${theme.accentColor}" letter-spacing="1" opacity="0.8">
-        FLUX AUDIO STUDIO
-      </text>
-      <text x="376" y="376" font-family="monospace" font-size="9" font-weight="bold" fill="#ffffff" letter-spacing="1" opacity="0.5" text-anchor="end">
-        PRESET v1.0
-      </text>
-    </svg>
-  `;
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-};
 
 const sanitizeOwnerName = (nameOrEmail?: string) => {
   if (!nameOrEmail) return "Socio Premium";
@@ -649,13 +467,17 @@ const cleanUrl = (url?: any) => {
   if (!url || typeof url !== "string") return "";
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
-    if (clean.endsWith("mqdefault.jpg")) {
-      clean = clean.replace("mqdefault.jpg", "hqdefault.jpg");
+    if (
+      clean.endsWith("default.jpg") ||
+      clean.endsWith("mqdefault.jpg") ||
+      clean.endsWith("sddefault.jpg")
+    ) {
+      clean = clean.replace(/(default|mqdefault|sddefault)\.jpg$/, "hqdefault.jpg");
     }
     return clean;
   }
   if (url.includes("googleusercontent.com")) {
-    return url.replace(/=w\d+-h\d+/, "=w512-h512").replace(/=s\d+/, "=s512");
+    return url.replace(/=w\d+-h\d+/, "=w800-h800").replace(/=s\d+/, "=s800");
   }
   return url;
 };
@@ -959,7 +781,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       }
     }
   };
-
   useEffect(() => {
     if (user && !authLoading && !user.isAnonymous) {
       const name = user.displayName;
@@ -1331,10 +1152,36 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
+  const [exploreMode, setExploreMode] = useState<"audio" | "video">("audio");
   const [videoTabQuery, setVideoTabQuery] = useState("");
   const [videoTabResults, setVideoTabResults] = useState<any[]>([]);
+  const [videoTabInitialFeed, setVideoTabInitialFeed] = useState<any[]>([]);
+  const [isLoadingVideoFeed, setIsLoadingVideoFeed] = useState(false);
   const [isSearchingVideoTab, setIsSearchingVideoTab] = useState(false);
   const [artistDetails, setArtistDetails] = useState<any>(null);
+  useEffect(() => {
+    if (exploreMode === "video" && videoTabInitialFeed.length === 0 && !isLoadingVideoFeed) {
+      const fetchInitialFeed = async () => {
+        setIsLoadingVideoFeed(true);
+        try {
+          const queries = ["podcasts entrevistas", "videoclips musicales top", "conciertos en vivo full", "documentales"];
+          const randomQuery = queries[Math.floor(Math.random() * queries.length)];
+          const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(randomQuery)}&limit=15&type=video`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              setVideoTabInitialFeed(data.filter((v:any) => !v.title.toLowerCase().includes("audio") && !v.title.toLowerCase().includes("letra") && !v.title.toLowerCase().includes("lyric")));
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsLoadingVideoFeed(false);
+        }
+      };
+      fetchInitialFeed();
+    }
+  }, [exploreMode]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
   const [exploreData, setExploreData] = useState<{
     trending?: any[];
@@ -2253,16 +2100,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     });
   }, [userPlaylists]);
 
-  const communitySearchResults = React.useMemo(() => {
-    if (!searchQuery.trim() || trackListTab !== "search") return [];
-    const query = searchQuery.trim().toLowerCase();
-    return communityPlaylists.filter(
-      (pl) =>
-        pl.name.toLowerCase().includes(query) ||
-        (pl.genre && pl.genre.toLowerCase().includes(query)),
-    );
-  }, [searchQuery, communityPlaylists, trackListTab]);
-
   useEffect(() => {
     if (!customExplorePlaylists.length) return;
     const maxCustomCreatedAt = Math.max(...customExplorePlaylists.map(pl => {
@@ -2352,7 +2189,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     };
   }, [displayTracks, currentTrackIndex, trackQueue]);
 
-  const isNativeMode = false; // Never use native mode, it's blocked by YouTube
   const fetchSponsorBlockSegments = async (url: string) => {
     try {
       const match = url.match(/[?&]v=([^&]+)/);
@@ -2459,8 +2295,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   };
 
-  const handleNext = useCallback((isAutomaticParam = false) => {
-    const isAutomatic = isAutomaticParam === true;
+  const handleNext = useCallback((_isAutomaticParam = false) => {
     const now = Date.now();
     if (now - lastSkipTimeRef.current < 400) return;
     lastSkipTimeRef.current = now;
@@ -2771,8 +2606,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
   // Sync with Firestore (Optimized: fetch global lists statically with limit, and user lists in real-time)
   useEffect(() => {
-    let unsubscribeUser = () => {};
-
     const processMergedDocs = () => {
       const normalizeDoc = (doc: any) => {
         if (typeof doc.data === 'function') {
@@ -3591,15 +3424,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   };
 
-  const logoutSecurity = () => {
-    if (confirm("¿Cerrar sesión de seguridad y olvidar el código maestro?")) {
-      localStorage.removeItem("gym_music_security_code");
-      setSavedSecurityCode(null);
-      setAuthCode("");
-      alert("Sesión de seguridad cerrada.");
-    }
-  };
-
   const handleDeleteTrack = async (
     trackToDelete: MusicTrack,
     event: React.MouseEvent,
@@ -3669,15 +3493,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     } finally {
       setTrackToDeleteConfirm(null);
     }
-  };
-
-  const startEditingTrack = (track: MusicTrack, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setEditingTrack(track);
-    setEditingTrackTitle(track.title || "");
-    setEditingTrackArtist(track.artist || "");
-    setEditingTrackDescription(track.description || "");
   };
 
   const saveTrackEdit = async () => {
@@ -4263,7 +4078,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
-    if (trackListTab === "search" && searchQuery.trim().length > 2) {
+    if (trackListTab === "search" && exploreMode === "audio" && searchQuery.trim().length > 2) {
       timeoutId = setTimeout(() => {
         handleYoutubeSearch();
       }, 700);
@@ -4271,7 +4086,44 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [searchQuery, trackListTab]);
+  }, [searchQuery, trackListTab, exploreMode]);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    if (trackListTab === "search" && exploreMode === "video" && videoTabQuery.trim().length > 2) {
+      timeoutId = setTimeout(() => {
+        handleVideoSearch();
+      }, 700);
+    }
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [videoTabQuery, trackListTab, exploreMode]);
+
+  const handleVideoSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!videoTabQuery.trim()) return;
+
+    setTrackListTab("search");
+    setIsSearchingVideoTab(true);
+    try {
+      const cleanQuery = videoTabQuery.trim().replace(/audio oficial|official audio|art track|lyric|letra|audio/gi, "");
+      const q = cleanQuery + " -lyric -letra";
+      const resp = await fetch(
+        `/api/youtube/search?q=${encodeURIComponent(q)}&limit=15&type=video`,
+      );
+      if (!resp.ok) throw new Error("Search failed");
+      const data = await resp.json();
+      if (Array.isArray(data)) {
+        setVideoTabResults(data.filter((v:any) => isRealVideo({ title: v.title, artist: v.artist })));
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification("Error buscando videos.");
+    } finally {
+      setIsSearchingVideoTab(false);
+    }
+  };
 
   const handleYoutubeSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -4540,14 +4392,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPos = parseInt(e.target.value);
-    setPosition(newPos);
-    if (youtubePlayerRef.current) {
-      youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
-    }
-  };
-
   const handleTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
     const updatePosition = (clientX: number) => {
@@ -4569,43 +4413,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       updatePosition(moveEvent.clientX);
-    };
-
-    const handlePointerUp = (upEvent: PointerEvent) => {
-      container.releasePointerCapture(e.pointerId);
-      container.removeEventListener("pointermove", handlePointerMove);
-      container.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    container.addEventListener("pointermove", handlePointerMove);
-    container.addEventListener("pointerup", handlePointerUp);
-  };
-
-  const handleVolumePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const updateVolume = (clientX: number) => {
-      const rect = container.getBoundingClientRect();
-      const clickX = clientX - rect.left;
-      const width = rect.width;
-      if (width > 0) {
-        const pct = Math.max(0, Math.min(1, clickX / width));
-        const newVol = Math.round(pct * 100);
-        handleVolumeChange(newVol);
-      }
-    };
-
-    updateVolume(e.clientX);
-    container.setPointerCapture(e.pointerId);
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
-      const clickX = moveEvent.clientX - rect.left;
-      const width = rect.width;
-      if (width > 0) {
-        const pct = Math.max(0, Math.min(1, clickX / width));
-        const newVol = Math.round(pct * 100);
-        handleVolumeChange(newVol);
-      }
     };
 
     const handlePointerUp = () => {
@@ -4654,7 +4461,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   // Sync Position State with Lock Screen - THROTTLED ECO OPTIMAL
   const lastSyncTrackRef = useRef<number>(-1);
   const lastSyncIsPlayingRef = useRef<boolean>(false);
-  const lastSessionSyncTimeRef = useRef<number>(0);
   const lastSyncDurationRef = useRef<number>(0);
 
   useEffect(() => {
@@ -5001,7 +4807,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 const elem = document.getElementById("video-mode-container");
                 if (elem) {
                   if (!document.fullscreenElement) {
-                    elem.requestFullscreen().catch(err => {});
+                    elem.requestFullscreen().catch(() => {});
                   } else {
                     document.exitFullscreen();
                   }
@@ -5073,7 +4879,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 }
               }, skipDelay);
             }}
-            onReady={(player) => {
+            onReady={() => {
               // Re-register Media Session and reinforce action handlers to beat YouTube iframe's own initial lock screen registration
               registerMediaSession();
               enforceActionHandlers();
@@ -5538,7 +5344,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
           </span>
         </button>
-
         {/* Podcasts */}
         <button
           onClick={() => {
@@ -5710,9 +5515,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
               const renderPlaylistItem = (
                 pl: MusicPlaylist,
-                isNested: boolean,
-                canMoveUp: boolean = true,
-                canMoveDown: boolean = true,
+                _isNested?: boolean,
+                _canMoveUp: boolean = true,
+                _canMoveDown: boolean = true,
               ) => {
                 const isSelected = selectedPlaylist?.id === pl.id;
                 const gradient = getPlaylistGradientClass(pl.name);
@@ -6124,7 +5929,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         >
           {/* PLAYER BAR */}
           <div
-            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-hidden md:overflow-y-auto md:overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85 border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || (trackListTab === "search" && exploreMode === "video") ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-hidden md:overflow-y-auto md:overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85 border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
           >
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -6711,12 +6516,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           trackListTab === "karaoke" ||
           trackListTab === "radio-fai" ? (
             <div
-              className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" ? "hidden" : "flex"}`}
+              className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" && !(trackListTab === "search" && exploreMode === "video") ? "hidden" : "flex"}`}
             >
               {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
                 <div className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40">
                   <div className="flex flex-col w-full">
                     {/* Search Bar matching Tab */}
+                    {exploreMode !== "video" && (
                     <div className="flex items-center gap-2 w-full">
                       {(trackListTab === "playlist" ||
                         trackListTab === "queue") && (
@@ -6745,14 +6551,17 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       <div className="relative flex-1 group">
                         <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
                           <Search
-                            className={`w-3.5 h-3.5 transition-colors ${searchQuery ? "text-emerald-500/70" : "text-slate-500"}`}
+                            className={`w-3.5 h-3.5 transition-colors ${(trackListTab === "search" && exploreMode === "video" ? videoTabQuery : searchQuery) ? "text-emerald-500/70" : "text-slate-500"}`}
                           />
                         </div>
                         <form
                           onSubmit={(e) => {
-                            e.preventDefault();
-    setTrackListTab("search");
-                            handleYoutubeSearch(e);
+                            e.preventDefault();    setTrackListTab("search");
+                            if (trackListTab === "search" && exploreMode === "video") {
+                              handleVideoSearch(e);
+                            } else {
+                              handleYoutubeSearch(e);
+                            }
                           }}
                         >
                           <input
@@ -6762,27 +6571,38 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                 ? `Buscar en ${selectedPlaylist?.name || "playlist"}...`
                                 : trackListTab === "queue"
                                   ? "¿Qué hay en la cola?"
-                                  : "¿Qué te apetece escuchar?..."
+                                  : trackListTab === "search" && exploreMode === "video"
+                                    ? "Buscar vídeos, podcasts, documentales..."
+                                    : "¿Qué te apetece escuchar?..."
                             }
-                            value={searchQuery}
+                            value={trackListTab === "search" && exploreMode === "video" ? videoTabQuery : searchQuery}
                             onChange={(e) => {
-                              setSearchQuery(e.target.value);
-                              if (
-                                !e.target.value &&
-                                trackListTab === "search"
-                              ) {
-                                setYoutubeResults([]);
+                              if (trackListTab === "search" && exploreMode === "video") {
+                                setVideoTabQuery(e.target.value);
+                                if (!e.target.value) {
+                                  setVideoTabResults([]);
+                                }
+                              } else {
+                                setSearchQuery(e.target.value);
+                                if (!e.target.value && trackListTab === "search") {
+                                  setYoutubeResults([]);
+                                }
                               }
                             }}
                             className="w-full bg-[#111113]/80 border border-white/5 rounded-lg py-1 pl-7.5 pr-8 text-[11px] text-white placeholder-slate-500/80 focus:outline-none focus:border-emerald-500/20 focus:bg-white/[0.04] transition-all font-medium tracking-wide"
                           />
                         </form>
-                        {searchQuery && (
+                        {(trackListTab === "search" && exploreMode === "video" ? videoTabQuery : searchQuery) && (
                           <button
                             onClick={() => {
-                              setSearchQuery("");
-                              if (trackListTab === "search") {
-                                setYoutubeResults([]);
+                              if (trackListTab === "search" && exploreMode === "video") {
+                                setVideoTabQuery("");
+                                setVideoTabResults([]);
+                              } else {
+                                setSearchQuery("");
+                                if (trackListTab === "search") {
+                                  setYoutubeResults([]);
+                                }
                               }
                             }}
                             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1 transition-colors"
@@ -6791,7 +6611,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                           </button>
                         )}
                       </div>
-
                       {trackListTab === "queue" && trackQueue.length > 0 && (
                         <button
                           onClick={() => {
@@ -6807,8 +6626,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         selectedPlaylist?.ownerId === user?.uid && (
                           <button
                             onClick={() => {
-                              setSearchQuery("");
-    setTrackListTab("search");
+                              setSearchQuery("");    setTrackListTab("search");
                             }}
                             className="shrink-0 py-1.5 px-3 text-[10px] font-bold uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 h-full"
                             title="Buscar canciones para añadir"
@@ -6820,6 +6638,25 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                           </button>
                         )}
                     </div>
+                    )}
+                    {trackListTab === "search" && (
+                      <div className="flex gap-2 mt-2 w-full max-w-sm mx-auto">
+                        <button
+                          onClick={() => setExploreMode("audio")}
+                          className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${exploreMode === "audio" ? "bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.3)]" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"}`}
+                        >
+                          <Music className="w-3 h-3" />
+                          Escuchar
+                        </button>
+                        <button
+                          onClick={() => setExploreMode("video")}
+                          className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${exploreMode === "video" ? "bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.3)]" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"}`}
+                        >
+                          <Youtube className="w-3 h-3" />
+                          Vídeos
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -6828,7 +6665,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 {/* Unified ambient background glow matching FAIView (FLUX) tab */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-[radial-gradient(ellipse_at_top,_rgba(192,38,211,0.12),_rgba(6,182,212,0.05),_transparent_70%)] pointer-events-none z-0" />
                 <div
-                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
+                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" || (trackListTab === "search" && exploreMode === "video") ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
                 >
                   {trackListTab === "karaoke" ? (
                     <React.Suspense
@@ -6915,6 +6752,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                     </div>
                   ) : trackListTab === "search" ? (
                     <div className="space-y-1">
+                      {exploreMode === "audio" && (
+                        <>
                       {/* Search results view */}
 
                       {(searchQuery || youtubeResults.length > 0) && (
@@ -7326,7 +7165,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                     </button>
 
                                     <button
-                                      onClick={async (e) => {
+                                      onClick={async () => {
                                         const isSamePlaylist =
                                           playingPlaylist?.id === ytTrack.id;
                                         if (isSamePlaylist) {
@@ -7641,83 +7480,43 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         );
                       })}
                       <div className="pt-4 border-t border-white/5 mt-4" />
-                    </div>
-                  ) : trackListTab === "artist" ? (
-                    <div className="space-y-4 px-1 pb-20">
-                      {artistDetails ? (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                          <div className="flex items-center gap-4 mb-6">
-                            <button onClick={() => setTrackListTab("search")} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                              <ChevronRight className="w-5 h-5 text-white transform rotate-180" />
-                            </button>
-                            <h2 className="text-2xl font-black text-white uppercase tracking-tight">{artistDetails.header}</h2>
-                          </div>
-                          {artistDetails.sections.map((section: any, sIdx: number) => (
-                            <div key={sIdx} className="mb-6">
-                              <h3 className="text-[14px] font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-emerald-400" />
-                                {section.title}
-                              </h3>
-                              <div className="flex overflow-x-auto pb-4 gap-3 snap-x scrollbar-hide">
-                                {section.items.map((item: any, iIdx: number) => (
-                                  <div key={iIdx} className="shrink-0 w-[140px] snap-start group/item cursor-pointer" onClick={() => {
-                                      if (item.isPlaylist) {
-                                        handleLoadExplorePlaylist(item);
-                                      } else {
-                                        const tempTrack = {
-                                          id: 'yt_temp_' + item.id,
-                                          title: item.title,
-                                          artist: item.artist || artistDetails.header,
-                                          duration: item.duration || "",
-                                          url: item.url,
-                                          bpm: 120
-                                        };
-                                        setOverrideCurrentTrack(tempTrack);
-                                        pendingSeekPosRef.current = null;
-                                        setPosition(0);
-                                        setDuration(0);
-                                        setIsPlaying(true);
-                                        loadIframeVideoDirectly(tempTrack);
-                                        showNotification(`Reproduciendo: ${item.title}`);
-
-                                        fetch(`/api/youtube/upnext?id=${item.id}`)
-                                          .then(r => r.json())
-                                          .then(data => {
-                                            if (data && data.length > 0) {
-                                              const targetIdWithPrefix = `yt_temp_${item.id}`;
-                                              const radioQueue = data
-                                                .filter((t: any) => t.id !== item.id && t.id !== targetIdWithPrefix)
-                                                .map((t: any) => ({
-                                                  ...t,
-                                                  id: t.id.startsWith('yt_temp_') ? t.id : `yt_temp_${t.id}`
-                                                }));
-                                              setTrackQueue(radioQueue);
-                                              trackQueueRef.current = radioQueue;
-                                              showNotification(`${radioQueue.length} canciones relacionadas añadidas a la cola`);
-                                            }
-                                          }).catch(() => {});
-                                      }
-                                  }}>
-                                    <div className="relative aspect-square rounded-xl overflow-hidden mb-2 shadow-lg group-hover/item:shadow-emerald-500/20 transition-all duration-300">
-                                      <img src={item.thumbnail} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
-                                      <div className="absolute inset-0 bg-black/20 group-hover/item:bg-black/40 transition-colors flex items-center justify-center">
-                                        <div className="w-12 h-12 rounded-full bg-[#1ED760] flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all transform scale-75 group-hover/item:scale-100 shadow-[0_8px_15px_rgba(30,215,96,0.3)]">
-                                          <Play className="w-6 h-6 text-black fill-black ml-1" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <h4 className="text-[11px] font-bold text-white line-clamp-2 leading-tight uppercase">{item.title}</h4>
-                                    <p className="text-[9px] text-white/50 truncate uppercase tracking-widest mt-1">{item.subType}</p>
-                                  </div>
-                                ))}
+                        </>
+                      )}
+                      {exploreMode === "video" && (
+                        <div className="w-full h-full flex flex-col absolute inset-0 z-50 bg-[#050505]">
+                          <React.Suspense
+                            fallback={
+                              <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center h-full">
+                                <Loader2 className="w-8 h-8 animate-spin mx-auto text-red-500 mb-2" />
+                                <span className="text-xs font-semibold">Cargando Vídeos...</span>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-white/50">
-                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
-                          <p className="text-[10px] uppercase tracking-widest">Cargando artista...</p>
+                            }
+                          >
+                            <LazyVideoView
+                              isVisible={true}
+                              pauseBackgroundMusic={() => {
+                                setIsPlaying(false);
+                                expectedPlayingRef.current = false;
+                                if (youtubePlayerRef.current) {
+                                  try {
+                                    const intPlayer =
+                                      youtubePlayerRef.current.getInternalPlayer();
+                                    if (
+                                      intPlayer &&
+                                      typeof intPlayer.pauseVideo === "function"
+                                    ) {
+                                      intPlayer.pauseVideo();
+                                    }
+                                  } catch (e) {}
+                                }
+                                if (fallbackSilentAudioRef.current) {
+                                  try {
+                                    fallbackSilentAudioRef.current.pause();
+                                  } catch (e) {}
+                                }
+                              }}
+                            />
+                          </React.Suspense>
                         </div>
                       )}
                     </div>
@@ -8191,7 +7990,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
       {currentTrack &&
         isTrackListExpanded &&
-        trackListTab !== "radio-fai" && (
+        trackListTab !== "entertainment" &&
+        trackListTab !== "radio-fai" &&
+        !(trackListTab === "search" && exploreMode === "video") && (
           <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">
             <div
               onClick={() => {

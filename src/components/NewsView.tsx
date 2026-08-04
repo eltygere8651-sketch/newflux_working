@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, orderBy, limit, getDocs, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Eye, EyeOff, ChevronUp, ChevronDown, Trash2,
   Clock,
@@ -7,7 +7,6 @@ import { Eye, EyeOff, ChevronUp, ChevronDown, Trash2,
   Rocket,
   MonitorPlay,
   Users,
-  Star,
   ArrowLeft,
   Pencil,
   Plus,

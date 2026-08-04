@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Link as LinkIcon, Download, Smartphone } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";

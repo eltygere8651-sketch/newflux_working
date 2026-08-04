@@ -1,4 +1,4 @@
-import { useRef, useEffect, RefObject } from 'react';
+import { useEffect, RefObject } from 'react';
 
 export function useDraggable(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
@@ -40,7 +40,7 @@ export function useDraggable(ref: RefObject<HTMLElement | null>) {
       ele.scrollLeft = pos.left - dx;
     };
 
-    const mouseUpHandler = (e: MouseEvent) => {
+    const mouseUpHandler = () => {
       isDragging = false;
       ele.style.cursor = 'grab';
       ele.style.removeProperty('user-select');

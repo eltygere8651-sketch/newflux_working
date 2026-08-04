@@ -76,7 +76,6 @@ export function selectNextDJTrack(
   // Normalize so that the ratios are converted to probabilities summing to 1.0
   const total = topRatio + favRatio + discRatio;
   const wTop = total > 0 ? topRatio / total : 0.60;
-  const wFav = total > 0 ? favRatio / total : 0.25;
   const wDisc = total > 0 ? discRatio / total : 0.15;
 
   const rand = Math.random();

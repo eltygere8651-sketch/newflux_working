@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { QrCode, Plus, MoreVertical, Copy, Trash2, Edit2, Download, Check, X, Loader2, Play, Pause, BarChart2, Eye } from 'lucide-react';
+import { QrCode, Plus, Copy, Trash2, Edit2, Download, X, Loader2, Eye } from 'lucide-react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { FluxLogo, FluxLogoLarge } from './FluxLogo';
 
 interface Campaign {
   id: string;

@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app';
-import { updateEmail, updatePassword } from 'firebase/auth';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -13,29 +12,13 @@ import {
   updateProfile,
   sendPasswordResetEmail,
   setPersistence,
-  browserLocalPersistence,
-  linkWithPopup,
-  signInWithCredential,
-  EmailAuthProvider,
-  linkWithCredential
+  browserLocalPersistence
 } from 'firebase/auth';
 import { 
-  getFirestore, 
   initializeFirestore, 
   persistentLocalCache, 
   persistentMultipleTabManager, 
-  setLogLevel,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-  writeBatch,
-  runTransaction
+  setLogLevel
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -57,8 +40,6 @@ let onAuthErrorCallback: AuthErrorCallback | null = null;
 export const registerAuthErrorHandler = (callback: AuthErrorCallback) => { onAuthErrorCallback = callback; };
 
 export const loginWithGoogle = async () => {
-  const user = auth.currentUser;
-
   try {
     // 1. Try signInWithPopup first (extremely compatible with standalone mobile browsers, safari, etc.)
     await signInWithPopup(auth, googleProvider);

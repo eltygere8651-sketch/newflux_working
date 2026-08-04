@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useFirebase } from "./FirebaseProvider";
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
 import { 
   updateProfile, 
   updateEmail, 

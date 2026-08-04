@@ -5,9 +5,6 @@ import {
   AlertTriangle, 
   Info, 
   Sparkles, 
-  Check, 
-  Megaphone, 
-  Clock, 
   Server,
   Trash2
 } from "lucide-react";
@@ -333,6 +330,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
     import("firebase/firestore").then(({ onSnapshot }) => {
       unsubscribe = onSnapshot(q, (querySnap) => {
+        if (!isMounted) return;
         const firebaseList: Announcement[] = [];
         const deletedIds = new Set<string>();
         querySnap.forEach((docSnap) => {

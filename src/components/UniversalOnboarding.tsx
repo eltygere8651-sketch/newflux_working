@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { FluxLogo, FluxLogoMini, FluxLogoLarge } from "./FluxLogo";
-import { CheckCircle2, ChevronRight, Play, Info, Smartphone, ShieldCheck, Sparkles, Share2, X, Send, Video, Maximize } from "lucide-react";
+import { FluxLogoLarge } from "./FluxLogo";
+import { CheckCircle2, ChevronRight, Play, Smartphone, ShieldCheck, Sparkles, Share2, X, Send, Video, Maximize } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 

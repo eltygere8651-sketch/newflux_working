@@ -11,7 +11,6 @@ import {
   query,
   orderBy,
   where,
-  addDoc,
   limit,
   startAfter,
   getCountFromServer,
@@ -27,7 +26,6 @@ import {
   Send,
   Save,
   Key,
-  Download,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -35,10 +33,6 @@ import {
   ChevronLeft,
   ChevronRight,
   QrCode,
-  Rocket,
-  MonitorPlay,
-  Users,
-  Star,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { FluxLogoMini } from "./FluxLogo";
@@ -1311,27 +1305,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     } finally {
       setLoadingAnalytics(false);
     }
-  };
-
-  const grantTrial = async (userId: string, durationDays: number = 7) => {
-    askConfirm(
-      `¿Activar prueba de ${durationDays} días para este usuario?`,
-      async () => {
-        try {
-          await updateDoc(doc(db, "users", userId), {
-            plan: "free",
-            trialStart: Date.now(),
-            trialDuration: durationDays,
-            subscriptionEnd: null,
-          });
-          showAlert(`¡Prueba de ${durationDays} días activada con éxito!`);
-          fetchUsers();
-        } catch (e) {
-          console.error(e);
-          showAlert("Error al activar prueba.");
-        }
-      },
-    );
   };
 
   const updateSub = async (
