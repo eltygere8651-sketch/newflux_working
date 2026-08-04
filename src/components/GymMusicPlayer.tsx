@@ -51,7 +51,9 @@ import { Play,
   UserPlus,
   Library,
   Globe,
-  Mic, Youtube } from "lucide-react";
+  Mic, 
+  Youtube,
+} from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { FAIView } from "./FAIView";
 import { NewsView } from "./NewsView";
@@ -98,6 +100,10 @@ import { recordTrackPlay,
 const LazyExploreView = React.lazy(() =>
   import("./ExploreView").then((m) => ({ default: m.ExploreView })),
 );
+
+// Feature Release Timestamps (for "NEW" badges)
+const VIDEOS_FEATURE_RELEASE = Date.now(); // Set to current time to ensure it shows for the next 24h
+const VIDEOS_RELEASE_MESSAGE = "¡Novedad! Sección de Vídeos HD ya disponible en Explorar 🎬";
 const LazyPodcastView = React.lazy(() =>
   import("./PodcastView").then((m) => ({ default: m.PodcastView })),
 );
@@ -486,6 +492,7 @@ const getTrackImage = (track?: any): string | null => {
   if (!track) return null;
   if (track.thumbnail) return cleanUrl(track.thumbnail);
   if (track.thumbnail_url) return cleanUrl(track.thumbnail_url);
+  if (track.thumbnails && track.thumbnails.length > 0 && track.thumbnails[0]?.url) return cleanUrl(track.thumbnails[0].url);
   if (track.imageUrl) return cleanUrl(track.imageUrl);
   if (track.artwork_url) return cleanUrl(track.artwork_url);
   if (track.artwork) return cleanUrl(track.artwork);
@@ -500,8 +507,9 @@ const getTrackImage = (track?: any): string | null => {
     }
   }
   if (typeof track.id === "string" && track.id.startsWith("yt_")) {
-    const vid = track.id.split("_")[1];
-    if (vid) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+    const parts = track.id.split("_");
+    const vid = parts[1] === "temp" ? parts[2] : parts[1];
+    if (vid && vid.length >= 10) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
   }
   // If track.id is exactly 11 characters (typical youtube ID)
   if (track.id && typeof track.id === "string" && track.id.length === 11) {
@@ -1501,7 +1509,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
   const [previousTab, setPreviousTab] = useState<string>("search");
   
-  const [hasNewExplore, setHasNewExplore] = useState(false);
+  const [hasNewExplore, setHasNewExplore] = useState(Date.now() - VIDEOS_FEATURE_RELEASE < 24 * 60 * 60 * 1000);
   const [hasNewCommunity, setHasNewCommunity] = useState(false);
 
   useEffect(() => {
@@ -2581,6 +2589,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
   // Fetch meta for custom UI
   useEffect(() => {
+    setCurrentTrackMeta(null);
     if (currentUrl) {
       fetchMetadata(currentUrl).then((meta) => {
         if (meta) {
@@ -4436,8 +4445,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   const displayTitle = currentTrack?.title || "Waiting...";
   const displayArtist = currentTrack?.artist || "Original Arch";
   const displayArtwork =
-    cleanUrl(currentTrackMeta?.thumbnail_url) ||
     getTrackImage(currentTrack) ||
+    cleanUrl(currentTrackMeta?.thumbnail_url) ||
     DEFAULT_MUSIC_COVER;
 
   // USE STABLE HANDLERS FOR MEDIA SESSION TO PREVENT LOCK SCREEN LAG/RE-REGISTRATION ISSUES
@@ -5238,7 +5247,15 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           }`}
         >
           <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Explorar</span>
-          {hasNewExplore && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
+          {hasNewExplore && (
+            <div className="absolute -top-1 -right-2 flex items-center justify-center">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600 border border-black shadow-[0_0_10px_rgba(239,68,68,1)]"></span>
+              </span>
+              <Sparkles className="absolute -top-3 -right-2 w-3 h-3 text-yellow-300 animate-bounce" />
+            </div>
+          )}
         </button>
 
         {/* Comunidad (Moved here from hidden, replacing Flux position) */}
@@ -5947,7 +5964,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                             alt="Artwork"
                             className="w-full h-full object-cover transition-opacity duration-300"
                             referrerPolicy="no-referrer"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_MUSIC_COVER; }}
                           />
                         </div>
                       </div>
@@ -6204,7 +6221,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                 alt="Artwork"
                                 className="w-full h-full object-cover transition-opacity duration-300"
                                 referrerPolicy="no-referrer"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_MUSIC_COVER; }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
                             </div>
@@ -6640,20 +6657,54 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                     </div>
                     )}
                     {trackListTab === "search" && (
-                      <div className="flex gap-2 mt-2 w-full max-w-sm mx-auto">
+                      <div className="flex gap-2.5 mt-3 mb-2 w-full max-w-[340px] mx-auto p-1.5 bg-emerald-500/[0.02] backdrop-blur-3xl border border-emerald-500/10 rounded-2xl shadow-2xl relative">
+                        {/* Premium Green Glow effect for the whole container */}
+                        <div className={`absolute inset-0 rounded-2xl transition-all duration-1000 blur-2xl -z-10 ${exploreMode === 'video' ? 'bg-red-600/5 opacity-100' : 'bg-emerald-500/10 opacity-100'}`} />
+                        
                         <button
                           onClick={() => setExploreMode("audio")}
-                          className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${exploreMode === "audio" ? "bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.3)]" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"}`}
+                          className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-500 flex items-center justify-center gap-2 group/abtn ${
+                            exploreMode === "audio" 
+                              ? "bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-600 text-black shadow-[0_8px_20px_-4px_rgba(16,185,129,0.5)] scale-[1.02] z-10 border border-white/20" 
+                              : "text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5"
+                          }`}
                         >
-                          <Music className="w-3 h-3" />
+                          <Music className={`w-4 h-4 ${exploreMode === "audio" ? "animate-pulse" : "group-hover/abtn:scale-110 transition-transform"}`} />
                           Escuchar
                         </button>
                         <button
                           onClick={() => setExploreMode("video")}
-                          className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${exploreMode === "video" ? "bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.3)]" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"}`}
+                          className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-700 flex items-center justify-center gap-2 relative overflow-hidden group/vbtn ${
+                            exploreMode === "video" 
+                              ? "bg-gradient-to-br from-[#FF0000] via-[#E60000] to-[#CC0000] text-white shadow-[0_10px_30px_-5px_rgba(220,38,38,0.6)] scale-[1.02] z-10 border border-white/20" 
+                              : "bg-emerald-500/[0.03] text-slate-400 hover:text-white hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20"
+                          }`}
                         >
-                          <Youtube className="w-3 h-3" />
-                          Vídeos
+                          {/* Premium inner glow */}
+                          {exploreMode === "video" && (
+                            <div className="absolute inset-0 bg-gradient-to-tr from-white/20 via-transparent to-transparent pointer-events-none" />
+                          )}
+                          
+                          <Youtube className={`w-4.5 h-4.5 transition-transform duration-700 ${exploreMode === "video" ? "scale-110" : "group-hover/vbtn:rotate-12"}`} />
+                          <span className="relative z-10">Vídeos</span>
+
+                          {/* Redesigned Novedad Badge - Auto-removes in 24h */}
+                          {Date.now() < VIDEOS_FEATURE_RELEASE + (24 * 60 * 60 * 1000) && (
+                            <div className="absolute -top-1 -right-1 flex items-center scale-90">
+                              <div className="relative">
+                                <div className="absolute inset-0 bg-emerald-400 blur-md animate-pulse opacity-60" />
+                                <div className="relative bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-500 text-black text-[7px] font-black px-2 py-1 rounded-bl-xl shadow-2xl flex items-center gap-1 border-l border-b border-black/20 ring-1 ring-white/20">
+                                  <Sparkles className="w-2.5 h-2.5 animate-bounce" />
+                                  <span>NUEVO</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Shimmer effect for novelty - now with Green glow */}
+                          {Date.now() < VIDEOS_FEATURE_RELEASE + (24 * 60 * 60 * 1000) && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent -translate-x-full animate-shimmer pointer-events-none" />
+                          )}
                         </button>
                       </div>
                     )}
@@ -6841,6 +6892,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                           url: `https://www.youtube.com/watch?v=${t.id}`,
                                           duration: t.duration || "N/A",
                                           bpm: 120,
+                                          thumbnail: t.thumbnail || t.thumbnail_url || `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`,
                                         }));
                                         setOverrideCurrentTrack(
                                           mapped[startIdx],
@@ -6980,6 +7032,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                       url: ytTrack.url,
                                       duration: ytTrack.duration || "N/A",
                                       bpm: 120,
+                                      thumbnail: ytTrack.thumbnail || ytTrack.thumbnail_url || (ytTrack.thumbnails && ytTrack.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${ytTrack.id}/hqdefault.jpg`,
                                     };
                                     setOverrideCurrentTrack(selectedTrackObj);
                                     pendingSeekPosRef.current = null;
@@ -7034,6 +7087,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                               url: t.url,
                                               duration: t.duration || "N/A",
                                               bpm: 120,
+                                              thumbnail: t.thumbnail || t.thumbnail_url || (t.thumbnails && t.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`,
                                             }));
                                           setTrackQueue(allTracksOnly);
                                           trackQueueRef.current = allTracksOnly;
@@ -7066,6 +7120,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                                 url: t.url,
                                                 duration: t.duration || "N/A",
                                                 bpm: 120,
+                                                thumbnail: t.thumbnail || t.thumbnail_url || (t.thumbnails && t.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`,
                                               }));
                                             const currentIdx = allTracksOnly.findIndex((t) => t.id === trackId);
                                             if (currentIdx !== -1 && allTracksOnly.length > currentIdx + 1) {
@@ -7085,7 +7140,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                   alt=""
                                   className="w-full h-full object-cover group-hover/yt:scale-110 transition-transform duration-500"
                                   referrerPolicy="no-referrer"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_MUSIC_COVER; }}
                                 />
                                 <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-black/60 transition-colors flex items-center justify-center">
                                   <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center opacity-0 group-hover/yt:opacity-100 transition-all transform scale-75 group-hover/yt:scale-100 shadow-xl">
@@ -7191,6 +7246,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                                   url: t.url,
                                                   duration: t.duration,
                                                   bpm: 120,
+                                                  thumbnail: t.thumbnail || t.thumbnail_url || (t.thumbnails && t.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`,
                                                 }),
                                               );
                                               setOverrideCurrentTrack(
@@ -7247,6 +7303,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                           url: ytTrack.url,
                                           duration: ytTrack.duration,
                                           bpm: 120,
+                                          thumbnail: ytTrack.thumbnail || ytTrack.thumbnail_url || (ytTrack.thumbnails && ytTrack.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${ytTrack.id}/hqdefault.jpg`,
                                         };
                                         handleAddToQueue(track, e);
                                       }}
@@ -7277,6 +7334,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                                           url: ytTrack.url,
                                           duration: ytTrack.duration,
                                           bpm: 120,
+                                          thumbnail: ytTrack.thumbnail || ytTrack.thumbnail_url || (ytTrack.thumbnails && ytTrack.thumbnails[0]?.url) || `https://i.ytimg.com/vi/${ytTrack.id}/hqdefault.jpg`,
                                         };
                                         handleToggleFavorite(track, e);
                                       }}
@@ -8018,7 +8076,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                   className="w-full h-full object-cover"
                   alt=""
                   referrerPolicy="no-referrer"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_MUSIC_COVER; }}
                 />
               </div>
 

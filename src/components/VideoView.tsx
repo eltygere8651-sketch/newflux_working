@@ -14,6 +14,19 @@ import {
   Trash2,
   Sparkles,
   PlayCircle,
+  Baby,
+  Lock,
+  LockKeyholeOpen,
+  Maximize,
+  Minimize,
+  ShieldCheck,
+  CheckCircle2,
+  Tv2,
+  Film,
+  Volume2,
+  VolumeX,
+  SkipForward,
+  Youtube,
 } from "lucide-react";
 import ReactPlayer from "react-player";
 import { useDraggable } from "../hooks/useDraggable";
@@ -36,6 +49,7 @@ const VIDEO_QUERIES = [
 const VIDEO_CATEGORIES = [
   "Todos",
   "Continuar Viendo",
+  "Infantil / Kids 🎈",
   "Entrevistas",
   "Podcasts",
   "La Resistencia",
@@ -51,6 +65,11 @@ const getCategoryQuery = (cat: string) => {
   switch (cat) {
     case "Todos":
       return "entrevistas virales podcasts tendencia 2025 2026 recientes";
+    case "Infantil / Kids 🎈":
+    case "Infantil / Kids":
+    case "Kids":
+    case "Infantil":
+      return "canciones infantiles caricaturas para niños pocoyo la granja de zenon plaza sesamo caricaturas disney junior en español";
     case "Entrevistas":
       return "entrevistas virales recientes artistas mas vistos 2025 2026";
     case "Podcasts":
@@ -79,12 +98,465 @@ interface VideoItem {
   title: string;
   artist: string;
   thumbnail: string;
-  duration?: number;
+  duration?: number | string;
   savedTime?: number;
 }
 
+const ActivePlayerControlBar = ({
+  isPlaying,
+  setIsPlaying,
+  isMuted,
+  setIsMuted,
+  volume,
+  setVolume,
+  isFullscreen,
+  toggleFullscreen,
+  isBabyLock,
+  setIsBabyLock,
+  played,
+  onSeekMouseDown,
+  onSeekChange,
+  onSeekMouseUp,
+  duration,
+  currentTime,
+  onNext,
+  isOverlay = false,
+}: {
+  isPlaying: boolean;
+  setIsPlaying: (val: boolean) => void;
+  isMuted: boolean;
+  setIsMuted: (val: boolean) => void;
+  volume: number;
+  setVolume: (val: number) => void;
+  isFullscreen: boolean;
+  toggleFullscreen: () => void;
+  isBabyLock: boolean;
+  setIsBabyLock: (val: boolean) => void;
+  played: number;
+  onSeekMouseDown: () => void;
+  onSeekChange: (val: number) => void;
+  onSeekMouseUp: (val: number) => void;
+  duration: number;
+  currentTime: number;
+  onNext?: () => void;
+  isOverlay?: boolean;
+}) => {
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds) || seconds < 0) return "0:00";
+    const date = new Date(seconds * 1000);
+    const hh = date.getUTCHours();
+    const mm = date.getUTCMinutes();
+    const ss = date.getUTCSeconds().toString().padStart(2, "0");
+    if (hh > 0) return `${hh}:${mm.toString().padStart(2, "0")}:${ss}`;
+    return `${mm}:${ss}`;
+  };
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={`flex flex-col gap-2 ${
+        isOverlay 
+          ? "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/95 via-black/60 to-transparent backdrop-blur-md z-50 transition-all duration-300 pointer-events-auto" 
+          : "p-3 rounded-b-2xl bg-slate-900 border-x border-b border-white/10 backdrop-blur-lg shadow-2xl"
+      } overflow-hidden`}
+    >
+      {/* Progress Bar & Time */}
+      <div className="flex flex-col gap-1 w-full group/seek">
+        <div className="flex items-center justify-between text-[10px] font-mono font-bold text-white/80 mb-0.5">
+          <span>{formatTime(currentTime)}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-red-500 animate-pulse">●</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+        <div className="relative h-6 flex items-center w-full">
+          <input
+            type="range"
+            min={0}
+            max={0.999999}
+            step="any"
+            value={played}
+            onMouseDown={onSeekMouseDown}
+            onChange={(e) => onSeekChange(parseFloat(e.target.value))}
+            onMouseUp={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
+            onTouchStart={onSeekMouseDown}
+            onTouchEnd={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
+            className="absolute inset-0 w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-red-600 z-10"
+          />
+          <div 
+            className="absolute top-1/2 -translate-y-1/2 left-0 h-1.5 bg-red-600 rounded-lg transition-all pointer-events-none"
+            style={{ width: `${played * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="flex items-center justify-between gap-3 w-full">
+        {/* Left: Play/Pause/Next Group */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPlaying(!isPlaying);
+            }}
+            className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all shadow-lg active:scale-95 cursor-pointer"
+          >
+            {isPlaying ? (
+              <Pause className="w-5 h-5 fill-current" />
+            ) : (
+              <Play className="w-5 h-5 fill-current ml-0.5" />
+            )}
+          </button>
+          
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNext?.();
+            }}
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/10"
+            title="Siguiente video"
+          >
+            <SkipForward className="w-4 h-4 fill-current" />
+          </button>
+        </div>
+
+        {/* Right: Volume & Fullscreen & Baby Lock */}
+        <div className="flex items-center gap-2">
+          {/* Volume Control */}
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5 hover:bg-white/10 transition-all">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMuted(!isMuted);
+              }}
+              className="text-slate-300 hover:text-white transition-colors cursor-pointer"
+            >
+              {isMuted || volume === 0 ? (
+                <VolumeX className="w-4 h-4 text-red-400" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-slate-300" />
+              )}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => {
+                e.stopPropagation();
+                setVolume(parseFloat(e.target.value));
+              }}
+              className="w-14 sm:w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/10"
+            title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+          >
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsBabyLock(true);
+            }}
+            className="w-9 h-9 rounded-full bg-red-600/20 hover:bg-red-600/30 text-red-400 flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-red-500/20"
+            title="Bloqueo Infantil"
+          >
+            <Lock className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VideoPlayerWithControls = ({
+  displayVideo,
+  isPlaying,
+  setIsPlaying,
+  isMuted,
+  setIsMuted,
+  volume,
+  setVolume,
+  isBabyLock,
+  setIsBabyLock,
+  played,
+  duration,
+  onProgress,
+  onDuration,
+  onSeekMouseDown,
+  onSeekChange,
+  onSeekMouseUp,
+  onEnded,
+  onReady,
+  playerRef,
+  fullscreenId,
+  toggleFullscreen,
+  showControls,
+  resetControlsTimeout,
+}: any) => {
+  const isFS = !!fullscreenId;
+
+  return (
+    <div
+      id={`player-card-${displayVideo.id}`}
+      className={`relative w-full ${isFS ? "h-full" : "aspect-video"} bg-slate-950 group/player overflow-hidden rounded-t-xl`}
+      onClick={() => {
+        if (!isBabyLock) resetControlsTimeout();
+      }}
+    >
+      <ReactPlayer
+        ref={playerRef}
+        url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
+        width="100%"
+        height="100%"
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        playing={isPlaying}
+        volume={isMuted ? 0 : volume}
+        muted={isMuted}
+        onProgress={onProgress}
+        onDuration={onDuration}
+        onReady={onReady}
+        onEnded={onEnded}
+        controls={false}
+        playsinline
+        config={{
+          youtube: {
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              modestbranding: 1,
+              rel: 0,
+              showinfo: 0,
+              iv_load_policy: 3,
+              cc_load_policy: 0,
+              fs: 0,
+              playsinline: 1,
+              disablekb: 1,
+              origin: typeof window !== "undefined" ? window.location.origin : undefined,
+            },
+          },
+        }}
+      />
+
+      {/* Top Mask to hide YouTube title/links */}
+      <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none z-0 opacity-60" />
+
+      {/* Central Play/Pause on Tap Overlay */}
+      {!isBabyLock && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsPlaying(!isPlaying);
+            resetControlsTimeout();
+          }}
+          onMouseMove={resetControlsTimeout}
+          className={`absolute inset-0 z-10 cursor-pointer flex items-center justify-center transition-all ${
+            showControls ? "bg-black/40" : "bg-transparent"
+          }`}
+        >
+          <div
+            className={`w-20 h-20 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-lg transition-all transform ${
+              showControls || !isPlaying ? "opacity-100 scale-100" : "opacity-0 scale-90"
+            } shadow-2xl border border-white/20`}
+          >
+            {isPlaying ? (
+              <Pause className="w-10 h-10 fill-current" />
+            ) : (
+              <Play className="w-10 h-10 fill-current ml-1.5" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Control Bar Overlay (Only in Fullscreen) */}
+      {!isBabyLock && isFS && (
+        <div
+          onMouseMove={resetControlsTimeout}
+          className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${
+            showControls || !isPlaying ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <ActivePlayerControlBar
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            isMuted={isMuted}
+            setIsMuted={setIsMuted}
+            volume={volume}
+            setVolume={setVolume}
+            isFullscreen={isFS}
+            toggleFullscreen={() => toggleFullscreen(`player-card-${displayVideo.id}`)}
+            isBabyLock={isBabyLock}
+            setIsBabyLock={setIsBabyLock}
+            played={played}
+            onSeekMouseDown={onSeekMouseDown}
+            onSeekChange={onSeekChange}
+            onSeekMouseUp={onSeekMouseUp}
+            duration={duration}
+            currentTime={played * duration}
+            onNext={onEnded}
+            isOverlay={true}
+          />
+        </div>
+      )}
+
+      {isBabyLock && <BabyLockOverlay onUnlock={() => setIsBabyLock(false)} />}
+    </div>
+  );
+};
+
 const POSITIONS_KEY = "flux_video_positions";
 const HISTORY_KEY = "flux_video_history";
+
+const formatDurationDisplay = (val?: number | string): string => {
+  if (val === undefined || val === null || val === "N/A" || val === "") return "";
+  if (typeof val === "number") {
+    if (isNaN(val) || val < 0) return "";
+    const date = new Date(val * 1000);
+    const hh = date.getUTCHours();
+    const mm = date.getUTCMinutes();
+    const ss = date.getUTCSeconds().toString().padStart(2, "0");
+    if (hh > 0) {
+      return `${hh}:${mm.toString().padStart(2, "0")}:${ss}`;
+    }
+    return `${mm}:${ss}`;
+  }
+  if (typeof val === "string") {
+    const clean = val.trim();
+    if (clean === "N/A") return "";
+    return clean;
+  }
+  return "";
+};
+
+const parseDurationSeconds = (val?: number | string): number => {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const parts = val.split(":").map((p) => parseInt(p, 10));
+    if (parts.some((p) => isNaN(p))) return 0;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+  }
+  return 0;
+};
+
+const getVideoClassificationInfo = (video: VideoItem, activeCat: string) => {
+  const titleLower = (video.title || "").toLowerCase();
+  const artistLower = (video.artist || "").toLowerCase();
+  const catLower = (activeCat || "").toLowerCase();
+
+  const isKidsCat = catLower.includes("infantil") || catLower.includes("kids");
+
+  const kidsKeywords = [
+    "pocoyo",
+    "zenon",
+    "granja",
+    "niños",
+    "niño",
+    "infantil",
+    "canciones infantiles",
+    "dibujos",
+    "caricatura",
+    "caricaturas",
+    "baby",
+    "kid",
+    "kids",
+    "disney",
+    "plaza sesamo",
+    "plim plim",
+    "chuchuwa",
+    "luli pampin",
+    "cantando",
+    "aprender",
+    "educativo",
+    "masha",
+  ];
+  const isKidsContent =
+    isKidsCat || kidsKeywords.some((k) => titleLower.includes(k) || artistLower.includes(k));
+
+  if (isKidsContent) {
+    return {
+      isKids: true,
+      categoryTag: "Infantil • Safe Kids 🛡️",
+      qualityBadge: "Safe Kids 🛡️",
+      badgeClass: "bg-amber-500/90 text-black border-amber-400/80 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]",
+      tagClass: "bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold",
+      ageRating: "Apto para todo público (0-10)",
+    };
+  }
+
+  if (
+    titleLower.includes("podcast") ||
+    artistLower.includes("podcast") ||
+    titleLower.includes("episodio") ||
+    catLower.includes("podcast")
+  ) {
+    return {
+      isKids: false,
+      categoryTag: "Podcast 🎙️",
+      qualityBadge: "Podcast HD",
+      badgeClass: "bg-purple-600/90 text-white border-purple-400/80 font-black shadow-[0_0_12px_rgba(168,85,247,0.4)]",
+      tagClass: "bg-purple-500/20 text-purple-300 border-purple-500/40 font-bold",
+      ageRating: "Podcast oficial",
+    };
+  }
+
+  if (
+    titleLower.includes("entrevista") ||
+    titleLower.includes("interview") ||
+    titleLower.includes("resistencia") ||
+    titleLower.includes("hormiguero") ||
+    catLower.includes("entrevista")
+  ) {
+    return {
+      isKids: false,
+      categoryTag: "Entrevista 💬",
+      qualityBadge: "4K Ultra HD",
+      badgeClass: "bg-blue-600/90 text-white border-blue-400/80 font-black shadow-[0_0_12px_rgba(59,130,246,0.4)]",
+      tagClass: "bg-blue-500/20 text-blue-300 border-blue-500/40 font-bold",
+      ageRating: "Entrevista exclusiva",
+    };
+  }
+
+  if (
+    titleLower.includes("oficial") ||
+    titleLower.includes("video oficial") ||
+    titleLower.includes("reggaeton") ||
+    titleLower.includes("urbano") ||
+    catLower.includes("urbano")
+  ) {
+    return {
+      isKids: false,
+      categoryTag: "Música Urbana 🎵",
+      qualityBadge: "HD 1080p",
+      badgeClass: "bg-rose-600/90 text-white border-rose-400/80 font-black shadow-[0_0_12px_rgba(244,63,94,0.4)]",
+      tagClass: "bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold",
+      ageRating: "Música & Tendencia",
+    };
+  }
+
+  return {
+    isKids: false,
+    categoryTag: "HD 🎬",
+    qualityBadge: "HD 1080p",
+    badgeClass: "bg-emerald-600/90 text-white border-emerald-400/80 font-black shadow-[0_0_12px_rgba(16,185,129,0.4)]",
+    tagClass: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold",
+    ageRating: "Alta definición",
+  };
+};
 
 export const getHighResVideoThumbnail = (url?: string, videoId?: string): string => {
   if (url && typeof url === "string") {
@@ -111,6 +583,104 @@ export const getHighResVideoThumbnail = (url?: string, videoId?: string): string
   return "";
 };
 
+const BabyLockOverlay: React.FC<{
+  onUnlock: () => void;
+}> = ({ onUnlock }) => {
+  const [tapCount, setTapCount] = useState(0);
+  const [showBadge, setShowBadge] = useState(false);
+  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const badgeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+
+  const handleTap = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    const now = Date.now();
+    
+    // Prevent duplicate touchstart + click events from firing within 120ms
+    if (now - lastTapTimeRef.current < 120) {
+      return;
+    }
+
+    const timeSinceLastTap = lastTapTimeRef.current > 0 ? now - lastTapTimeRef.current : 0;
+    lastTapTimeRef.current = now;
+
+    setShowBadge(true);
+    if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    badgeTimerRef.current = setTimeout(() => {
+      setShowBadge(false);
+    }, 2000);
+
+    // If more than 650ms elapsed since the previous tap, reset sequence to 1
+    if (timeSinceLastTap > 650) {
+      setTapCount(1);
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = setTimeout(() => {
+        setTapCount(0);
+      }, 600);
+      return;
+    }
+
+    const nextCount = tapCount + 1;
+    if (nextCount >= 10) {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+      setShowBadge(false);
+      setTapCount(0);
+      onUnlock();
+      return;
+    }
+
+    setTapCount(nextCount);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => {
+      setTapCount(0);
+    }, 600); // 10 rapid consecutive taps required (<600ms apart)
+  };
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    };
+  }, []);
+
+  return (
+    <div
+      className="absolute inset-0 z-40 bg-transparent pointer-events-auto select-none overflow-hidden cursor-pointer"
+      onClick={handleTap}
+      onTouchStart={handleTap}
+    >
+      {showBadge && (
+        <div className="absolute inset-x-0 top-3 sm:top-5 flex flex-col items-center justify-center gap-2 pointer-events-none px-3 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-black/90 backdrop-blur-2xl border border-amber-500/60 text-amber-300 text-xs font-bold px-4 py-2 rounded-full flex items-center gap-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.9)]">
+            <Baby className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+            <div className="flex flex-col text-left">
+              <span className="text-[10.5px] leading-tight text-white font-black uppercase tracking-wider">
+                🔒 Modo Bebé Activo
+              </span>
+              <span className="text-[9.5px] text-amber-300/80 leading-tight font-medium">
+                Controles protegidos
+              </span>
+            </div>
+            <div className="flex items-center gap-1 ml-2.5 bg-black/50 px-2 py-1 rounded-full border border-white/10">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((step) => (
+                <div
+                  key={step}
+                  className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${
+                    step <= tapCount
+                      ? "bg-amber-400 scale-125 shadow-[0_0_8px_rgba(251,191,36,0.9)]"
+                      : "bg-white/20 border border-white/10"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const VideoView = ({
   isVisible,
   pauseBackgroundMusic,
@@ -124,12 +694,101 @@ export const VideoView = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [activePlayerContainerId, setActivePlayerContainerId] = useState<string | null>(null);
   const [isPlayerInView, setIsPlayerInView] = useState(true);
   const [videoHistory, setVideoHistory] = useState<VideoItem[]>([]);
 
   // Player state
   const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [played, setPlayed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [seeking, setSeeking] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isBabyLock, setIsBabyLock] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [fullscreenId, setFullscreenId] = useState<string | null>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const resetControlsTimeout = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    setShowControls(true);
+    controlsTimeoutRef.current = setTimeout(() => {
+      if (isPlaying && !isBabyLock) {
+        setShowControls(false);
+      }
+    }, 3500);
+  };
+
+  useEffect(() => {
+    if (showControls && isPlaying && !isBabyLock) {
+      resetControlsTimeout();
+    }
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, [isPlaying, isBabyLock]);
+
+  useEffect(() => {
+    const handleFS = () => {
+      const activeFS = document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (!activeFS) {
+        setFullscreenId(null);
+        if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.unlock) {
+          try {
+            (window.screen as any).orientation.unlock();
+          } catch (e) {}
+        }
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFS);
+    document.addEventListener("webkitfullscreenchange", handleFS);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFS);
+      document.removeEventListener("webkitfullscreenchange", handleFS);
+    };
+  }, []);
+
+  const toggleFullscreen = (containerId: string) => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    const isFS = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el;
+
+    if (isFS) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+      if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.unlock) {
+        try {
+          (window.screen as any).orientation.unlock();
+        } catch (e) {}
+      }
+    } else {
+      const requestFS = el.requestFullscreen || (el as any).webkitRequestFullscreen || (el as any).msRequestFullscreen;
+      if (requestFS) {
+        Promise.resolve(requestFS.call(el))
+          .then(() => {
+            setFullscreenId(containerId);
+            if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
+              (window.screen as any).orientation.lock("landscape").catch(() => {
+                try {
+                  (window.screen as any).orientation.lock("landscape-primary").catch(() => {});
+                } catch (e) {}
+              });
+            }
+          })
+          .catch(() => {
+            setFullscreenId(containerId);
+          });
+      }
+    }
+  };
 
   const playerRef = useRef<ReactPlayer>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -152,6 +811,11 @@ export const VideoView = ({
       return;
     }
 
+    // Scroll to the active video automatically when it changes (for continuous play)
+    if (currentVideo) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         setIsPlayerInView(entry.isIntersecting);
@@ -161,7 +825,7 @@ export const VideoView = ({
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [playingId, isMinimized, currentVideo, videos, videoHistory, activeCategory]);
+  }, [playingId, isMinimized, currentVideo, activeCategory]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -209,11 +873,16 @@ export const VideoView = ({
   };
 
   const saveVideoProgress = (video: VideoItem, seconds: number) => {
-    if (!video || isNaN(seconds) || seconds <= 0) return;
+    if (!video || isNaN(seconds)) return;
     try {
-      const floorSecs = Math.floor(seconds);
+      const floorSecs = Math.max(0, Math.floor(seconds));
       const positions = getSavedPositions();
-      positions[video.id] = floorSecs;
+      
+      if (floorSecs === 0) {
+        delete positions[video.id];
+      } else {
+        positions[video.id] = floorSecs;
+      }
       localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
 
       // Update History List
@@ -267,10 +936,7 @@ export const VideoView = ({
             title: formatTitle(v.title),
             artist: v.artist || v.uploader || "YouTube",
             thumbnail: getHighResVideoThumbnail(v.thumbnail, v.id),
-            duration:
-              typeof v.duration === "number" && !isNaN(v.duration)
-                ? v.duration
-                : undefined,
+            duration: v.duration || undefined,
           })),
         );
       }
@@ -312,10 +978,18 @@ export const VideoView = ({
   const playNextVideo = () => {
     if (!currentVideo) return;
     
+    // Clear progress for the video that just finished
+    saveVideoProgress(currentVideo, 0);
+    
     const activeList = activeCategory === "Continuar Viendo" ? videoHistory : videos;
     const sourcePrefix = activeCategory === "Continuar Viendo" ? "hist" : "grid";
     
     const currentIndex = activeList.findIndex(v => v.id === currentVideo.id);
+    
+    // Reset states for the new video
+    setPlayed(0);
+    setDuration(0);
+
     if (currentIndex !== -1 && currentIndex < activeList.length - 1) {
       const nextVid = activeList[currentIndex + 1];
       
@@ -323,8 +997,32 @@ export const VideoView = ({
       const savedSecs = positions[nextVid.id] || nextVid.savedTime || 0;
       initialSeekTimeRef.current = savedSecs;
       
+      const nextSourceId = `${sourcePrefix}-${nextVid.id}`;
       setCurrentVideo(nextVid);
-      setPlayingId(`${sourcePrefix}-${nextVid.id}`);
+      setPlayingId(nextSourceId);
+      
+      // If NOT in fullscreen, move the player container to the new card
+      // If IN fullscreen, keep the player container stable to preserve fullscreen
+      if (!fullscreenId) {
+        setActivePlayerContainerId(nextSourceId);
+      }
+      
+      setIsPlaying(true);
+    } else if (activeList.length > 0) {
+      // Continuous autoplay sequence: loop back to start or first video
+      const nextVid = activeList[0];
+      const positions = getSavedPositions();
+      const savedSecs = positions[nextVid.id] || nextVid.savedTime || 0;
+      initialSeekTimeRef.current = savedSecs;
+
+      const nextSourceId = `${sourcePrefix}-${nextVid.id}`;
+      setCurrentVideo(nextVid);
+      setPlayingId(nextSourceId);
+
+      if (!fullscreenId) {
+        setActivePlayerContainerId(nextSourceId);
+      }
+
       setIsPlaying(true);
     } else {
       setIsPlaying(false);
@@ -341,6 +1039,7 @@ export const VideoView = ({
     initialSeekTimeRef.current = savedSecs;
     setCurrentVideo(video);
     setPlayingId(sourceId);
+    setActivePlayerContainerId(sourceId);
     setIsPlaying(true);
     setIsMinimized(false);
   };
@@ -386,16 +1085,47 @@ export const VideoView = ({
   };
 
   const handleProgress = (state: {
+    played: number;
     playedSeconds: number;
     loadedSeconds: number;
   }) => {
+    if (!seeking) {
+      setPlayed(state.played);
+    }
     const secs = state.playedSeconds;
-    if (currentVideo && secs > 1) {
+    
+    // Don't save progress if we're in the last 10 seconds or 98% of the video
+    const isNearEnd = duration > 0 && (duration - secs < 10 || state.played > 0.98);
+
+    if (currentVideo && secs > 1 && !isNearEnd) {
       if (Math.abs(secs - lastSavedTimeRef.current) >= 2) {
         lastSavedTimeRef.current = secs;
         saveVideoProgress(currentVideo, secs);
       }
+    } else if (currentVideo && isNearEnd) {
+      // Clear progress when nearly finished to avoid end-of-video loop on restart
+      if (lastSavedTimeRef.current !== 0) {
+        lastSavedTimeRef.current = 0;
+        saveVideoProgress(currentVideo, 0);
+      }
     }
+  };
+
+  const handleDuration = (dur: number) => {
+    setDuration(dur);
+  };
+
+  const handleSeekMouseDown = () => {
+    setSeeking(true);
+  };
+
+  const handleSeekChange = (val: number) => {
+    setPlayed(val);
+  };
+
+  const handleSeekMouseUp = (val: number) => {
+    setSeeking(false);
+    playerRef.current?.seekTo(val);
   };
 
   const handlePlayerReady = () => {
@@ -409,6 +1139,29 @@ export const VideoView = ({
 
   return (
     <div className="w-full h-full flex flex-col bg-[#050508] text-white overflow-hidden relative z-50 selection:bg-red-500 selection:text-white">
+      {/* Release Announcement Banner */}
+      {Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
+        <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-sm z-20">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+              <Youtube className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] font-black text-white uppercase tracking-wider leading-tight">
+                ¡Nueva Sección de Vídeos HD! 🎬
+              </p>
+              <p className="text-[10px] font-bold text-red-400/80 leading-tight">
+                Disfruta de tus temas favoritos con controles Premium.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black bg-white text-red-600 px-1.5 py-0.5 rounded-md animate-pulse">
+              HOT
+            </span>
+          </div>
+        </div>
+      )}
       {/* Search & Category Filter Sticky Header */}
       <div className="shrink-0 sticky top-0 z-40 bg-[#050508]/95 backdrop-blur-xl border-b border-white/10 p-2.5 sm:p-3.5 shadow-xl">
         <div className="flex flex-col gap-2.5 max-w-7xl mx-auto w-full">
@@ -481,6 +1234,7 @@ export const VideoView = ({
                   className="absolute top-0 left-0 w-full h-full pointer-events-none"
                   playing={isPlaying}
                   onProgress={handleProgress}
+                  onDuration={handleDuration}
                   onReady={handlePlayerReady}
                   onEnded={playNextVideo}
                   controls={false}
@@ -599,14 +1353,18 @@ export const VideoView = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {videoHistory.map((item) => {
-                  const isThisTheActivePlayer = playingId === `hist-${item.id}` && !isMinimized;
+                  const isThisTheActivePlayer = activePlayerContainerId === `hist-${item.id}` && !isMinimized;
                   const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : item;
 
-                  const savedStr = formatTime(displayVideo.savedTime);
+                  const savedStr = formatDurationDisplay(displayVideo.savedTime);
+                  const durationDisplay = formatDurationDisplay(displayVideo.duration);
+                  const classInfo = getVideoClassificationInfo(displayVideo, activeCategory);
                   const highResImg = getHighResVideoThumbnail(displayVideo.thumbnail, displayVideo.id);
+
+                  const durationSecs = parseDurationSeconds(displayVideo.duration);
                   const progressPct =
-                    displayVideo.duration && displayVideo.savedTime
-                      ? Math.min(100, Math.max(5, (displayVideo.savedTime / displayVideo.duration) * 100))
+                    durationSecs && displayVideo.savedTime
+                      ? Math.min(100, Math.max(5, (displayVideo.savedTime / durationSecs) * 100))
                       : null;
 
                   return (
@@ -620,38 +1378,63 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className="flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2.5 sm:p-3 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1"
+                      className={`flex flex-col group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2 sm:p-2.5 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
+                        isThisTheActivePlayer ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50" : ""
+                      }`}
                     >
-                      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-white/5 shadow-md">
+                      <div className="flex flex-col w-full bg-slate-950 rounded-xl overflow-hidden border border-white/5 shadow-md">
                         {isThisTheActivePlayer ? (
-                          <ReactPlayer
-                            ref={playerRef}
-                            url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
-                            width="100%"
-                            height="100%"
-                            className="absolute top-0 left-0 w-full h-full"
-                            playing={isPlaying}
-                            onProgress={handleProgress}
-                            onReady={handlePlayerReady}
-                            onEnded={playNextVideo}
-                            controls={true}
-                            playsinline
-                            config={{
-                              youtube: {
-                                playerVars: {
-                                  autoplay: 1,
-                                  modestbranding: 1,
-                                  rel: 0,
-                                  iv_load_policy: 3,
-                                  cc_load_policy: 0,
-                                  fs: 1,
-                                  playsinline: 1,
-                                },
-                              },
-                            }}
-                          />
-                        ) : (
                           <>
+                            <VideoPlayerWithControls
+                              displayVideo={displayVideo}
+                              isPlaying={isPlaying}
+                              setIsPlaying={setIsPlaying}
+                              isMuted={isMuted}
+                              setIsMuted={setIsMuted}
+                              volume={volume}
+                              setVolume={setVolume}
+                              isBabyLock={isBabyLock}
+                              setIsBabyLock={setIsBabyLock}
+                              played={played}
+                              duration={duration}
+                              onProgress={handleProgress}
+                              onDuration={handleDuration}
+                              onSeekMouseDown={handleSeekMouseDown}
+                              onSeekChange={handleSeekChange}
+                              onSeekMouseUp={handleSeekMouseUp}
+                              onEnded={playNextVideo}
+                              onReady={handlePlayerReady}
+                              playerRef={playerRef}
+                              fullscreenId={fullscreenId}
+                              toggleFullscreen={toggleFullscreen}
+                              showControls={showControls}
+                              resetControlsTimeout={resetControlsTimeout}
+                            />
+                            {!isBabyLock && (
+                              <ActivePlayerControlBar
+                                isPlaying={isPlaying}
+                                setIsPlaying={setIsPlaying}
+                                isMuted={isMuted}
+                                setIsMuted={setIsMuted}
+                                volume={volume}
+                                setVolume={setVolume}
+                                isFullscreen={!!fullscreenId}
+                                toggleFullscreen={() => toggleFullscreen(`player-card-${item.id}`)}
+                                isBabyLock={isBabyLock}
+                                setIsBabyLock={setIsBabyLock}
+                                played={played}
+                                onSeekMouseDown={handleSeekMouseDown}
+                                onSeekChange={handleSeekChange}
+                                onSeekMouseUp={handleSeekMouseUp}
+                                duration={duration}
+                                currentTime={played * duration}
+                                onNext={playNextVideo}
+                                isOverlay={false}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <div className="relative w-full aspect-video">
                             <img
                               src={highResImg}
                               alt={displayVideo.title}
@@ -662,20 +1445,36 @@ export const VideoView = ({
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
                             
+                            {/* Quality / Classification Top-Left Pill */}
+                            <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass}`}>
+                              {classInfo.isKids ? (
+                                <ShieldCheck className="w-3 h-3 text-amber-950 fill-amber-300" />
+                              ) : (
+                                <Sparkles className="w-2.5 h-2.5 text-white animate-pulse" />
+                              )}
+                              <span>{classInfo.qualityBadge}</span>
+                            </div>
+
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                               <div className="w-11 h-11 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
                                 <Play className="w-5 h-5 text-white fill-current ml-0.5" />
                               </div>
                             </div>
 
-                            {savedStr && (
-                              <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-red-300 border border-red-500/30 flex items-center gap-1 shadow-sm">
+                            {/* Saved Time / Duration Badge */}
+                            {savedStr ? (
+                              <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-red-300 border border-red-500/40 flex items-center gap-1 shadow-sm font-bold">
                                 <Clock className="w-2.5 h-2.5 text-red-400" />
                                 {savedStr}
                               </div>
-                            )}
+                            ) : durationDisplay ? (
+                              <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-black text-white border border-white/20 flex items-center gap-1 shadow-md">
+                                <Clock className="w-2.5 h-2.5 text-red-400" />
+                                {durationDisplay}
+                              </div>
+                            ) : null}
 
-                            {/* YouTube Style Progress Line */}
+                            {/* Netflix Style Watch Progress Line */}
                             {progressPct !== null && (
                               <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 overflow-hidden">
                                 <div
@@ -684,7 +1483,7 @@ export const VideoView = ({
                                 />
                               </div>
                             )}
-                          </>
+                          </div>
                         )}
                       </div>
 
@@ -693,10 +1492,22 @@ export const VideoView = ({
                           {displayVideo.title}
                         </h4>
                         <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
-                          <PlayCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
                           <span className="truncate">{displayVideo.artist}</span>
                         </p>
-                      </div>
+
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className={`text-[9.5px] px-2 py-0.5 rounded-md border ${classInfo.tagClass}`}>
+                            {classInfo.categoryTag}
+                          </span>
+                          {durationDisplay && (
+                            <span className="text-[10px] text-slate-400 font-mono font-medium">
+                              • {durationDisplay}
+                            </span>
+                          )}
+                        </div>
+
+                        </div>
                     </div>
                   );
                 })}
@@ -737,10 +1548,11 @@ export const VideoView = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {videos.map((video) => {
-                const isThisTheActivePlayer = playingId === `grid-${video.id}` && !isMinimized;
+                const isThisTheActivePlayer = activePlayerContainerId === `grid-${video.id}` && !isMinimized;
                 const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : video;
 
-                const durationStr = formatTime(displayVideo.duration);
+                const durationDisplay = formatDurationDisplay(displayVideo.duration);
+                const classInfo = getVideoClassificationInfo(displayVideo, activeCategory);
                 const highResThumbnail = getHighResVideoThumbnail(displayVideo.thumbnail, displayVideo.id);
 
                 return (
@@ -760,36 +1572,59 @@ export const VideoView = ({
                       handlePlayVideo(video, sourceId);
                     }}
                   >
-                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-slate-950 border border-white/5 shadow-md">
+                    <div className="flex flex-col w-full bg-slate-950 rounded-xl overflow-hidden border border-white/5 shadow-md">
                       {isThisTheActivePlayer ? (
-                        <ReactPlayer
-                          ref={playerRef}
-                          url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
-                          width="100%"
-                          height="100%"
-                          className="absolute top-0 left-0 w-full h-full"
-                          playing={isPlaying}
-                          onProgress={handleProgress}
-                          onReady={handlePlayerReady}
-                          onEnded={playNextVideo}
-                          controls={true}
-                          playsinline
-                          config={{
-                            youtube: {
-                              playerVars: {
-                                autoplay: 1,
-                                modestbranding: 1,
-                                rel: 0,
-                                iv_load_policy: 3,
-                                cc_load_policy: 0,
-                                fs: 1,
-                                playsinline: 1,
-                              },
-                            },
-                          }}
-                        />
-                      ) : (
                         <>
+                          <VideoPlayerWithControls
+                            displayVideo={displayVideo}
+                            isPlaying={isPlaying}
+                            setIsPlaying={setIsPlaying}
+                            isMuted={isMuted}
+                            setIsMuted={setIsMuted}
+                            volume={volume}
+                            setVolume={setVolume}
+                            isBabyLock={isBabyLock}
+                            setIsBabyLock={setIsBabyLock}
+                            played={played}
+                            duration={duration}
+                            onProgress={handleProgress}
+                            onDuration={handleDuration}
+                            onSeekMouseDown={handleSeekMouseDown}
+                            onSeekChange={handleSeekChange}
+                            onSeekMouseUp={handleSeekMouseUp}
+                            onEnded={playNextVideo}
+                            onReady={handlePlayerReady}
+                            playerRef={playerRef}
+                            fullscreenId={fullscreenId}
+                            toggleFullscreen={toggleFullscreen}
+                            showControls={showControls}
+                            resetControlsTimeout={resetControlsTimeout}
+                          />
+                          {!isBabyLock && (
+                            <ActivePlayerControlBar
+                              isPlaying={isPlaying}
+                              setIsPlaying={setIsPlaying}
+                              isMuted={isMuted}
+                              setIsMuted={setIsMuted}
+                              volume={volume}
+                              setVolume={setVolume}
+                              isFullscreen={!!fullscreenId}
+                              toggleFullscreen={() => toggleFullscreen(`player-card-${video.id}`)}
+                              isBabyLock={isBabyLock}
+                              setIsBabyLock={setIsBabyLock}
+                              played={played}
+                              onSeekMouseDown={handleSeekMouseDown}
+                              onSeekChange={handleSeekChange}
+                              onSeekMouseUp={handleSeekMouseUp}
+                              duration={duration}
+                              currentTime={played * duration}
+                              onNext={playNextVideo}
+                              isOverlay={false}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <div className="relative w-full aspect-video">
                           <img
                             src={highResThumbnail}
                             alt={displayVideo.title}
@@ -800,18 +1635,29 @@ export const VideoView = ({
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
                           
+                          {/* Quality / Classification Top-Left Pill */}
+                          <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass}`}>
+                            {classInfo.isKids ? (
+                              <ShieldCheck className="w-3 h-3 text-amber-950 fill-amber-300" />
+                            ) : (
+                              <Sparkles className="w-2.5 h-2.5 text-white animate-pulse" />
+                            )}
+                            <span>{classInfo.qualityBadge}</span>
+                          </div>
+
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                             <div className="w-11 h-11 bg-red-600/90 rounded-full flex items-center justify-center backdrop-blur-md shadow-[0_0_20px_rgba(220,38,38,0.8)] scale-90 group-hover:scale-100 transition-all">
                               <Play className="w-5 h-5 text-white fill-current ml-0.5" />
                             </div>
                           </div>
 
-                          {durationStr ? (
-                            <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-bold text-white border border-white/10">
-                              {durationStr}
+                          {durationDisplay ? (
+                            <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-black text-white border border-white/20 flex items-center gap-1 shadow-md z-10">
+                              <Clock className="w-2.5 h-2.5 text-red-400" />
+                              <span>{durationDisplay}</span>
                             </div>
                           ) : null}
-                        </>
+                        </div>
                       )}
                     </div>
 
@@ -820,10 +1666,22 @@ export const VideoView = ({
                         {displayVideo.title}
                       </h4>
                       <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
                         <span className="truncate">{displayVideo.artist}</span>
                       </p>
-                    </div>
+
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className={`text-[9.5px] px-2 py-0.5 rounded-md border ${classInfo.tagClass}`}>
+                          {classInfo.categoryTag}
+                        </span>
+                        {durationDisplay && (
+                          <span className="text-[10px] text-slate-400 font-mono font-medium">
+                            • {durationDisplay}
+                          </span>
+                        )}
+                      </div>
+
+                      </div>
                   </div>
                 );
               })}

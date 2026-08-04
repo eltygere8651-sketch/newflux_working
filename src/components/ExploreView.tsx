@@ -69,6 +69,7 @@ const getTrackImage = (track?: any): string | null => {
   if (!track) return null;
   if (track.thumbnail) return cleanUrl(track.thumbnail);
   if (track.thumbnail_url) return cleanUrl(track.thumbnail_url);
+  if (track.thumbnails && track.thumbnails.length > 0 && track.thumbnails[0]?.url) return cleanUrl(track.thumbnails[0].url);
   if (track.imageUrl) return cleanUrl(track.imageUrl);
   if (track.artwork_url) return cleanUrl(track.artwork_url);
   if (track.artwork) return cleanUrl(track.artwork);
@@ -83,8 +84,9 @@ const getTrackImage = (track?: any): string | null => {
     }
   }
   if (typeof track.id === "string" && track.id.startsWith("yt_")) {
-    const vid = track.id.split("_")[1];
-    if (vid) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+    const parts = track.id.split("_");
+    const vid = parts[1] === "temp" ? parts[2] : parts[1];
+    if (vid && vid.length >= 10) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
   }
   if (track.id && typeof track.id === "string" && track.id.length === 11) {
     return `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
@@ -95,6 +97,7 @@ const getTrackImage = (track?: any): string | null => {
 const getItemImage = (item: any): string => {
   if (item.thumbnail) return cleanUrl(item.thumbnail);
   if (item.thumbnail_url) return cleanUrl(item.thumbnail_url);
+  if (item.thumbnails && item.thumbnails.length > 0 && item.thumbnails[0]?.url) return cleanUrl(item.thumbnails[0].url);
   if (item.imageUrl) return cleanUrl(item.imageUrl);
   if (item.artwork_url) return cleanUrl(item.artwork_url);
   if (item.artwork) return cleanUrl(item.artwork);
@@ -1043,6 +1046,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             url: `https://www.youtube.com/watch?v=${item.id}`,
                             duration: item.duration || "0:00",
                             bpm: 120,
+                            thumbnail: item.thumbnail || item.thumbnail_url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
                           };
                           setOverrideCurrentTrack(mapped);
                           setIsPlaying(true);
