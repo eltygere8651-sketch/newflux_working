@@ -313,7 +313,7 @@ const VideoPlayerWithControls = ({
   return (
     <div
       id={`player-card-${displayVideo.id}`}
-      className={`relative w-full ${isFS ? "h-full" : "aspect-video"} bg-slate-950 group/player overflow-hidden rounded-t-xl`}
+      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[9999] h-full" : "aspect-video h-auto rounded-t-xl"} bg-slate-950 group/player overflow-hidden`}
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
@@ -756,36 +756,45 @@ export const VideoView = ({
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    const isFS = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el;
+    const isActuallyFullscreen = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el;
+    const isPseudoFullscreen = fullscreenId === containerId;
 
-    if (isFS) {
+    if (isActuallyFullscreen || isPseudoFullscreen) {
+      // EXIT
       if (document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
       } else if ((document as any).webkitExitFullscreen) {
         (document as any).webkitExitFullscreen();
       }
+      setFullscreenId(null);
       if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.unlock) {
-        try {
-          (window.screen as any).orientation.unlock();
-        } catch (e) {}
+        try { (window.screen as any).orientation.unlock(); } catch (e) {}
       }
     } else {
+      // ENTER
       const requestFS = el.requestFullscreen || (el as any).webkitRequestFullscreen || (el as any).msRequestFullscreen;
       if (requestFS) {
-        Promise.resolve(requestFS.call(el))
-          .then(() => {
+        try {
+          const promise = requestFS.call(el);
+          if (promise && typeof promise.then === 'function') {
+            promise.then(() => {
+              setFullscreenId(containerId);
+              if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
+                (window.screen as any).orientation.lock("landscape").catch(() => {});
+              }
+            }).catch(() => {
+              // Fallback for iOS
+              setFullscreenId(containerId);
+            });
+          } else {
             setFullscreenId(containerId);
-            if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
-              (window.screen as any).orientation.lock("landscape").catch(() => {
-                try {
-                  (window.screen as any).orientation.lock("landscape-primary").catch(() => {});
-                } catch (e) {}
-              });
-            }
-          })
-          .catch(() => {
-            setFullscreenId(containerId);
-          });
+          }
+        } catch (e) {
+          setFullscreenId(containerId);
+        }
+      } else {
+        // Fallback for iOS iPhone where API is missing
+        setFullscreenId(containerId);
       }
     }
   };

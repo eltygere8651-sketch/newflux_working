@@ -1765,6 +1765,77 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     return saved === "true";
   });
   const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  useEffect(() => {
+    const handleFSChange = () => {
+      const isFS = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      if (!isFS) {
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFSChange);
+    document.addEventListener("webkitfullscreenchange", handleFSChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFSChange);
+      document.removeEventListener("webkitfullscreenchange", handleFSChange);
+    };
+  }, []);
+
+  const toggleFullscreen = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const elem = document.getElementById("video-mode-container");
+    if (!elem) return;
+
+    // Check both standard API and our internal state (for iOS fallback)
+    const isActuallyFullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+    
+    if (isActuallyFullscreen || isFullscreen) {
+      // EXIT
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+      setIsFullscreen(false);
+      
+      // Unlock orientation if possible
+      if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.unlock) {
+        try { (window.screen as any).orientation.unlock(); } catch (e) {}
+      }
+    } else {
+      // ENTER
+      const requestFS = elem.requestFullscreen || (elem as any).webkitRequestFullscreen || (elem as any).msRequestFullscreen;
+      
+      if (requestFS) {
+        // Try standard or webkit API
+        try {
+          const promise = requestFS.call(elem);
+          if (promise && typeof promise.then === 'function') {
+            promise.then(() => {
+              setIsFullscreen(true);
+              // Try to lock orientation
+              if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
+                (window.screen as any).orientation.lock("landscape").catch(() => {});
+              }
+            }).catch(() => {
+              // Fallback for iOS/Safari if API exists but fails
+              setIsFullscreen(true);
+            });
+          } else {
+            // Older browsers with no promise return
+            setIsFullscreen(true);
+          }
+        } catch (err) {
+          setIsFullscreen(true);
+        }
+      } else {
+        // Absolute fallback for iOS (iPhone) where API is missing for elements
+        setIsFullscreen(true);
+      }
+    }
+  };
+
   useEffect(() => {
     if (isTrackListExpanded) {
       setIsVideoMode(false);
@@ -4790,7 +4861,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       <div 
         id="video-mode-container"
         className={isVideoMode && !isTrackListExpanded
-          ? "absolute inset-0 z-[60] bg-black flex flex-col pointer-events-auto transition-opacity duration-300 opacity-100"
+          ? `bg-black flex flex-col pointer-events-auto transition-all duration-300 opacity-100 ${isFullscreen ? "fixed inset-0 z-[9999]" : "absolute inset-0 z-[60]"}`
           : "absolute top-[-300px] left-[-300px] w-[300px] h-[300px] overflow-hidden pointer-events-none select-none z-[-1] opacity-[0.01]"}
       >
         <audio
@@ -4811,20 +4882,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
               <span className="text-sm sm:text-base font-bold text-white truncate max-w-full drop-shadow-md">{displayTitle}</span>
             </div>
             <button 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                const elem = document.getElementById("video-mode-container");
-                if (elem) {
-                  if (!document.fullscreenElement) {
-                    elem.requestFullscreen().catch(() => {});
-                  } else {
-                    document.exitFullscreen();
-                  }
-                }
-              }}
-              className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-xl text-white transition-all active:scale-95 cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.5)] hidden md:flex"
+              onClick={(e) => toggleFullscreen(e)}
+              className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-xl text-white transition-all active:scale-95 cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.5)] flex"
             >
-              <Maximize2 className="w-5 h-5" />
+              {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
             </button>
             <div className="w-12 h-12 shrink-0 md:hidden" />
           </div>
