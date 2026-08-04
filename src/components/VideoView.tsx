@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   Play,
@@ -310,10 +311,11 @@ const VideoPlayerWithControls = ({
 }: any) => {
   const isFS = !!fullscreenId;
 
-  return (
+  const playerContent = (
     <div
       id={`player-card-${displayVideo.id}`}
       className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[9999] h-full" : "aspect-video h-auto rounded-t-xl"} bg-slate-950 group/player overflow-hidden`}
+      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' } : {}}
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
@@ -416,6 +418,12 @@ const VideoPlayerWithControls = ({
       {isBabyLock && <BabyLockOverlay onUnlock={() => setIsBabyLock(false)} />}
     </div>
   );
+
+  if (isFS && typeof document !== 'undefined') {
+    return createPortal(playerContent, document.body);
+  }
+
+  return playerContent;
 };
 
 const POSITIONS_KEY = "flux_video_positions";

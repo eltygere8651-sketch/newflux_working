@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { createPortal } from "react-dom";
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
@@ -4858,11 +4859,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         )}
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer (or Video Mode overlay) and background thread preservation audio */}
-      <div 
-        id="video-mode-container"
+      {(() => {
+        const videoContent = (
+          <div 
+            id="video-mode-container"
         className={isVideoMode && !isTrackListExpanded
-          ? `bg-black flex flex-col pointer-events-auto transition-all duration-300 opacity-100 ${isFullscreen ? "fixed inset-0 z-[9999]" : "absolute inset-0 z-[60]"}`
+          ? `bg-black flex flex-col pointer-events-auto transition-all duration-300 opacity-100 ${isFullscreen ? "fixed inset-0 z-[99999]" : "absolute inset-0 z-[60]"}`
           : "absolute top-[-300px] left-[-300px] w-[300px] h-[300px] overflow-hidden pointer-events-none select-none z-[-1] opacity-[0.01]"}
+        style={isFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' } : {}}
       >
         <audio
           ref={fallbackSilentAudioRef}
@@ -5236,6 +5240,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           </div>
         )}
       </div>
+    );
+
+        if (isFullscreen && typeof document !== 'undefined') {
+          return createPortal(videoContent, document.body);
+        }
+        return videoContent;
+      })()}
 
       {/* GLOBAL TABS / PILLS HEADER */}
       <Carousel className={`px-3 py-2 gap-1.5 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full ${!isTrackListExpanded ? "hidden md:flex" : "flex"}`}>
