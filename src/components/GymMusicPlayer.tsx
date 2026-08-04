@@ -5242,7 +5242,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       </div>
     );
 
-        if (isFullscreen && typeof document !== 'undefined') {
+        const isNativeFS = typeof document !== 'undefined' && !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+        if (isFullscreen && !isNativeFS && typeof document !== 'undefined') {
           return createPortal(videoContent, document.body);
         }
         return videoContent;

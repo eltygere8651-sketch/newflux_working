@@ -419,7 +419,8 @@ const VideoPlayerWithControls = ({
     </div>
   );
 
-  if (isFS && typeof document !== 'undefined') {
+  const isNativeFS = typeof document !== 'undefined' && !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+  if (isFS && !isNativeFS && typeof document !== 'undefined') {
     return createPortal(playerContent, document.body);
   }
 
@@ -659,7 +660,10 @@ const BabyLockOverlay: React.FC<{
       onTouchStart={handleTap}
     >
       {showBadge && (
-        <div className="absolute inset-x-0 top-3 sm:top-5 flex flex-col items-center justify-center gap-2 pointer-events-none px-3 animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          className="absolute inset-x-0 flex flex-col items-center justify-center gap-2 pointer-events-none px-3 animate-in fade-in zoom-in-95 duration-200"
+          style={{ top: "calc(16px + env(safe-area-inset-top, 0px))" }}
+        >
           <div className="bg-black/90 backdrop-blur-2xl border border-amber-500/60 text-amber-300 text-xs font-bold px-4 py-2 rounded-full flex items-center gap-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.9)]">
             <Baby className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
             <div className="flex flex-col text-left">
