@@ -7613,43 +7613,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                       <div className="pt-4 border-t border-white/5 mt-4" />
                         </>
                       )}
-                      {exploreMode === "video" && (
-                        <div className="w-full h-full flex flex-col absolute inset-0 z-50 bg-[#050505]">
-                          <React.Suspense
-                            fallback={
-                              <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center h-full">
-                                <Loader2 className="w-8 h-8 animate-spin mx-auto text-red-500 mb-2" />
-                                <span className="text-xs font-semibold">Cargando Vídeos...</span>
-                              </div>
-                            }
-                          >
-                            <LazyVideoView
-                              isVisible={true}
-                              pauseBackgroundMusic={() => {
-                                setIsPlaying(false);
-                                expectedPlayingRef.current = false;
-                                if (youtubePlayerRef.current) {
-                                  try {
-                                    const intPlayer =
-                                      youtubePlayerRef.current.getInternalPlayer();
-                                    if (
-                                      intPlayer &&
-                                      typeof intPlayer.pauseVideo === "function"
-                                    ) {
-                                      intPlayer.pauseVideo();
-                                    }
-                                  } catch (e) {}
-                                }
-                                if (fallbackSilentAudioRef.current) {
-                                  try {
-                                    fallbackSilentAudioRef.current.pause();
-                                  } catch (e) {}
-                                }
-                              }}
-                            />
-                          </React.Suspense>
-                        </div>
-                      )}
                     </div>
                   ) : trackListTab === "queue" ? (
                     (() => {
@@ -9888,6 +9851,38 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         </div>
       )}
       
+      {exploreMode === "video" && (
+        <React.Suspense
+          fallback={
+            <div className="fixed inset-0 z-[999999] bg-[#060814] flex flex-col items-center justify-center text-slate-500">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto text-red-500 mb-4" />
+              <span className="text-sm font-black uppercase tracking-widest text-white">Iniciando Flux Cinema...</span>
+            </div>
+          }
+        >
+          <LazyVideoView
+            isVisible={true}
+            pauseBackgroundMusic={() => {
+              setIsPlaying(false);
+              expectedPlayingRef.current = false;
+              if (youtubePlayerRef.current) {
+                try {
+                  const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                  if (intPlayer && typeof intPlayer.pauseVideo === "function") {
+                    intPlayer.pauseVideo();
+                  }
+                } catch (e) {}
+              }
+              if (fallbackSilentAudioRef.current) {
+                try {
+                  fallbackSilentAudioRef.current.pause();
+                } catch (e) {}
+              }
+            }}
+            onClose={() => setExploreMode("audio")}
+          />
+        </React.Suspense>
+      )}
       
     </div>
   );

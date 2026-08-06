@@ -28,6 +28,8 @@ import {
   VolumeX,
   SkipForward,
   Youtube,
+  ArrowLeft,
+  Shield,
 } from "lucide-react";
 import ReactPlayer from "react-player";
 import { useDraggable } from "../hooks/useDraggable";
@@ -61,6 +63,26 @@ const VIDEO_CATEGORIES = [
   "Urbano",
   "Curiosidades",
 ];
+
+const KIDS_SUBCATEGORIES = [
+  "Recomendados para niños",
+  "Dibujos",
+  "Aprender jugando",
+  "Música infantil",
+  "Cuentos",
+  "Educación",
+  "Aventuras"
+];
+
+const KIDS_SUBCATEGORY_QUERIES: Record<string, string> = {
+  "Recomendados para niños": "pocoyo la granja de zenon plaza sesamo caricaturas disney junior canciones infantiles",
+  "Dibujos": "caricaturas infantiles episodios completos dibujos animados disney junior en español peppa pig bluey",
+  "Aprender jugando": "videos educativos para niños aprender jugando numeros colores formas canciones divertidas",
+  "Música infantil": "canciones infantiles la granja de zenon gallina pintadita canciones para cantar y bailar niños",
+  "Cuentos": "cuentos infantiles cortos para dormir audiocuentos con moraleja animados para niños",
+  "Educación": "videos educativos niños dinosaurios ciencias planetas experimentos divertidos plaza sesamo",
+  "Aventuras": "aventuras de juguetes pocoyo episodios completos videos divertidos infantiles"
+};
 
 const getCategoryQuery = (cat: string) => {
   switch (cat) {
@@ -696,13 +718,18 @@ const BabyLockOverlay: React.FC<{
 export const VideoView = ({
   isVisible,
   pauseBackgroundMusic,
+  onClose,
 }: {
   isVisible: boolean;
   pauseBackgroundMusic: () => void;
+  onClose?: () => void;
 }) => {
+  const [immersiveModeSelection, setImmersiveModeSelection] = useState<'select' | 'videos' | 'kids'>('select');
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Todos");
+  const [previousCategory, setPreviousCategory] = useState("Todos");
+  const [activeKidsSubCategory, setActiveKidsSubCategory] = useState("Recomendados para niños");
   const [isLoading, setIsLoading] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -851,10 +878,27 @@ export const VideoView = ({
   useEffect(() => {
     if (!isVisible) return;
     loadHistory();
-    if (videos.length === 0) {
+    if (immersiveModeSelection === 'videos' && videos.length === 0) {
       loadRecommendations();
+    } else if (immersiveModeSelection === 'kids' && videos.length === 0) {
+      fetchVideosForQuery(KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"]);
     }
-  }, [isVisible]);
+  }, [isVisible, immersiveModeSelection]);
+
+  const selectNormalVideosMode = async () => {
+    setImmersiveModeSelection('videos');
+    setActiveCategory('Todos');
+    setSearchQuery('');
+    await loadRecommendations();
+  };
+
+  const selectKidsMode = async () => {
+    setImmersiveModeSelection('kids');
+    setActiveCategory('Infantil / Kids 🎈');
+    setActiveKidsSubCategory('Recomendados para niños');
+    setSearchQuery('');
+    await fetchVideosForQuery(KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"]);
+  };
 
   const loadHistory = () => {
     try {
@@ -975,6 +1019,9 @@ export const VideoView = ({
   };
 
   const handleCategorySelect = async (cat: string) => {
+    if (cat === "Infantil / Kids 🎈") {
+      setPreviousCategory(activeCategory);
+    }
     setActiveCategory(cat);
     if (cat === "Todos") {
       setSearchQuery("");
@@ -982,6 +1029,11 @@ export const VideoView = ({
     } else if (cat === "Continuar Viendo") {
       setSearchQuery("");
       setVideos([]); // Clear videos to just show history
+    } else if (cat === "Infantil / Kids 🎈") {
+      setSearchQuery("");
+      setActiveKidsSubCategory("Recomendados para niños");
+      const query = KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"];
+      await fetchVideosForQuery(query);
     } else {
       setSearchQuery(cat);
       const catQuery = getCategoryQuery(cat);
@@ -989,11 +1041,24 @@ export const VideoView = ({
     }
   };
 
+  const handleExitKidsMode = async () => {
+    setSearchQuery("");
+    await handleCategorySelect(previousCategory || "Todos");
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-    setActiveCategory("");
-    await fetchVideosForQuery(searchQuery.trim());
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+
+    if (activeCategory === "Infantil / Kids 🎈") {
+      // Keep kids mode active and execute a safe filtered search
+      const safeKidsQuery = `${trimmed} infantil para niños dibujos caricaturas`;
+      await fetchVideosForQuery(safeKidsQuery);
+    } else {
+      setActiveCategory("");
+      await fetchVideosForQuery(trimmed);
+    }
   };
 
   const playNextVideo = () => {
@@ -1158,10 +1223,107 @@ export const VideoView = ({
 
   if (!isVisible) return null;
 
+  const isKidsMode = immersiveModeSelection === 'kids';
+  const categoriesToShow = VIDEO_CATEGORIES.filter((cat) => cat !== "Infantil / Kids 🎈");
+
+  if (immersiveModeSelection === 'select') {
+    return (
+      <div className="fixed inset-0 z-[9999] h-screen w-screen bg-[#060814] text-white flex flex-col justify-between p-4 sm:p-12 overflow-y-auto font-sans selection:bg-amber-500 selection:text-black">
+        {/* Top Header with Back/Close button */}
+        <div className="flex items-center justify-between w-full max-w-5xl mx-auto pt-2 sm:pt-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 select-none">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center shadow-[0_4px_20px_rgba(239,68,68,0.25)]">
+              <Tv2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div>
+              <span className="text-base sm:text-lg font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400 uppercase">
+                Flux Cinema
+              </span>
+              <span className="block text-[9px] sm:text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">
+                Premium Streaming
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              if (onClose) {
+                onClose();
+              }
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:text-white transition-all duration-300 cursor-pointer shadow-md group"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-red-500" />
+            <span className="text-[11px] font-black uppercase tracking-wider">Volver</span>
+          </button>
+        </div>
+
+        {/* Center Prompt & Cards */}
+        <div className="flex-1 flex flex-col items-center justify-center my-2 sm:my-8 max-w-5xl mx-auto w-full">
+          <div className="text-center mb-6 sm:mb-12 space-y-1 sm:space-y-2 max-w-md animate-in fade-in slide-in-from-top-4 duration-500">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight select-none px-4">
+              ¿Qué deseas ver hoy?
+            </h1>
+            <p className="text-[10px] sm:text-sm text-slate-400 font-semibold select-none">
+              Elige tu perfil de entretenimiento inmersivo exclusivo
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-8 w-full max-w-3xl px-2 sm:px-4">
+            {/* Card 1: 🎬 Vídeos Normal */}
+            <button
+              onClick={selectNormalVideosMode}
+              className="group relative flex flex-col items-center justify-center text-center p-4 sm:p-10 rounded-[24px] sm:rounded-3xl bg-[#0d0e1e]/60 border border-white/10 hover:border-red-500/40 shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer hover:shadow-red-500/5 select-none"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-red-600/5 to-transparent rounded-[24px] sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-2xl bg-red-600/10 border border-red-500/20 text-red-500 flex items-center justify-center shadow-lg group-hover:bg-red-600 group-hover:text-white group-hover:scale-110 transition-all duration-300 mb-3 sm:mb-6">
+                <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-1" />
+              </div>
+
+              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight group-hover:text-red-400 transition-colors leading-none mb-1.5 sm:mb-3">
+                Flux Vídeos 🎬
+              </h3>
+              <p className="text-[10px] sm:text-sm text-slate-400 font-semibold max-w-[260px] leading-relaxed">
+                Música, podcasts, entrevistas y contenido exclusivo en alta definición
+              </p>
+            </button>
+
+            {/* Card 2: 👶 Infantil / Kids */}
+            <button
+              onClick={selectKidsMode}
+              className="group relative flex flex-col items-center justify-center text-center p-4 sm:p-10 rounded-[24px] sm:rounded-3xl bg-[#0d0e1e]/60 border border-white/10 hover:border-amber-500/40 shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer hover:shadow-amber-500/5 select-none"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent rounded-[24px] sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+              <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shadow-lg group-hover:bg-amber-500 group-hover:text-black group-hover:scale-110 transition-all duration-300 mb-3 sm:mb-6">
+                <Baby className="w-5 h-5 sm:w-8 sm:h-8 animate-bounce" />
+              </div>
+
+              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight group-hover:text-amber-300 transition-colors leading-none mb-1.5 sm:mb-3">
+                Flux Kids 🎈
+              </h3>
+              <p className="text-[10px] sm:text-sm text-slate-400 font-semibold max-w-[260px] leading-relaxed">
+                Caricaturas, música, cuentos animados y aprendizaje seguro para niños
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom footer bar */}
+        <div className="text-center w-full max-w-5xl mx-auto py-2">
+          <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold tracking-widest uppercase select-none">
+            Flux Music • Conectando Familias de Manera Segura
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-full flex flex-col bg-[#050508] text-white overflow-hidden relative z-50 selection:bg-red-500 selection:text-white">
+    <div className={`fixed inset-0 z-[9999] h-screen w-screen flex flex-col bg-[#050508] text-white overflow-hidden selection:bg-red-500 selection:text-white ${isKidsMode ? "bg-[#060814]" : ""}`}>
       {/* Release Announcement Banner */}
-      {Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
+      {!isKidsMode && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
         <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-sm z-20">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
@@ -1183,55 +1345,194 @@ export const VideoView = ({
           </div>
         </div>
       )}
+      
       {/* Search & Category Filter Sticky Header */}
-      <div className="shrink-0 sticky top-0 z-40 bg-[#050508]/95 backdrop-blur-xl border-b border-white/10 p-2.5 sm:p-3.5 shadow-xl">
-        <div className="flex flex-col gap-2.5 max-w-7xl mx-auto w-full">
-          {/* Full Width Search Input */}
-          <form onSubmit={handleSearch} className="relative w-full">
-            <input
-              type="text"
-              placeholder="Buscar vídeos, entrevistas, podcasts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/15 rounded-full py-2.5 pl-10 pr-9 text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-red-500/60 focus:bg-white/10 transition-all shadow-inner placeholder:text-slate-400"
-            />
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setActiveCategory("Todos");
-                  loadRecommendations();
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </form>
-
-          {/* Touch-Friendly Category Quick Filter Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 pt-0.5 touch-pan-x active:cursor-grabbing">
-            {VIDEO_CATEGORIES.map((cat) => {
-              const isSelected = activeCategory === cat;
-              return (
+      {isKidsMode ? (
+        <div className="shrink-0 sticky top-0 z-40 bg-[#060814]/95 backdrop-blur-xl border-b border-amber-500/15 p-3 sm:p-5 shadow-2xl">
+          <div className="flex flex-col gap-2.5 sm:gap-3.5 max-w-7xl mx-auto w-full">
+            {/* Top row with Premium back button, Brand Logo and Safe Badge */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
-                  key={cat}
-                  onClick={() => handleCategorySelect(cat)}
-                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap border min-h-[34px] flex items-center justify-center ${
-                    isSelected
-                      ? "bg-white text-black border-white shadow-md shadow-white/10 scale-[1.02]"
-                      : "bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white"
-                  }`}
+                  onClick={() => {
+                    if (onClose) onClose();
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-red-500/30 text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-all duration-300 cursor-pointer shadow-md group"
                 >
-                  {cat}
+                  <ArrowLeft className="w-3.5 h-3.5 text-red-400 group-hover:-translate-x-0.5 transition-transform" />
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Salir</span>
                 </button>
-              );
-            })}
+                <button
+                  onClick={() => setImmersiveModeSelection('select')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-amber-500/30 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-all duration-300 cursor-pointer shadow-md"
+                >
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Perfiles</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2 select-none">
+                <div className="bg-amber-500/10 p-1.5 rounded-xl border border-amber-500/20 shadow-md">
+                  <Baby className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-bounce" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs sm:text-base font-black tracking-wider text-amber-300 uppercase leading-none">
+                    Flux Kids 🎈
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] text-amber-400/60 font-bold tracking-tight">
+                    Modo Seguro
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+                <Shield className="w-3 h-3" />
+                <span className="hidden sm:inline">Seguro</span>
+              </div>
+            </div>
+
+            {/* Playful Kids Search bar */}
+            <form onSubmit={handleSearch} className="relative w-full">
+              <input
+                type="text"
+                placeholder="Buscar caricaturas, canciones..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-amber-500/15 rounded-full py-2 sm:py-2.5 pl-10 pr-9 text-xs sm:text-sm font-extrabold text-amber-100 placeholder:text-amber-200/40 focus:outline-none focus:border-amber-500/40 focus:bg-amber-500/5 transition-all shadow-inner"
+              />
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400/60 pointer-events-none">
+                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setActiveKidsSubCategory("Recomendados para niños");
+                    fetchVideosForQuery(KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"]);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400/60 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </form>
+
+            {/* Kids subcategories filter pills */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 pt-0.5 touch-pan-x border-t border-amber-500/10">
+              {KIDS_SUBCATEGORIES.map((subCat) => {
+                const isSelected = activeKidsSubCategory === subCat;
+                return (
+                  <button
+                    key={subCat}
+                    onClick={async () => {
+                      setActiveKidsSubCategory(subCat);
+                      const query = KIDS_SUBCATEGORY_QUERIES[subCat];
+                      await fetchVideosForQuery(query);
+                    }}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black transition-all cursor-pointer whitespace-nowrap border min-h-[30px] sm:min-h-[34px] flex items-center justify-center gap-1 ${
+                      isSelected
+                        ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/20 scale-[1.02]"
+                        : "bg-amber-500/5 text-amber-200/80 border-amber-500/10 hover:bg-amber-500/10 hover:text-white"
+                    }`}
+                  >
+                    👶 {subCat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="shrink-0 sticky top-0 z-40 bg-[#050508]/95 backdrop-blur-xl border-b border-white/10 p-3 sm:p-3.5 shadow-xl">
+          <div className="flex flex-col gap-2.5 max-w-7xl mx-auto w-full">
+            {/* Top row with Premium back button, Brand Logo and Safe Badge */}
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  onClick={() => {
+                    if (onClose) onClose();
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-red-500/20 text-red-400 bg-red-600/10 hover:bg-red-600/20 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer shadow-md group"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-red-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Salir</span>
+                </button>
+
+                <button
+                  onClick={() => setImmersiveModeSelection('select')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer shadow-md"
+                >
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Perfiles</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2 select-none">
+                <div className="bg-red-600/10 p-1.5 rounded-lg border border-red-500/20 shadow-md">
+                  <Film className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs sm:text-sm font-black tracking-wider text-red-400 uppercase leading-none">
+                    Flux Vídeos 🎬
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold tracking-tight">
+                    Modo Inmersivo
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+                <Sparkles className="w-3 h-3 animate-pulse" />
+                <span className="hidden sm:inline">Alta Definición</span>
+              </div>
+            </div>
+
+            {/* Full Width Search Input */}
+            <form onSubmit={handleSearch} className="relative w-full">
+              <input
+                type="text"
+                placeholder="Buscar vídeos, entrevistas, podcasts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/15 rounded-full py-2 sm:py-2.5 pl-10 pr-9 text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-red-500/60 focus:bg-white/10 transition-all shadow-inner placeholder:text-slate-400"
+              />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setActiveCategory("Todos");
+                    loadRecommendations();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </form>
+
+            {/* Touch-Friendly Category Quick Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 pt-0.5 touch-pan-x active:cursor-grabbing">
+              {categoriesToShow.map((cat) => {
+                const isSelected = activeCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => handleCategorySelect(cat)}
+                    className={`shrink-0 px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap border min-h-[30px] sm:min-h-[34px] flex items-center justify-center ${
+                      isSelected
+                        ? "bg-white text-black border-white shadow-md shadow-white/10 scale-[1.01]"
+                        : "bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Scrollable Feed */}
       <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 pb-36 sm:pb-32 relative space-y-6 sm:space-y-8">
@@ -1550,19 +1851,32 @@ export const VideoView = ({
             <div>
               <div className="flex items-center justify-between mb-3 sm:mb-5">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-red-500" />
-                  <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
-                    {searchQuery
-                      ? `Resultados: "${searchQuery}"`
-                      : activeCategory !== "Todos"
-                      ? `Vídeos de ${activeCategory}`
-                      : "Vídeos Recomendados HD"}
-                  </span>
+                  {isKidsMode ? (
+                    <div className="flex items-center gap-2">
+                      <Baby className="w-5 h-5 text-amber-400 animate-pulse" />
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-300">
+                        {searchQuery
+                          ? `Caricaturas encontradas: "${searchQuery}"`
+                          : `Sección: ${activeKidsSubCategory}`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-red-500" />
+                      <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
+                        {searchQuery
+                          ? `Resultados: "${searchQuery}"`
+                          : activeCategory !== "Todos"
+                          ? `Vídeos de ${activeCategory}`
+                          : "Vídeos Recomendados HD"}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {isLoading && (
-                  <div className="flex items-center gap-2 text-xs text-red-400 font-semibold">
-                    <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
-                    <span className="hidden sm:inline">Cargando alta definición...</span>
+                  <div className={`flex items-center gap-2 text-xs font-semibold ${isKidsMode ? "text-amber-400" : "text-red-400"}`}>
+                    <Loader2 className={`w-4 h-4 animate-spin ${isKidsMode ? "text-amber-500" : "text-red-500"}`} />
+                    <span className="hidden sm:inline">{isKidsMode ? "Cargando diversión segura..." : "Cargando alta definición..."}</span>
                   </div>
                 )}
               </div>
@@ -1580,10 +1894,18 @@ export const VideoView = ({
                   <div
                     key={video.id}
                     id={`grid-${video.id}`}
-                    className={`flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2.5 sm:p-3 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
-                      currentVideo?.id === displayVideo.id
-                        ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50"
-                        : ""
+                    className={`flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 p-2.5 sm:p-3 rounded-2xl border shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
+                      isKidsMode
+                        ? `bg-[#0e142e]/60 hover:bg-[#141b3d]/80 border-amber-500/10 hover:border-amber-500/30 ${
+                            currentVideo?.id === displayVideo.id
+                              ? "ring-2 ring-amber-500 bg-amber-500/10 border-amber-500/40"
+                              : ""
+                          }`
+                        : `bg-slate-900/40 hover:bg-slate-800/60 border-white/10 hover:border-red-500/40 ${
+                            currentVideo?.id === displayVideo.id
+                              ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50"
+                              : ""
+                          }`
                     }`}
                     onClick={(e) => {
                       const sourceId = `grid-${video.id}`;
@@ -1667,14 +1989,20 @@ export const VideoView = ({
                           </div>
 
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                            <div className="w-11 h-11 bg-red-600/90 rounded-full flex items-center justify-center backdrop-blur-md shadow-[0_0_20px_rgba(220,38,38,0.8)] scale-90 group-hover:scale-100 transition-all">
-                              <Play className="w-5 h-5 text-white fill-current ml-0.5" />
-                            </div>
+                            {isKidsMode ? (
+                              <div className="w-12 h-12 rounded-full bg-amber-500 text-black flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-90 group-hover:scale-100 transition-all duration-300">
+                                <Play className="w-5 h-5 text-black fill-current ml-0.5" />
+                              </div>
+                            ) : (
+                              <div className="w-11 h-11 rounded-full bg-red-600/95 text-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.7)] backdrop-blur-md scale-90 group-hover:scale-100 transition-all duration-300">
+                                <Play className="w-5 h-5 text-white fill-current ml-0.5" />
+                              </div>
+                            )}
                           </div>
 
                           {durationDisplay ? (
                             <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-black text-white border border-white/20 flex items-center gap-1 shadow-md z-10">
-                              <Clock className="w-2.5 h-2.5 text-red-400" />
+                              <Clock className={`w-2.5 h-2.5 ${isKidsMode ? "text-amber-400" : "text-red-400"}`} />
                               <span>{durationDisplay}</span>
                             </div>
                           ) : null}
@@ -1683,11 +2011,11 @@ export const VideoView = ({
                     </div>
 
                     <div className="flex flex-col min-w-0">
-                      <h4 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
+                      <h4 className={`font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug transition-colors ${isKidsMode ? "group-hover:text-amber-300" : "group-hover:text-red-400"}`}>
                         {displayVideo.title}
                       </h4>
                       <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${isKidsMode ? "text-amber-400" : "text-red-500"}`} />
                         <span className="truncate">{displayVideo.artist}</span>
                       </p>
 
@@ -1702,7 +2030,7 @@ export const VideoView = ({
                         )}
                       </div>
 
-                      </div>
+                    </div>
                   </div>
                 );
               })}
