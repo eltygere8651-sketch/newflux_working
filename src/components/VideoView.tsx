@@ -35,18 +35,22 @@ import ReactPlayer from "react-player";
 import { useDraggable } from "../hooks/useDraggable";
 
 const VIDEO_QUERIES = [
-  "entrevistas virales recientes artistas 2025 2026",
-  "entrevista Bad Bunny viral reciente 2025 2026",
-  "entrevista Quevedo podcast reciente 2025 2026",
-  "entrevista Rosalia viral reciente 2025 2026",
-  "podcasts mas vistos virales recientes 2025 2026",
-  "La Resistencia entrevista viral reciente 2025 2026",
-  "El Hormiguero entrevista viral reciente 2025 2026",
-  "Chente Ydrach entrevista viral reciente",
-  "Ibai Llanos entrevista reciente viral",
-  "entrevista Rauw Alejandro viral reciente 2025 2026",
-  "entrevista Karol G viral reciente 2025 2026",
-  "entrevista Feid viral reciente 2025 2026",
+  "Bad Bunny entrevista completa podcast reciente 2025 2026",
+  "Aitana entrevista completa podcast reciente 2025 2026",
+  "Rosalía entrevista completa podcast reciente 2025 2026",
+  "Rauw Alejandro entrevista completa podcast reciente",
+  "Quevedo entrevista podcast completa reciente 2025 2026",
+  "Karol G entrevista completa podcast reciente",
+  "Bizarrap entrevista completa podcast reciente",
+  "Feid entrevista completa podcast reciente",
+  "La Resistencia entrevista completa viral reciente 2025 2026",
+  "El Hormiguero entrevista completa viral reciente 2025 2026",
+  "The Wild Project podcast completo reciente en español",
+  "Nude Project podcast entrevista completa reciente",
+  "podcast fitness salud nutricion entrenamiento completo en español",
+  "podcast longevidad salud mental rendimiento hábitos saludables en español",
+  "documental musica actualidad tendencias viral completo en español",
+  "Chente Ydrach entrevista completa viral reciente"
 ];
 
 const VIDEO_CATEGORIES = [
@@ -55,11 +59,15 @@ const VIDEO_CATEGORIES = [
   "Infantil / Kids 🎈",
   "Entrevistas",
   "Podcasts",
+  "Fitness & Salud",
+  "Bad Bunny",
+  "Aitana",
+  "Rosalía",
+  "Rauw Alejandro",
+  "Quevedo",
+  "Karol G",
   "La Resistencia",
   "El Hormiguero",
-  "Bad Bunny",
-  "Quevedo",
-  "Rosalía",
   "Urbano",
   "Curiosidades",
 ];
@@ -105,32 +113,40 @@ const KIDS_SUBCATEGORY_QUERIES: Record<string, string> = {
 const getCategoryQuery = (cat: string) => {
   switch (cat) {
     case "Todos":
-      return "entrevistas virales podcasts tendencia 2025 2026 recientes";
+      return "entrevistas virales podcasts tendencia 2025 2026 recientes producciones completas";
     case "Infantil / Kids 🎈":
     case "Infantil / Kids":
     case "Kids":
     case "Infantil":
-      return "canciones infantiles caricaturas para niños pocoyo la granja de zenon plaza sesamo caricaturas disney junior en español";
+      return "la granja de zenon pocoyo peppa pig bluey cocomelon mickey mouse plim plim episodios completos largos español 1 hora";
     case "Entrevistas":
-      return "entrevistas virales recientes artistas mas vistos 2025 2026";
+      return "entrevistas virales completas recientes artistas famosos mas vistos 2025 2026";
     case "Podcasts":
-      return "podcasts virales mas vistos recientes 2025 2026";
+      return "podcasts virales completos mas vistos recientes en español 2025 2026";
+    case "Fitness & Salud":
+      return "podcast fitness salud nutricion entrenamiento longevidad rendimiento completo en español";
+    case "Bad Bunny":
+      return "Bad Bunny entrevista completa reciente viral podcast 2025 2026";
+    case "Aitana":
+      return "Aitana entrevista completa reciente viral podcast 2025 2026";
+    case "Rosalía":
+      return "Rosalía entrevista completa reciente viral podcast 2025 2026";
+    case "Rauw Alejandro":
+      return "Rauw Alejandro entrevista completa reciente viral podcast";
+    case "Quevedo":
+      return "Quevedo entrevista completa reciente viral podcast 2025 2026";
+    case "Karol G":
+      return "Karol G entrevista completa reciente viral podcast";
     case "La Resistencia":
       return "La Resistencia entrevista completa viral reciente 2025 2026";
     case "El Hormiguero":
       return "El Hormiguero entrevista completa viral reciente 2025 2026";
-    case "Bad Bunny":
-      return "Bad Bunny entrevista reciente viral podcast 2025 2026";
-    case "Quevedo":
-      return "Quevedo entrevista reciente viral podcast 2025 2026";
-    case "Rosalía":
-      return "Rosalía entrevista reciente viral podcast 2025 2026";
     case "Urbano":
-      return "entrevistas musica urbana reggaeton virales recientes";
+      return "entrevistas musica urbana reggaeton virales recientes completas";
     case "Curiosidades":
-      return "curiosidades noticias mas virales recientes famosos";
+      return "curiosidades noticias actualidad mas virales recientes famosos documental";
     default:
-      return `${cat} entrevista viral reciente 2025 2026`;
+      return `${cat} entrevista completa viral reciente podcast 2025 2026`;
   }
 };
 
@@ -1021,39 +1037,78 @@ export const VideoView = ({
             titleLower.includes("vol 2") ||
             titleLower.includes("volumen 2") ||
             titleLower.includes("unavailable") ||
-            titleLower.includes("no disponible")
+            titleLower.includes("no disponible") ||
+            titleLower.includes("deleted video") ||
+            titleLower.includes("private video")
           ) {
             return false;
           }
 
-          // Basic music audio/lyrics filters
+          // Exclude Shorts, promos, teasers, trailers, short clips
           if (
-            titleLower.includes("audio oficial") ||
-            titleLower.includes("letra") ||
-            titleLower.includes("lyric")
+            titleLower.includes("shorts") ||
+            titleLower.includes("#shorts") ||
+            titleLower.includes("#short") ||
+            titleLower.includes("promo") ||
+            titleLower.includes("teaser") ||
+            titleLower.includes("tráiler") ||
+            titleLower.includes("trailer") ||
+            titleLower.includes("avance") ||
+            titleLower.includes("fragmento")
           ) {
             return false;
           }
 
-          // Strict filtering for Kids Mode: exclude Shorts, promos, teasers, and short clips (< 3 mins)
           if (isForKids) {
-            if (
-              titleLower.includes("shorts") ||
-              titleLower.includes("#shorts") ||
-              titleLower.includes("#short") ||
-              titleLower.includes("promo") ||
-              titleLower.includes("teaser") ||
-              titleLower.includes("tráiler") ||
-              titleLower.includes("trailer") ||
-              titleLower.includes("avance") ||
-              titleLower.includes("fragmento")
-            ) {
-              return false;
-            }
-
+            // Kids Mode duration filter: exclude clips under 3 minutes (180 secs)
             if (v.duration) {
               const secs = parseDurationSeconds(v.duration);
-              if (secs > 0 && secs < 180) { // Exclude short clips under 3 minutes
+              if (secs > 0 && secs < 180) {
+                return false;
+              }
+            }
+          } else {
+            // Flux Videos (non-kids): Filter out static cover songs / standalone music tracks
+            const isInterviewOrPodcast =
+              titleLower.includes("entrevista") ||
+              titleLower.includes("podcast") ||
+              titleLower.includes("documental") ||
+              titleLower.includes("hablando") ||
+              titleLower.includes("charla") ||
+              titleLower.includes("resistencia") ||
+              titleLower.includes("hormiguero") ||
+              titleLower.includes("wild project") ||
+              titleLower.includes("nude project") ||
+              titleLower.includes("salud") ||
+              titleLower.includes("fitness") ||
+              titleLower.includes("nutricion") ||
+              titleLower.includes("entrenamiento") ||
+              titleLower.includes("rutina") ||
+              titleLower.includes("actualidad") ||
+              titleLower.includes("noticias");
+
+            if (!isInterviewOrPodcast) {
+              if (
+                titleLower.includes("audio oficial") ||
+                titleLower.includes("official audio") ||
+                titleLower.includes("lyric video") ||
+                titleLower.includes("video con letra") ||
+                titleLower.includes("letra") ||
+                titleLower.includes("audio") ||
+                titleLower.includes("cover audio") ||
+                titleLower.includes("visualizer") ||
+                titleLower.includes("topic") ||
+                titleLower.includes("full audio") ||
+                titleLower.includes("sencillo")
+              ) {
+                return false;
+              }
+            }
+
+            // Exclude short clips (< 5 mins / 300 secs) to guarantee long-form entertainment
+            if (v.duration) {
+              const secs = parseDurationSeconds(v.duration);
+              if (secs > 0 && secs < 300) {
                 return false;
               }
             }
