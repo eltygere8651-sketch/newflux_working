@@ -74,14 +74,32 @@ const KIDS_SUBCATEGORIES = [
   "Aventuras"
 ];
 
+const KIDS_RECOMMENDED_QUERIES = [
+  "La Granja de Zenón episodios completos recopilacion 1 hora en español",
+  "La Granja de Pepito episodios completos largos español",
+  "Pocoyó episodios completos largos en español 1 hora",
+  "Bluey episodios completos largos en español recopilacion",
+  "Cocomelon en español episodios largos completos 1 hora",
+  "Mickey Mouse Casa de Mickey episodios completos largos en español",
+  "Peppa Pig episodios completos en español 1 hora maratón",
+  "Baby Shark canciones infantiles largas 1 hora recopilacion",
+  "Luli Pampín enganchado canciones infantiles largas",
+  "Plim Plim episodios completos largos español 1 hora",
+  "Bichikids episodios completos largos en español",
+  "Cleo y Cuquín episodios completos largos español",
+  "Masha y el Oso episodios completos en español largos maraton",
+  "Cuentos infantiles para dormir audiocuentos animados largos completos",
+  "Aprender jugando videos educativos para niños recopilacion larga"
+];
+
 const KIDS_SUBCATEGORY_QUERIES: Record<string, string> = {
-  "Recomendados para niños": "pocoyo la granja de zenon plaza sesamo caricaturas disney junior canciones infantiles",
-  "Dibujos": "caricaturas infantiles episodios completos dibujos animados disney junior en español peppa pig bluey",
-  "Aprender jugando": "videos educativos para niños aprender jugando numeros colores formas canciones divertidas",
-  "Música infantil": "canciones infantiles la granja de zenon gallina pintadita canciones para cantar y bailar niños",
-  "Cuentos": "cuentos infantiles cortos para dormir audiocuentos con moraleja animados para niños",
-  "Educación": "videos educativos niños dinosaurios ciencias planetas experimentos divertidos plaza sesamo",
-  "Aventuras": "aventuras de juguetes pocoyo episodios completos videos divertidos infantiles"
+  "Recomendados para niños": "la granja de zenon pocoyo peppa pig bluey cocomelon mickey mouse plim plim episodios completos largos español 1 hora",
+  "Dibujos": "caricaturas infantiles episodios completos dibujos animados disney junior en español peppa pig bluey masha y el oso cleo y cuquin",
+  "Aprender jugando": "videos educativos para niños aprender jugando numeros colores formas canciones divertidas recopilacion larga",
+  "Música infantil": "canciones infantiles la granja de zenon luli pampin baby shark gallina pintadita canciones para cantar y bailar niños 1 hora",
+  "Cuentos": "cuentos infantiles cortos para dormir audiocuentos con moraleja animados para niños largos completos",
+  "Educación": "videos educativos niños dinosaurios ciencias planetas experimentos divertidos plaza sesamo recopilacion",
+  "Aventuras": "aventuras de juguetes pocoyo la granja de pepito episodios completos videos divertidos infantiles largos"
 };
 
 const getCategoryQuery = (cat: string) => {
@@ -355,6 +373,9 @@ const VideoPlayerWithControls = ({
         onDuration={onDuration}
         onReady={onReady}
         onEnded={onEnded}
+        onError={() => {
+          if (onEnded) onEnded();
+        }}
         controls={false}
         playsinline
         config={{
@@ -989,17 +1010,63 @@ export const VideoView = ({
       );
       if (res.ok) {
         const data = await res.json();
-        const filtered = data.filter(
-          (v: any) =>
-            !v.title.toLowerCase().includes("audio") &&
-            !v.title.toLowerCase().includes("letra") &&
-            !v.title.toLowerCase().includes("lyric"),
-        );
+        const isForKids = isKidsMode || activeCategory === "Infantil / Kids 🎈";
+
+        const filtered = data.filter((v: any) => {
+          const titleLower = (v.title || "").toLowerCase();
+
+          // Exclude unavailable / unplayable / restricted video titles
+          if (
+            titleLower.includes("vol. 2") ||
+            titleLower.includes("vol 2") ||
+            titleLower.includes("volumen 2") ||
+            titleLower.includes("unavailable") ||
+            titleLower.includes("no disponible")
+          ) {
+            return false;
+          }
+
+          // Basic music audio/lyrics filters
+          if (
+            titleLower.includes("audio oficial") ||
+            titleLower.includes("letra") ||
+            titleLower.includes("lyric")
+          ) {
+            return false;
+          }
+
+          // Strict filtering for Kids Mode: exclude Shorts, promos, teasers, and short clips (< 3 mins)
+          if (isForKids) {
+            if (
+              titleLower.includes("shorts") ||
+              titleLower.includes("#shorts") ||
+              titleLower.includes("#short") ||
+              titleLower.includes("promo") ||
+              titleLower.includes("teaser") ||
+              titleLower.includes("tráiler") ||
+              titleLower.includes("trailer") ||
+              titleLower.includes("avance") ||
+              titleLower.includes("fragmento")
+            ) {
+              return false;
+            }
+
+            if (v.duration) {
+              const secs = parseDurationSeconds(v.duration);
+              if (secs > 0 && secs < 180) { // Exclude short clips under 3 minutes
+                return false;
+              }
+            }
+          }
+
+          return true;
+        });
+
         setVideos(
           filtered.map((v: any) => ({
             id: v.id,
             title: formatTitle(v.title),
-            artist: v.artist || v.uploader || "YouTube",
+            artist: v.artist || v.uploader || (isForKids ? "Flux Kids" : "YouTube"),
             thumbnail: getHighResVideoThumbnail(v.thumbnail, v.id),
             duration: v.duration || undefined,
           })),
@@ -1032,7 +1099,7 @@ export const VideoView = ({
     } else if (cat === "Infantil / Kids 🎈") {
       setSearchQuery("");
       setActiveKidsSubCategory("Recomendados para niños");
-      const query = KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"];
+      const query = KIDS_RECOMMENDED_QUERIES[Math.floor(Math.random() * KIDS_RECOMMENDED_QUERIES.length)];
       await fetchVideosForQuery(query);
     } else {
       setSearchQuery(cat);
@@ -1321,10 +1388,10 @@ export const VideoView = ({
   }
 
   return (
-    <div className={`fixed inset-0 z-[9999] h-screen w-screen flex flex-col bg-[#050508] text-white overflow-hidden selection:bg-red-500 selection:text-white ${isKidsMode ? "bg-[#060814]" : ""}`}>
+    <div className={`fixed inset-0 z-[9999] h-screen w-screen flex flex-col overflow-hidden selection:bg-red-500 selection:text-white ${isKidsMode ? "bg-gradient-to-br from-sky-200 via-teal-100 to-sky-100 text-slate-800" : "bg-[#020204] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/20 via-[#050508] to-[#020204] text-white"}`}>
       {/* Release Announcement Banner */}
       {!isKidsMode && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
-        <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-sm z-20">
+        <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 pb-2 pt-[max(env(safe-area-inset-top),8px)] flex items-center justify-between gap-3 backdrop-blur-sm z-20">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
               <Youtube className="w-4 h-4 text-white" />
@@ -1348,59 +1415,51 @@ export const VideoView = ({
       
       {/* Search & Category Filter Sticky Header */}
       {isKidsMode ? (
-        <div className="shrink-0 sticky top-0 z-40 bg-[#060814]/95 backdrop-blur-xl border-b border-amber-500/15 p-3 sm:p-5 shadow-2xl">
-          <div className="flex flex-col gap-2.5 sm:gap-3.5 max-w-7xl mx-auto w-full">
-            {/* Top row with Premium back button, Brand Logo and Safe Badge */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className={`shrink-0 sticky top-0 z-40 bg-white/60 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgba(0,0,0,0.05)] transition-all duration-300 pb-3 pt-[max(env(safe-area-inset-top),16px)]`}>
+          <div className="flex flex-col gap-3 max-w-7xl mx-auto w-full px-4 sm:px-6">
+            {/* Top row with Premium back button, Brand Logo and Perfiles */}
+            <div className="relative flex items-center justify-between min-h-[44px]">
+              <div className="flex items-center z-10 w-1/3 justify-start">
                 <button
                   onClick={() => {
                     if (onClose) onClose();
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-red-500/30 text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-all duration-300 cursor-pointer shadow-md group"
+                  className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full border-2 border-rose-400 text-rose-500 bg-white hover:bg-rose-50 hover:scale-105 transition-all duration-300 cursor-pointer shadow-sm group active:scale-95"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-red-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Salir</span>
+                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
                 </button>
+              </div>
+
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-transparent bg-clip-text drop-shadow-sm">
+                  <Baby className="w-5 h-5 text-amber-500" />
+                  <span className="text-base sm:text-lg font-black tracking-widest uppercase leading-none mt-0.5">
+                    Flux Kids
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center z-10 w-1/3 justify-end">
                 <button
                   onClick={() => setImmersiveModeSelection('select')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-amber-500/30 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-all duration-300 cursor-pointer shadow-md"
+                  className="flex items-center justify-center h-10 sm:h-11 px-4 sm:px-5 rounded-full border-2 border-sky-400 text-sky-600 bg-white hover:bg-sky-50 hover:scale-105 transition-all duration-300 cursor-pointer shadow-sm active:scale-95"
                 >
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Perfiles</span>
+                  <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider">Perfiles</span>
                 </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 sm:gap-2 select-none">
-                <div className="bg-amber-500/10 p-1.5 rounded-xl border border-amber-500/20 shadow-md">
-                  <Baby className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-bounce" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs sm:text-base font-black tracking-wider text-amber-300 uppercase leading-none">
-                    Flux Kids 🎈
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] text-amber-400/60 font-bold tracking-tight">
-                    Modo Seguro
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
-                <Shield className="w-3 h-3" />
-                <span className="hidden sm:inline">Seguro</span>
               </div>
             </div>
 
             {/* Playful Kids Search bar */}
-            <form onSubmit={handleSearch} className="relative w-full">
+            <form onSubmit={handleSearch} className="relative w-full mt-1">
               <input
                 type="text"
-                placeholder="Buscar caricaturas, canciones..."
+                placeholder="Buscar caricaturas, canciones, cuentos..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-amber-500/15 rounded-full py-2 sm:py-2.5 pl-10 pr-9 text-xs sm:text-sm font-extrabold text-amber-100 placeholder:text-amber-200/40 focus:outline-none focus:border-amber-500/40 focus:bg-amber-500/5 transition-all shadow-inner"
+                className="w-full bg-white border-2 border-sky-200 rounded-full h-12 sm:h-14 pl-12 pr-10 text-sm sm:text-base font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100 transition-all shadow-sm"
               />
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400/60 pointer-events-none">
-                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-sky-400 pointer-events-none">
+                <Search className="w-5 h-5" />
               </div>
               {searchQuery && (
                 <button
@@ -1410,15 +1469,15 @@ export const VideoView = ({
                     setActiveKidsSubCategory("Recomendados para niños");
                     fetchVideosForQuery(KIDS_SUBCATEGORY_QUERIES["Recomendados para niños"]);
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400/60 hover:text-white p-1 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 p-1.5 cursor-pointer bg-slate-100 hover:bg-rose-100 rounded-full transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </form>
 
             {/* Kids subcategories filter pills */}
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 pt-0.5 touch-pan-x border-t border-amber-500/10">
+            <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none pb-1 pt-1 touch-pan-x">
               {KIDS_SUBCATEGORIES.map((subCat) => {
                 const isSelected = activeKidsSubCategory === subCat;
                 return (
@@ -1429,10 +1488,10 @@ export const VideoView = ({
                       const query = KIDS_SUBCATEGORY_QUERIES[subCat];
                       await fetchVideosForQuery(query);
                     }}
-                    className={`shrink-0 px-3 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black transition-all cursor-pointer whitespace-nowrap border min-h-[30px] sm:min-h-[34px] flex items-center justify-center gap-1 ${
+                    className={`shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap border-2 flex items-center justify-center gap-1.5 ${
                       isSelected
-                        ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/20 scale-[1.02]"
-                        : "bg-amber-500/5 text-amber-200/80 border-amber-500/10 hover:bg-amber-500/10 hover:text-white"
+                        ? "bg-gradient-to-r from-amber-400 to-orange-400 text-white border-transparent shadow-lg shadow-orange-400/30 scale-105"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 shadow-sm"
                     }`}
                   >
                     👶 {subCat}
@@ -1443,57 +1502,49 @@ export const VideoView = ({
           </div>
         </div>
       ) : (
-        <div className="shrink-0 sticky top-0 z-40 bg-[#050508]/95 backdrop-blur-xl border-b border-white/10 p-3 sm:p-3.5 shadow-xl">
-          <div className="flex flex-col gap-2.5 max-w-7xl mx-auto w-full">
-            {/* Top row with Premium back button, Brand Logo and Safe Badge */}
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className={`shrink-0 sticky top-0 z-40 bg-[#020204]/80 backdrop-blur-3xl shadow-2xl border-b border-white/5 transition-all duration-300 pb-2.5 ${!isKidsMode && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 ? 'pt-2' : 'pt-[max(env(safe-area-inset-top),12px)]'}`}>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
+          <div className="flex flex-col gap-2 max-w-7xl mx-auto w-full px-3 sm:px-4 relative z-10">
+            {/* Top row with Premium back button, Brand Logo and Perfiles */}
+            <div className="relative flex items-center justify-between min-h-[44px]">
+              <div className="flex items-center z-10 w-1/3 justify-start">
                 <button
                   onClick={() => {
                     if (onClose) onClose();
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-red-500/20 text-red-400 bg-red-600/10 hover:bg-red-600/20 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer shadow-md group"
+                  className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all duration-300 cursor-pointer shadow-sm group active:scale-95"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-red-500 group-hover:-translate-x-0.5 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Salir</span>
+                  <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
                 </button>
+              </div>
 
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex items-center gap-1.5 drop-shadow-md">
+                  <Film className="w-4 h-4 text-rose-500" />
+                  <span className="text-sm sm:text-base font-black tracking-widest text-white uppercase leading-none mt-0.5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
+                    Flux Vídeos
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center z-10 w-1/3 justify-end">
                 <button
                   onClick={() => setImmersiveModeSelection('select')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer shadow-md"
+                  className="flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all duration-300 cursor-pointer shadow-sm active:scale-95"
                 >
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider">Perfiles</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider">Perfiles</span>
                 </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 sm:gap-2 select-none">
-                <div className="bg-red-600/10 p-1.5 rounded-lg border border-red-500/20 shadow-md">
-                  <Film className="w-4 h-4 text-red-500" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs sm:text-sm font-black tracking-wider text-red-400 uppercase leading-none">
-                    Flux Vídeos 🎬
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold tracking-tight">
-                    Modo Inmersivo
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
-                <Sparkles className="w-3 h-3 animate-pulse" />
-                <span className="hidden sm:inline">Alta Definición</span>
               </div>
             </div>
 
             {/* Full Width Search Input */}
-            <form onSubmit={handleSearch} className="relative w-full">
+            <form onSubmit={handleSearch} className="relative w-full mt-0.5">
               <input
                 type="text"
                 placeholder="Buscar vídeos, entrevistas, podcasts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/15 rounded-full py-2 sm:py-2.5 pl-10 pr-9 text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-red-500/60 focus:bg-white/10 transition-all shadow-inner placeholder:text-slate-400"
+                className="w-full bg-black/40 border border-white/10 rounded-full h-10 sm:h-11 pl-10 pr-9 text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-rose-500/50 focus:bg-black/60 transition-all shadow-inner placeholder:text-slate-400"
               />
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               {searchQuery && (
@@ -1512,17 +1563,17 @@ export const VideoView = ({
             </form>
 
             {/* Touch-Friendly Category Quick Filter Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 pt-0.5 touch-pan-x active:cursor-grabbing">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5 pt-0.5 touch-pan-x">
               {categoriesToShow.map((cat) => {
                 const isSelected = activeCategory === cat;
                 return (
                   <button
                     key={cat}
                     onClick={() => handleCategorySelect(cat)}
-                    className={`shrink-0 px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap border min-h-[30px] sm:min-h-[34px] flex items-center justify-center ${
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap min-h-[32px] flex items-center justify-center border ${
                       isSelected
-                        ? "bg-white text-black border-white shadow-md shadow-white/10 scale-[1.01]"
-                        : "bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white"
+                        ? "bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)] scale-[1.02]"
+                        : "bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
                     }`}
                   >
                     {cat}
@@ -1559,6 +1610,7 @@ export const VideoView = ({
                   onDuration={handleDuration}
                   onReady={handlePlayerReady}
                   onEnded={playNextVideo}
+                  onError={playNextVideo}
                   controls={false}
                   playsinline
                   config={{
@@ -1700,11 +1752,11 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className={`flex flex-col group cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-800/60 p-2 sm:p-2.5 rounded-2xl border border-white/10 hover:border-red-500/40 shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
-                        isThisTheActivePlayer ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50" : ""
+                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10 backdrop-blur-md ${
+                        isThisTheActivePlayer ? "ring-2 ring-rose-500 bg-white/[0.08] border-rose-500/50" : ""
                       }`}
                     >
-                      <div className="flex flex-col w-full bg-slate-950 rounded-xl overflow-hidden border border-white/5 shadow-md">
+                      <div className="flex flex-col w-full bg-black rounded-xl overflow-hidden border border-white/5 shadow-md relative">
                         {isThisTheActivePlayer ? (
                           <>
                             <VideoPlayerWithControls
@@ -1762,7 +1814,19 @@ export const VideoView = ({
                               alt={displayVideo.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                               onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                                const target = e.currentTarget as HTMLImageElement;
+                                if (!target.dataset.triedHq && displayVideo.id) {
+                                  target.dataset.triedHq = "true";
+                                  target.src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                                } else if (!target.dataset.triedMq && displayVideo.id) {
+                                  target.dataset.triedMq = "true";
+                                  target.src = `https://i.ytimg.com/vi/${displayVideo.id}/mqdefault.jpg`;
+                                } else if (!target.dataset.triedDef && displayVideo.id) {
+                                  target.dataset.triedDef = "true";
+                                  target.src = `https://i.ytimg.com/vi/${displayVideo.id}/default.jpg`;
+                                } else {
+                                  target.src = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&auto=format&fit=crop&q=80";
+                                }
                               }}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
@@ -1809,27 +1873,26 @@ export const VideoView = ({
                         )}
                       </div>
 
-                      <div className="flex flex-col min-w-0">
-                        <h4 className="font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
+                      <div className="flex flex-col min-w-0 px-1">
+                        <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug group-hover:text-rose-400 transition-colors">
                           {displayVideo.title}
                         </h4>
-                        <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        <p className="text-xs font-semibold text-slate-400 mt-1.5 truncate flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-rose-500 shrink-0" />
                           <span className="truncate">{displayVideo.artist}</span>
                         </p>
 
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className={`text-[9.5px] px-2 py-0.5 rounded-md border ${classInfo.tagClass}`}>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${classInfo.tagClass}`}>
                             {classInfo.categoryTag}
                           </span>
                           {durationDisplay && (
-                            <span className="text-[10px] text-slate-400 font-mono font-medium">
+                            <span className="text-[10px] text-slate-500 font-mono font-bold">
                               • {durationDisplay}
                             </span>
                           )}
                         </div>
-
-                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -1894,16 +1957,16 @@ export const VideoView = ({
                   <div
                     key={video.id}
                     id={`grid-${video.id}`}
-                    className={`flex flex-col gap-2.5 group cursor-pointer transition-all duration-300 p-2.5 sm:p-3 rounded-2xl border shadow-lg hover:shadow-2xl hover:-translate-y-1 ${
+                    className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border ${
                       isKidsMode
-                        ? `bg-[#0e142e]/60 hover:bg-[#141b3d]/80 border-amber-500/10 hover:border-amber-500/30 ${
+                        ? `rounded-[28px] shadow-xl hover:shadow-2xl hover:shadow-sky-300/30 hover:-translate-y-2 bg-white/80 hover:bg-white border-white backdrop-blur-sm ${
                             currentVideo?.id === displayVideo.id
-                              ? "ring-2 ring-amber-500 bg-amber-500/10 border-amber-500/40"
+                              ? "ring-4 ring-amber-400 bg-white border-transparent"
                               : ""
                           }`
-                        : `bg-slate-900/40 hover:bg-slate-800/60 border-white/10 hover:border-red-500/40 ${
+                        : `rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10 backdrop-blur-md ${
                             currentVideo?.id === displayVideo.id
-                              ? "ring-2 ring-red-500 bg-red-500/10 border-red-500/50"
+                              ? "ring-2 ring-rose-500 bg-white/[0.08] border-rose-500/50"
                               : ""
                           }`
                     }`}
@@ -1915,7 +1978,7 @@ export const VideoView = ({
                       handlePlayVideo(video, sourceId);
                     }}
                   >
-                    <div className="flex flex-col w-full bg-slate-950 rounded-xl overflow-hidden border border-white/5 shadow-md">
+                    <div className={`flex flex-col w-full overflow-hidden shadow-md relative ${isKidsMode ? "bg-slate-100 rounded-[20px] border-2 border-slate-100/50" : "bg-black rounded-xl border border-white/5"}`}>
                       {isThisTheActivePlayer ? (
                         <>
                           <VideoPlayerWithControls
@@ -1973,7 +2036,19 @@ export const VideoView = ({
                             alt={displayVideo.title}
                             className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                             onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                              const target = e.currentTarget as HTMLImageElement;
+                              if (!target.dataset.triedHq && displayVideo.id) {
+                                target.dataset.triedHq = "true";
+                                target.src = `https://i.ytimg.com/vi/${displayVideo.id}/hqdefault.jpg`;
+                              } else if (!target.dataset.triedMq && displayVideo.id) {
+                                target.dataset.triedMq = "true";
+                                target.src = `https://i.ytimg.com/vi/${displayVideo.id}/mqdefault.jpg`;
+                              } else if (!target.dataset.triedDef && displayVideo.id) {
+                                target.dataset.triedDef = "true";
+                                target.src = `https://i.ytimg.com/vi/${displayVideo.id}/default.jpg`;
+                              } else {
+                                target.src = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&auto=format&fit=crop&q=80";
+                              }
                             }}
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
@@ -2010,26 +2085,25 @@ export const VideoView = ({
                       )}
                     </div>
 
-                    <div className="flex flex-col min-w-0">
-                      <h4 className={`font-bold text-xs sm:text-sm text-white line-clamp-2 leading-snug transition-colors ${isKidsMode ? "group-hover:text-amber-300" : "group-hover:text-red-400"}`}>
+                    <div className="flex flex-col min-w-0 px-1">
+                      <h4 className={`font-bold text-sm sm:text-base line-clamp-2 leading-snug transition-colors ${isKidsMode ? "text-slate-800 group-hover:text-rose-500" : "text-white group-hover:text-rose-400"}`}>
                         {displayVideo.title}
                       </h4>
-                      <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 truncate flex items-center gap-1">
-                        <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${isKidsMode ? "text-amber-400" : "text-red-500"}`} />
+                      <p className={`text-xs font-semibold mt-1.5 truncate flex items-center gap-1.5 ${isKidsMode ? "text-slate-500" : "text-slate-400"}`}>
+                        <CheckCircle2 className={`w-4 h-4 shrink-0 ${isKidsMode ? "text-sky-500" : "text-rose-500"}`} />
                         <span className="truncate">{displayVideo.artist}</span>
                       </p>
 
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <span className={`text-[9.5px] px-2 py-0.5 rounded-md border ${classInfo.tagClass}`}>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${classInfo.tagClass} ${isKidsMode ? "shadow-sm" : ""}`}>
                           {classInfo.categoryTag}
                         </span>
                         {durationDisplay && (
-                          <span className="text-[10px] text-slate-400 font-mono font-medium">
+                          <span className={`text-[10px] font-mono font-bold ${isKidsMode ? "text-slate-400" : "text-slate-500"}`}>
                             • {durationDisplay}
                           </span>
                         )}
                       </div>
-
                     </div>
                   </div>
                 );
