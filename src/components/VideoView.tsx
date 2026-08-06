@@ -101,8 +101,8 @@ const KIDS_RECOMMENDED_QUERIES = [
 ];
 
 const KIDS_SUBCATEGORY_QUERIES: Record<string, string> = {
-  "Recomendados para niños": "la granja de zenon pocoyo peppa pig bluey cocomelon mickey mouse plim plim episodios completos largos español 1 hora",
-  "Dibujos": "caricaturas infantiles episodios completos dibujos animados disney junior en español peppa pig bluey masha y el oso cleo y cuquin",
+  "Recomendados para niños": "la granja de zenon pocoyo bluey cocomelon mickey mouse plim plim episodios completos largos español 1 hora",
+  "Dibujos": "caricaturas infantiles episodios completos dibujos animados disney junior en español bluey masha y el oso cleo y cuquin",
   "Aprender jugando": "videos educativos para niños aprender jugando numeros colores formas canciones divertidas recopilacion larga",
   "Música infantil": "canciones infantiles la granja de zenon luli pampin baby shark gallina pintadita canciones para cantar y bailar niños 1 hora",
   "Cuentos": "cuentos infantiles cortos para dormir audiocuentos con moraleja animados para niños largos completos",
@@ -1060,7 +1060,96 @@ export const VideoView = ({
           }
 
           if (isForKids) {
-            // Kids Mode duration filter: exclude clips under 3 minutes (180 secs)
+            // 1. Strict anti-adult / non-kids keywords filter (e.g. Pepas, Farruko, Bad Bunny, Reggaeton, etc.)
+            const adultKeywords = [
+              "pepas",
+              "farruko",
+              "bad bunny",
+              "karol g",
+              "rauw",
+              "quevedo",
+              "feid",
+              "bizarrap",
+              "bzrp",
+              "ozuna",
+              "daddy yankee",
+              "anuel",
+              "myke towers",
+              "el alfa",
+              "j balvin",
+              "maluma",
+              "duki",
+              "trueno",
+              "mora",
+              "sech",
+              "arcangel",
+              "wisin",
+              "yandel",
+              "don omar",
+              "reggaeton",
+              "reggaetón",
+              "reggeton",
+              "perreo",
+              "trap",
+              "hip hop",
+              "dembow",
+              "corridos",
+              "peso pluma",
+              "desnuda",
+              "sexo",
+              "puta",
+              "perra",
+              "alcohol",
+              "cerveza",
+              "drogas",
+              "18+",
+              "explicit",
+              "chente ydrach",
+              "ibai",
+              "wild project",
+              "nude project",
+              "la resistencia",
+              "el hormiguero",
+            ];
+
+            if (adultKeywords.some((word) => titleLower.includes(word))) {
+              return false;
+            }
+
+            // 2. Exclude standard audio markers that indicate standalone pop/urban tracks
+            if (
+              titleLower.includes("audio oficial") ||
+              titleLower.includes("official audio") ||
+              titleLower.includes("lyric video") ||
+              titleLower.includes("video con letra") ||
+              titleLower.includes("cover audio") ||
+              titleLower.includes("visualizer") ||
+              titleLower.includes("topic") ||
+              titleLower.includes("full audio") ||
+              titleLower.includes("sencillo")
+            ) {
+              return false;
+            }
+
+            // 3. Positive verification: Must contain at least one children's keyword/concept
+            const kidsPositiveKeywords = [
+              "granja", "zenon", "zenón", "pocoyo", "pocoyó", "peppa", "bluey", "cocomelon",
+              "mickey", "disney", "baby shark", "luli pampin", "pampín", "plim plim", "bichikids",
+              "cleo", "cuquin", "cuquín", "masha", "dibujos", "caricaturas", "animacion", "animación",
+              "infantil", "infantiles", "niños", "niñas", "bebe", "bebé", "bebés", "bebes", "cuentos",
+              "audiocuentos", "educativo", "educativos", "aprender", "colores", "numeros", "números",
+              "abecedario", "reino infantil", "gallina pintadita", "pica pica", "chuchuwa", "toy cantando",
+              "cantando aprendo", "plaza sesamo", "sésamo", "dinosaurios", "dinos", "juguetes", "episodio",
+              "episodios", "capitulo", "capítulo", "capitulos", "temporada", "serie", "recopilacion",
+              "recopilación", "maraton", "maratón", "1 hora", "canciones infantiles"
+            ];
+
+            const hasKidsKeyword = kidsPositiveKeywords.some((kw) => titleLower.includes(kw));
+            if (!hasKidsKeyword) {
+              return false;
+            }
+
+            // 4. Kids Mode duration filter: exclude clips under 3 minutes (180 secs)
             if (v.duration) {
               const secs = parseDurationSeconds(v.duration);
               if (secs > 0 && secs < 180) {
