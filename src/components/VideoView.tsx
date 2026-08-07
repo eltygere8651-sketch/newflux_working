@@ -29,6 +29,7 @@ import {
   SkipForward,
   Youtube,
   ArrowLeft,
+  ArrowRight,
   Shield,
 } from "lucide-react";
 import ReactPlayer from "react-player";
@@ -211,22 +212,11 @@ const ActivePlayerControlBar = ({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`flex flex-col gap-2 ${
-        isOverlay 
-          ? "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/95 via-black/60 to-transparent backdrop-blur-md z-50 transition-all duration-300 pointer-events-auto" 
-          : "p-3 rounded-b-2xl bg-slate-900 border-x border-b border-white/10 backdrop-blur-lg shadow-2xl"
-      } overflow-hidden`}
+      className={`flex flex-col gap-1 sm:gap-1.5 absolute bottom-0 left-0 right-0 px-3 py-2 sm:px-4 sm:py-2.5 pt-5 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-50 transition-all duration-300 pointer-events-auto`}
     >
-      {/* Progress Bar & Time */}
-      <div className="flex flex-col gap-1 w-full group/seek">
-        <div className="flex items-center justify-between text-[10px] font-mono font-bold text-white/80 mb-0.5">
-          <span>{formatTime(currentTime)}</span>
-          <div className="flex items-center gap-1">
-            <span className="text-red-500 animate-pulse">●</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-        <div className="relative h-6 flex items-center w-full">
+      {/* Sleek Progress Bar Track pinned at bottom overlay top edge */}
+      <div className="flex items-center w-full group/seek relative cursor-pointer">
+        <div className="relative h-2.5 sm:h-3 flex items-center w-full">
           <input
             type="range"
             min={0}
@@ -238,31 +228,38 @@ const ActivePlayerControlBar = ({
             onMouseUp={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
             onTouchStart={onSeekMouseDown}
             onTouchEnd={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
-            className="absolute inset-0 w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-red-600 z-10"
+            className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
           />
+          <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full pointer-events-none overflow-hidden group-hover/seek:h-1.5 transition-all">
+            <div 
+              className="h-full bg-red-600 transition-all pointer-events-none"
+              style={{ width: `${played * 100}%` }}
+            />
+          </div>
+          {/* Thumb indicator */}
           <div 
-            className="absolute top-1/2 -translate-y-1/2 left-0 h-1.5 bg-red-600 rounded-lg transition-all pointer-events-none"
-            style={{ width: `${played * 100}%` }}
+            className="absolute h-3 w-3 bg-red-600 rounded-full pointer-events-none shadow-md opacity-0 group-hover/seek:opacity-100 transition-opacity transform -translate-x-1/2"
+            style={{ left: `${played * 100}%` }}
           />
         </div>
       </div>
 
-      {/* Bottom Controls */}
-      <div className="flex items-center justify-between gap-3 w-full">
-        {/* Left: Play/Pause/Next Group */}
-        <div className="flex items-center gap-2.5 shrink-0">
+      {/* Bottom Controls Row */}
+      <div className="flex items-center justify-between gap-2 w-full">
+        {/* Left: Play/Pause/Next + Timestamp */}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setIsPlaying(!isPlaying);
             }}
-            className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all shadow-lg active:scale-95 cursor-pointer"
+            className="text-white hover:text-red-400 hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-lg p-1"
           >
             {isPlaying ? (
-              <Pause className="w-5 h-5 fill-current" />
+              <Pause className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
             ) : (
-              <Play className="w-5 h-5 fill-current ml-0.5" />
+              <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current ml-0.5" />
             )}
           </button>
           
@@ -272,29 +269,26 @@ const ActivePlayerControlBar = ({
               e.stopPropagation();
               onNext?.();
             }}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/10"
+            className="text-white/80 hover:text-white hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-md p-1"
             title="Siguiente video"
           >
-            <SkipForward className="w-4 h-4 fill-current" />
+            <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
           </button>
-        </div>
 
-        {/* Right: Volume & Fullscreen & Baby Lock */}
-        <div className="flex items-center gap-2">
           {/* Volume Control */}
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2.5 py-1.5 hover:bg-white/10 transition-all">
+          <div className="hidden sm:flex items-center gap-1.5 group/vol ml-1">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMuted(!isMuted);
               }}
-              className="text-slate-300 hover:text-white transition-colors cursor-pointer"
+              className="text-white/80 hover:text-white transition-colors cursor-pointer drop-shadow-md p-1"
             >
               {isMuted || volume === 0 ? (
                 <VolumeX className="w-4 h-4 text-red-400" />
               ) : (
-                <Volume2 className="w-4 h-4 text-slate-300" />
+                <Volume2 className="w-4 h-4" />
               )}
             </button>
             <input
@@ -307,9 +301,31 @@ const ActivePlayerControlBar = ({
                 e.stopPropagation();
                 setVolume(parseFloat(e.target.value));
               }}
-              className="w-14 sm:w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+              className="w-0 opacity-0 group-hover/vol:w-16 group-hover/vol:opacity-100 h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-white transition-all duration-300 origin-left"
             />
           </div>
+
+          {/* Clean Inline Time Readout */}
+          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-mono text-white/90 ml-1 sm:ml-2 drop-shadow-sm select-none">
+            <span>{formatTime(currentTime)}</span>
+            <span className="opacity-40">/</span>
+            <span className="opacity-60">{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Right: Fullscreen & Baby Lock */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsBabyLock(true);
+            }}
+            className="text-white/80 hover:text-red-400 hover:scale-110 transition-all active:scale-95 cursor-pointer flex items-center justify-center drop-shadow-md p-1"
+            title="Bloqueo Infantil"
+          >
+            <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
 
           <button
             type="button"
@@ -317,22 +333,10 @@ const ActivePlayerControlBar = ({
               e.stopPropagation();
               toggleFullscreen();
             }}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/10"
+            className="text-white/80 hover:text-white hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-md p-1"
             title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
           >
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsBabyLock(true);
-            }}
-            className="w-9 h-9 rounded-full bg-red-600/20 hover:bg-red-600/30 text-red-400 flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-red-500/20"
-            title="Bloqueo Infantil"
-          >
-            <Lock className="w-4 h-4" />
+            {isFullscreen ? <Minimize className="w-5 h-5 sm:w-6 sm:h-6" /> : <Maximize className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
         </div>
       </div>
@@ -366,55 +370,95 @@ const VideoPlayerWithControls = ({
   resetControlsTimeout,
 }: any) => {
   const isFS = !!fullscreenId;
+  const [videoReady, setVideoReady] = useState(false);
 
   const playerContent = (
     <div
       id={`player-card-${displayVideo.id}`}
-      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[9999] h-full" : "aspect-video h-auto rounded-t-xl"} bg-slate-950 group/player overflow-hidden`}
+      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[99999999] h-full" : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl"} bg-slate-950 group/player overflow-hidden shadow-2xl`}
       style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' } : {}}
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
     >
-      <ReactPlayer
-        ref={playerRef}
-        url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
-        width="100%"
-        height="100%"
-        className="absolute top-0 left-0 w-full h-full pointer-events-none"
-        playing={isPlaying}
-        volume={isMuted ? 0 : volume}
-        muted={isMuted}
-        onProgress={onProgress}
-        onDuration={onDuration}
-        onReady={onReady}
-        onEnded={onEnded}
-        onError={() => {
-          if (onEnded) onEnded();
-        }}
-        controls={false}
-        playsinline
-        config={{
-          youtube: {
-            playerVars: {
-              autoplay: 1,
-              controls: 0,
-              modestbranding: 1,
-              rel: 0,
-              showinfo: 0,
-              iv_load_policy: 3,
-              cc_load_policy: 0,
-              fs: 0,
-              playsinline: 1,
-              disablekb: 1,
-              origin: typeof window !== "undefined" ? window.location.origin : undefined,
-            },
-          },
-        }}
-      />
+      {/* Background Poster Overlay while loading to prevent raw YouTube first-second flashes */}
+      {!videoReady && (
+        <div className="absolute inset-0 z-[1] bg-slate-950 flex items-center justify-center overflow-hidden transition-opacity duration-500">
+          <img
+            src={displayVideo.thumbnail}
+            alt={displayVideo.title}
+            className="w-full h-full object-cover blur-sm opacity-50 scale-105"
+          />
+          <div className="absolute inset-0 bg-black/40" />
+        </div>
+      )}
 
-      {/* Top Mask to hide YouTube title/links */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none z-0 opacity-60" />
+      {/* Cropped YouTube Iframe Container - scale-[1.14] crops out native YouTube top title bar & watermark */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none flex items-center justify-center">
+        <div className="w-full h-full scale-[1.14] origin-center">
+          <ReactPlayer
+            ref={playerRef}
+            url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
+            width="100%"
+            height="100%"
+            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            playing={isPlaying}
+            volume={isMuted ? 0 : volume}
+            muted={isMuted}
+            onProgress={onProgress}
+            onDuration={onDuration}
+            onReady={(e: any) => {
+              setVideoReady(true);
+              if (onReady) onReady(e);
+            }}
+            onEnded={onEnded}
+            onError={() => {
+              if (onEnded) onEnded();
+            }}
+            controls={false}
+            playsinline
+            config={{
+              youtube: {
+                playerVars: {
+                  autoplay: 1,
+                  controls: 0,
+                  modestbranding: 1,
+                  rel: 0,
+                  showinfo: 0,
+                  iv_load_policy: 3,
+                  cc_load_policy: 0,
+                  fs: 0,
+                  playsinline: 1,
+                  disablekb: 1,
+                  origin: typeof window !== "undefined" ? window.location.origin : undefined,
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[2] opacity-80 transition-opacity duration-300" />
+
+      {/* Top Header Title Overlay when controls are active (Netflix / Apple TV style) */}
+      {!isBabyLock && (
+        <div
+          className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/90 via-black/40 to-transparent z-20 pointer-events-none transition-opacity duration-300 flex items-center justify-between ${
+            showControls || !isPlaying ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0 max-w-[80%] pr-4">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">
+              {displayVideo.title}
+            </span>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-wider text-white/80 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15 backdrop-blur-md shrink-0 shadow-sm">
+            FLUX HD
+          </span>
+        </div>
+      )}
 
       {/* Central Play/Pause on Tap Overlay */}
       {!isBabyLock && (
@@ -425,14 +469,14 @@ const VideoPlayerWithControls = ({
             resetControlsTimeout();
           }}
           onMouseMove={resetControlsTimeout}
-          className={`absolute inset-0 z-10 cursor-pointer flex items-center justify-center transition-all ${
-            showControls ? "bg-black/40" : "bg-transparent"
+          className={`absolute inset-0 z-10 cursor-pointer flex items-center justify-center transition-all duration-300 ${
+            showControls && !isPlaying ? "bg-black/30" : "bg-transparent"
           }`}
         >
           <div
-            className={`w-20 h-20 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-lg transition-all transform ${
+            className={`w-20 h-20 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-md transition-all transform ${
               showControls || !isPlaying ? "opacity-100 scale-100" : "opacity-0 scale-90"
-            } shadow-2xl border border-white/20`}
+            } shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-white/20`}
           >
             {isPlaying ? (
               <Pause className="w-10 h-10 fill-current" />
@@ -443,11 +487,11 @@ const VideoPlayerWithControls = ({
         </div>
       )}
 
-      {/* Control Bar Overlay (Only in Fullscreen) */}
-      {!isBabyLock && isFS && (
+      {/* Control Bar Overlay (Always shown when active) */}
+      {!isBabyLock && (
         <div
           onMouseMove={resetControlsTimeout}
-          className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${
+          className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-end ${
             showControls || !isPlaying ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -470,6 +514,16 @@ const VideoPlayerWithControls = ({
             currentTime={played * duration}
             onNext={onEnded}
             isOverlay={true}
+          />
+        </div>
+      )}
+
+      {/* Ultra-thin ambient progress bar pinned at bottom edge when controls auto-hide */}
+      {!isBabyLock && !showControls && isPlaying && (
+        <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white/20 z-10 pointer-events-none overflow-hidden">
+          <div
+            className="h-full bg-red-600 transition-all duration-200"
+            style={{ width: `${played * 100}%` }}
           />
         </div>
       )}
@@ -807,6 +861,17 @@ export const VideoView = ({
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, [isPlaying, isBabyLock]);
+
+  useEffect(() => {
+    if (isVisible) {
+      pauseBackgroundMusic();
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isVisible, pauseBackgroundMusic]);
 
   useEffect(() => {
     const handleFS = () => {
@@ -1439,92 +1504,107 @@ export const VideoView = ({
 
   if (immersiveModeSelection === 'select') {
     return (
-      <div className="fixed inset-0 z-[9999] h-screen w-screen bg-[#060814] text-white flex flex-col justify-between p-4 sm:p-12 overflow-y-auto font-sans selection:bg-amber-500 selection:text-black">
-        {/* Top Header with Back/Close button */}
-        <div className="flex items-center justify-between w-full max-w-5xl mx-auto pt-2 sm:pt-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 select-none">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center shadow-[0_4px_20px_rgba(239,68,68,0.25)]">
-              <Tv2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div>
-              <span className="text-base sm:text-lg font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400 uppercase">
-                Flux Cinema
-              </span>
-              <span className="block text-[9px] sm:text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">
-                Premium Streaming
-              </span>
-            </div>
-          </div>
+      <div 
+        className="fixed inset-0 z-[999999999] h-screen w-screen bg-[#040612] text-white flex flex-col justify-between p-4 sm:p-10 md:p-12 overflow-y-auto font-sans selection:bg-rose-500 selection:text-white"
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 }}
+      >
+        {/* Ambient Glowing Background Layers */}
+        <div className="absolute top-0 left-1/4 w-[32rem] h-[32rem] bg-indigo-600/20 rounded-full blur-[140px] pointer-events-none -z-10" />
+        <div className="absolute bottom-0 right-1/4 w-[36rem] h-[36rem] bg-rose-600/15 rounded-full blur-[160px] pointer-events-none -z-10" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[45rem] h-[45rem] bg-cyan-500/10 rounded-full blur-[180px] pointer-events-none -z-10" />
+        <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:32px_32px] opacity-[0.03] pointer-events-none -z-10" />
 
+        {/* Top Header with Back/Close button */}
+        <div className="flex items-center justify-end w-full max-w-5xl mx-auto pt-2 sm:pt-0 z-10">
           <button
             onClick={() => {
               if (onClose) {
                 onClose();
               }
             }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/10 text-slate-300 bg-white/5 hover:bg-white/10 hover:text-white transition-all duration-300 cursor-pointer shadow-md group"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-emerald-500/30 text-slate-200 bg-black/60 hover:bg-black/90 hover:border-red-500/60 hover:text-white transition-all duration-300 cursor-pointer shadow-xl backdrop-blur-xl group active:scale-95"
           >
-            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-red-500" />
-            <span className="text-[11px] font-black uppercase tracking-wider">Volver</span>
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-emerald-400" />
+            <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider">Volver</span>
           </button>
         </div>
 
         {/* Center Prompt & Cards */}
-        <div className="flex-1 flex flex-col items-center justify-center my-2 sm:my-8 max-w-5xl mx-auto w-full">
-          <div className="text-center mb-6 sm:mb-12 space-y-1 sm:space-y-2 max-w-md animate-in fade-in slide-in-from-top-4 duration-500">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight select-none px-4">
+        <div className="flex-1 flex flex-col items-center justify-center my-4 sm:my-8 max-w-5xl mx-auto w-full z-10">
+          <div className="text-center mb-6 sm:mb-12 space-y-2 max-w-lg animate-in fade-in slide-in-from-top-4 duration-500">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-indigo-200 tracking-tight leading-tight select-none px-4 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]">
               ¿Qué deseas ver hoy?
             </h1>
-            <p className="text-[10px] sm:text-sm text-slate-400 font-semibold select-none">
+            <p className="text-xs sm:text-base text-indigo-200/70 font-medium select-none max-w-md mx-auto leading-relaxed">
               Elige tu perfil de entretenimiento inmersivo exclusivo
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-8 w-full max-w-3xl px-2 sm:px-4">
-            {/* Card 1: 🎬 Vídeos Normal */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 w-full max-w-3xl px-2 sm:px-4">
+            {/* Card 1: 🎬 Flux Videos */}
             <button
               onClick={selectNormalVideosMode}
-              className="group relative flex flex-col items-center justify-center text-center p-4 sm:p-10 rounded-[24px] sm:rounded-3xl bg-[#0d0e1e]/60 border border-white/10 hover:border-red-500/40 shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer hover:shadow-red-500/5 select-none"
+              className="group relative flex flex-col items-center justify-between text-center p-6 sm:p-10 rounded-[28px] bg-black/70 border-2 border-emerald-500/40 hover:border-red-500/70 shadow-[0_10px_35px_rgba(0,0,0,0.8)] hover:shadow-[0_0_35px_rgba(16,185,129,0.25),0_0_35px_rgba(239,68,68,0.35)] transition-all duration-500 hover:scale-[1.03] active:scale-[0.98] cursor-pointer backdrop-blur-2xl overflow-hidden select-none min-h-[260px] sm:min-h-[320px]"
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-red-600/5 to-transparent rounded-[24px] sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 via-black to-red-600/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute top-0 left-10 right-10 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               
-              <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-2xl bg-red-600/10 border border-red-500/20 text-red-500 flex items-center justify-center shadow-lg group-hover:bg-red-600 group-hover:text-white group-hover:scale-110 transition-all duration-300 mb-3 sm:mb-6">
-                <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-1" />
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-black text-white flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4),0_0_20px_rgba(239,68,68,0.5)] group-hover:scale-110 transition-all duration-500 mb-4 sm:mb-6 border-2 border-transparent [background:linear-gradient(#000,#000)_padding-box,linear-gradient(135deg,#10b981,#ef4444)_border-box]">
+                <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-current ml-1 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
               </div>
 
-              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight group-hover:text-red-400 transition-colors leading-none mb-1.5 sm:mb-3">
-                Flux Vídeos 🎬
-              </h3>
-              <p className="text-[10px] sm:text-sm text-slate-400 font-semibold max-w-[260px] leading-relaxed">
-                Música, podcasts, entrevistas y contenido exclusivo en alta definición
-              </p>
+              <div className="relative z-10 flex flex-col items-center">
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-none mb-2 sm:mb-3 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-white to-red-500">
+                  Flux Videos 🎬
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300/90 font-medium max-w-[280px] leading-relaxed">
+                  Música, podcasts, entrevistas y contenido exclusivo en alta definición
+                </p>
+              </div>
+
+              <div className="relative z-10 mt-5 sm:mt-8 px-4 py-1.5 rounded-full bg-black/80 group-hover:bg-gradient-to-r group-hover:from-emerald-500 group-hover:to-red-600 text-white text-[11px] font-black uppercase tracking-widest border border-emerald-500/30 group-hover:border-white/30 transition-all duration-300 flex items-center gap-2 shadow-md">
+                <span>Entrar a Flux Videos</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
 
-            {/* Card 2: 👶 Infantil / Kids */}
+            {/* Card 2: 🎈 Flux Kids */}
             <button
               onClick={selectKidsMode}
-              className="group relative flex flex-col items-center justify-center text-center p-4 sm:p-10 rounded-[24px] sm:rounded-3xl bg-[#0d0e1e]/60 border border-white/10 hover:border-amber-500/40 shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer hover:shadow-amber-500/5 select-none"
+              className="group relative flex flex-col items-center justify-between text-center p-6 sm:p-10 rounded-[28px] bg-slate-900/50 border border-white/10 hover:border-amber-400/50 shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_20px_50px_rgba(245,158,11,0.25)] transition-all duration-500 hover:scale-[1.03] active:scale-[0.98] cursor-pointer backdrop-blur-2xl overflow-hidden select-none min-h-[260px] sm:min-h-[320px]"
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent rounded-[24px] sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/15 via-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute top-0 left-10 right-10 h-[1px] bg-gradient-to-r from-transparent via-amber-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-              <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shadow-lg group-hover:bg-amber-500 group-hover:text-black group-hover:scale-110 transition-all duration-300 mb-3 sm:mb-6">
-                <Baby className="w-5 h-5 sm:w-8 sm:h-8 animate-bounce" />
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 text-slate-950 flex items-center justify-center shadow-[0_10px_25px_rgba(245,158,11,0.4)] group-hover:shadow-[0_15px_35px_rgba(245,158,11,0.6)] group-hover:scale-110 transition-all duration-500 mb-4 sm:mb-6 border border-white/30">
+                <Baby className="w-7 h-7 sm:w-9 sm:h-9" />
               </div>
 
-              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight group-hover:text-amber-300 transition-colors leading-none mb-1.5 sm:mb-3">
-                Flux Kids 🎈
-              </h3>
-              <p className="text-[10px] sm:text-sm text-slate-400 font-semibold max-w-[260px] leading-relaxed">
-                Caricaturas, música, cuentos animados y aprendizaje seguro para niños
-              </p>
+              <div className="relative z-10 flex flex-col items-center">
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight group-hover:text-amber-300 transition-colors leading-none mb-2 sm:mb-3">
+                  Flux Kids 🎈
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300/90 font-medium max-w-[280px] leading-relaxed">
+                  Caricaturas, música, cuentos animados y aprendizaje seguro para niños
+                </p>
+              </div>
+
+              <div className="relative z-10 mt-5 sm:mt-8 px-4 py-1.5 rounded-full bg-white/5 group-hover:bg-amber-500 group-hover:text-black text-white text-[11px] font-black uppercase tracking-widest border border-white/10 group-hover:border-amber-300 transition-all duration-300 flex items-center gap-2 shadow-sm">
+                <span>Entrar a Flux Kids</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
           </div>
         </div>
 
         {/* Bottom footer bar */}
-        <div className="text-center w-full max-w-5xl mx-auto py-2">
-          <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold tracking-widest uppercase select-none">
-            Flux Music • Conectando Familias de Manera Segura
+        <div className="text-center w-full max-w-5xl mx-auto py-3 z-10">
+          <p className="text-[10px] sm:text-[11px] text-slate-400/80 font-extrabold tracking-[0.2em] uppercase select-none flex items-center justify-center gap-2">
+            <span>Flux Music</span>
+            <span className="w-1 h-1 rounded-full bg-rose-500/50" />
+            <span>Streaming HD</span>
+            <span className="w-1 h-1 rounded-full bg-indigo-500/50" />
+            <span>Entretenimiento Exclusivo</span>
           </p>
         </div>
       </div>
@@ -1532,7 +1612,10 @@ export const VideoView = ({
   }
 
   return (
-    <div className={`fixed inset-0 z-[9999] h-screen w-screen flex flex-col overflow-hidden selection:bg-red-500 selection:text-white ${isKidsMode ? "bg-gradient-to-br from-sky-200 via-teal-100 to-sky-100 text-slate-800" : "bg-[#020204] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/20 via-[#050508] to-[#020204] text-white"}`}>
+    <div 
+      className={`fixed inset-0 z-[999999999] h-screen w-screen flex flex-col overflow-hidden selection:bg-red-500 selection:text-white ${isKidsMode ? "bg-gradient-to-br from-sky-200 via-teal-100 to-sky-100 text-slate-800" : "bg-[#020204] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/20 via-[#050508] to-[#020204] text-white"}`}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 }}
+    >
       {/* Release Announcement Banner */}
       {!isKidsMode && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
         <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 pb-2 pt-[max(env(safe-area-inset-top),8px)] flex items-center justify-between gap-3 backdrop-blur-sm z-20">
@@ -1663,10 +1746,12 @@ export const VideoView = ({
               </div>
 
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="flex items-center gap-1.5 drop-shadow-md">
-                  <Film className="w-4 h-4 text-rose-500" />
-                  <span className="text-sm sm:text-base font-black tracking-widest text-white uppercase leading-none mt-0.5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
-                    Flux Vídeos
+                <div className="flex items-center gap-2 drop-shadow-md">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-black flex items-center justify-center shadow-md border-2 border-transparent [background:linear-gradient(#000,#000)_padding-box,linear-gradient(135deg,#10b981,#ef4444)_border-box] shadow-[0_0_12px_rgba(16,185,129,0.3),0_0_12px_rgba(239,68,68,0.4)]">
+                    <Tv2 className="w-3.5 h-3.5 text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
+                  </div>
+                  <span className="text-sm sm:text-base font-black tracking-wider uppercase leading-none mt-0.5 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-white to-red-500 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+                    Flux Videos
                   </span>
                 </div>
               </div>
@@ -1743,34 +1828,36 @@ export const VideoView = ({
                 className="relative h-full aspect-video shrink-0 bg-black rounded-xl overflow-hidden border border-white/15 cursor-pointer group shadow-md"
                 title="Ampliar vídeo"
               >
-                <ReactPlayer
-                  ref={playerRef}
-                  url={`https://www.youtube.com/watch?v=${currentVideo.id}`}
-                  width="100%"
-                  height="100%"
-                  className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                  playing={isPlaying}
-                  onProgress={handleProgress}
-                  onDuration={handleDuration}
-                  onReady={handlePlayerReady}
-                  onEnded={playNextVideo}
-                  onError={playNextVideo}
-                  controls={false}
-                  playsinline
-                  config={{
-                    youtube: {
-                      playerVars: {
-                        autoplay: 0,
-                        modestbranding: 1,
-                        rel: 0,
-                        iv_load_policy: 3,
-                        cc_load_policy: 0,
-                        fs: 0,
-                        playsinline: 1,
+                <div className="w-full h-full scale-[1.14] origin-center">
+                  <ReactPlayer
+                    ref={playerRef}
+                    url={`https://www.youtube.com/watch?v=${currentVideo.id}`}
+                    width="100%"
+                    height="100%"
+                    className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                    playing={isPlaying}
+                    onProgress={handleProgress}
+                    onDuration={handleDuration}
+                    onReady={handlePlayerReady}
+                    onEnded={playNextVideo}
+                    onError={playNextVideo}
+                    controls={false}
+                    playsinline
+                    config={{
+                      youtube: {
+                        playerVars: {
+                          autoplay: 0,
+                          modestbranding: 1,
+                          rel: 0,
+                          iv_load_policy: 3,
+                          cc_load_policy: 0,
+                          fs: 0,
+                          playsinline: 1,
+                        },
                       },
-                    },
-                  }}
-                />
+                    }}
+                  />
+                </div>
                 <div className="absolute inset-0 bg-black/30 group-hover:bg-transparent transition-colors flex items-center justify-center">
                   <ChevronUp className="w-4 h-4 text-white opacity-90 group-hover:scale-110 transition-all drop-shadow" />
                 </div>
@@ -1896,11 +1983,13 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10 backdrop-blur-md ${
-                        isThisTheActivePlayer ? "ring-2 ring-rose-500 bg-white/[0.08] border-rose-500/50" : ""
+                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md ${
+                        isThisTheActivePlayer 
+                          ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]" 
+                          : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
                       }`}
                     >
-                      <div className="flex flex-col w-full bg-black rounded-xl overflow-hidden border border-white/5 shadow-md relative">
+                      <div className={`flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl relative ${isThisTheActivePlayer ? "bg-black border border-white/10" : "bg-black border border-white/5"}`}>
                         {isThisTheActivePlayer ? (
                           <>
                             <VideoPlayerWithControls
@@ -1928,28 +2017,6 @@ export const VideoView = ({
                               showControls={showControls}
                               resetControlsTimeout={resetControlsTimeout}
                             />
-                            {!isBabyLock && (
-                              <ActivePlayerControlBar
-                                isPlaying={isPlaying}
-                                setIsPlaying={setIsPlaying}
-                                isMuted={isMuted}
-                                setIsMuted={setIsMuted}
-                                volume={volume}
-                                setVolume={setVolume}
-                                isFullscreen={!!fullscreenId}
-                                toggleFullscreen={() => toggleFullscreen(`player-card-${item.id}`)}
-                                isBabyLock={isBabyLock}
-                                setIsBabyLock={setIsBabyLock}
-                                played={played}
-                                onSeekMouseDown={handleSeekMouseDown}
-                                onSeekChange={handleSeekChange}
-                                onSeekMouseUp={handleSeekMouseUp}
-                                duration={duration}
-                                currentTime={played * duration}
-                                onNext={playNextVideo}
-                                isOverlay={false}
-                              />
-                            )}
                           </>
                         ) : (
                           <div className="relative w-full aspect-video">
@@ -2108,10 +2175,10 @@ export const VideoView = ({
                               ? "ring-4 ring-amber-400 bg-white border-transparent"
                               : ""
                           }`
-                        : `rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10 backdrop-blur-md ${
+                        : `rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md ${
                             currentVideo?.id === displayVideo.id
-                              ? "ring-2 ring-rose-500 bg-white/[0.08] border-rose-500/50"
-                              : ""
+                              ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]"
+                              : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
                           }`
                     }`}
                     onClick={(e) => {
@@ -2122,7 +2189,7 @@ export const VideoView = ({
                       handlePlayVideo(video, sourceId);
                     }}
                   >
-                    <div className={`flex flex-col w-full overflow-hidden shadow-md relative ${isKidsMode ? "bg-slate-100 rounded-[20px] border-2 border-slate-100/50" : "bg-black rounded-xl border border-white/5"}`}>
+                    <div className={`flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl relative ${isKidsMode ? "bg-slate-100 border-2 border-white/40" : isThisTheActivePlayer ? "bg-black border border-white/10" : "bg-black border border-white/5"}`}>
                       {isThisTheActivePlayer ? (
                         <>
                           <VideoPlayerWithControls
@@ -2150,28 +2217,6 @@ export const VideoView = ({
                             showControls={showControls}
                             resetControlsTimeout={resetControlsTimeout}
                           />
-                          {!isBabyLock && (
-                            <ActivePlayerControlBar
-                              isPlaying={isPlaying}
-                              setIsPlaying={setIsPlaying}
-                              isMuted={isMuted}
-                              setIsMuted={setIsMuted}
-                              volume={volume}
-                              setVolume={setVolume}
-                              isFullscreen={!!fullscreenId}
-                              toggleFullscreen={() => toggleFullscreen(`player-card-${video.id}`)}
-                              isBabyLock={isBabyLock}
-                              setIsBabyLock={setIsBabyLock}
-                              played={played}
-                              onSeekMouseDown={handleSeekMouseDown}
-                              onSeekChange={handleSeekChange}
-                              onSeekMouseUp={handleSeekMouseUp}
-                              duration={duration}
-                              currentTime={played * duration}
-                              onNext={playNextVideo}
-                              isOverlay={false}
-                            />
-                          )}
                         </>
                       ) : (
                         <div className="relative w-full aspect-video">

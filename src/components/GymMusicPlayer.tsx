@@ -6747,37 +6747,23 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         </button>
                         <button
                           onClick={() => setExploreMode("video")}
-                          className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-700 flex items-center justify-center gap-2 relative overflow-hidden group/vbtn ${
+                          className={`flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-500 flex items-center justify-center gap-2 relative overflow-hidden group/vbtn ${
                             exploreMode === "video" 
-                              ? "bg-gradient-to-br from-[#FF0000] via-[#E60000] to-[#CC0000] text-white shadow-[0_10px_30px_-5px_rgba(220,38,38,0.6)] scale-[1.02] z-10 border border-white/20" 
-                              : "bg-emerald-500/[0.03] text-slate-400 hover:text-white hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20"
+                              ? "bg-black text-white shadow-[0_0_25px_rgba(16,185,129,0.4),0_0_25px_rgba(239,68,68,0.5)] scale-[1.02] z-10 border-2 border-transparent [background:linear-gradient(#000,#000)_padding-box,linear-gradient(135deg,#10b981,#ef4444)_border-box]" 
+                              : "bg-black/60 text-slate-300 hover:text-white hover:bg-black/90 border border-emerald-500/30 hover:border-red-500/50 shadow-md"
                           }`}
                         >
-                          {/* Premium inner glow */}
+                          {/* Premium inner glow with green and red accents */}
                           {exploreMode === "video" && (
-                            <div className="absolute inset-0 bg-gradient-to-tr from-white/20 via-transparent to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-transparent to-red-600/15 pointer-events-none animate-pulse" />
                           )}
                           
-                          <Youtube className={`w-4.5 h-4.5 transition-transform duration-700 ${exploreMode === "video" ? "scale-110" : "group-hover/vbtn:rotate-12"}`} />
-                          <span className="relative z-10">Vídeos</span>
-
-                          {/* Redesigned Novedad Badge - Auto-removes in 24h */}
-                          {Date.now() < VIDEOS_FEATURE_RELEASE + (24 * 60 * 60 * 1000) && (
-                            <div className="absolute -top-1 -right-1 flex items-center scale-90">
-                              <div className="relative">
-                                <div className="absolute inset-0 bg-emerald-400 blur-md animate-pulse opacity-60" />
-                                <div className="relative bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-500 text-black text-[7px] font-black px-2 py-1 rounded-bl-xl shadow-2xl flex items-center gap-1 border-l border-b border-black/20 ring-1 ring-white/20">
-                                  <Sparkles className="w-2.5 h-2.5 animate-bounce" />
-                                  <span>NUEVO</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Shimmer effect for novelty - now with Green glow */}
-                          {Date.now() < VIDEOS_FEATURE_RELEASE + (24 * 60 * 60 * 1000) && (
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent -translate-x-full animate-shimmer pointer-events-none" />
-                          )}
+                          <div className="relative flex items-center justify-center">
+                            <Youtube className={`w-4.5 h-4.5 transition-transform duration-500 ${exploreMode === "video" ? "text-red-500 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "text-emerald-400 group-hover/vbtn:rotate-12"}`} />
+                          </div>
+                          <span className={`relative z-10 font-black tracking-wider ${exploreMode === "video" ? "bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-white to-red-500" : "text-slate-200 group-hover/vbtn:text-white"}`}>
+                            Flux Videos
+                          </span>
                         </button>
                       </div>
                     )}
@@ -9851,12 +9837,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         </div>
       )}
       
-      {exploreMode === "video" && (
+      {exploreMode === "video" && typeof document !== "undefined" && createPortal(
         <React.Suspense
           fallback={
-            <div className="fixed inset-0 z-[999999] bg-[#060814] flex flex-col items-center justify-center text-slate-500">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto text-red-500 mb-4" />
-              <span className="text-sm font-black uppercase tracking-widest text-white">Iniciando Flux Cinema...</span>
+            <div className="fixed inset-0 z-[99999999] bg-[#040612] flex flex-col items-center justify-center text-slate-500">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto text-rose-500 mb-4" />
+              <span className="text-sm font-black uppercase tracking-widest text-white">Iniciando Flux Videos...</span>
             </div>
           }
         >
@@ -9881,7 +9867,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             }}
             onClose={() => setExploreMode("audio")}
           />
-        </React.Suspense>
+        </React.Suspense>,
+        document.body
       )}
       
     </div>
