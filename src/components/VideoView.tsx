@@ -27,6 +27,7 @@ import {
   Volume2,
   VolumeX,
   SkipForward,
+  SkipBack,
   Youtube,
   ArrowLeft,
   ArrowRight,
@@ -209,136 +210,266 @@ const ActivePlayerControlBar = ({
     return `${mm}:${ss}`;
   };
 
-  return (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className={`flex flex-col gap-1 sm:gap-1.5 absolute bottom-0 left-0 right-0 px-3 py-2 sm:px-4 sm:py-2.5 pt-5 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-50 transition-all duration-300 pointer-events-auto`}
-    >
-      {/* Sleek Progress Bar Track pinned at bottom overlay top edge */}
-      <div className="flex items-center w-full group/seek relative cursor-pointer">
-        <div className="relative h-2.5 sm:h-3 flex items-center w-full">
+  if (!isFullscreen) {
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col w-full absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent z-[100] transition-all duration-300 pointer-events-auto pt-10 pb-1"
+      >
+        <div className="flex items-center justify-between w-full px-2 sm:px-3 pb-1 gap-2">
+          {/* Left Side: Play/Pause, Volume, Time */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPlaying(!isPlaying);
+              }}
+              className="flex shrink-0 items-center justify-center text-white hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer w-[32px] h-[32px] sm:w-[36px] sm:h-[36px]"
+            >
+              {isPlaying ? (
+                <Pause className="fill-current w-4 h-4 sm:w-5 sm:h-5" />
+              ) : (
+                <Play className="fill-current ml-0.5 w-4 h-4 sm:w-5 sm:h-5" />
+              )}
+            </button>
+            
+            <div className="group/volume relative flex items-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMuted(!isMuted);
+                }}
+                className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer w-[32px] h-[32px] sm:w-[36px] sm:h-[36px]"
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="text-red-400 w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+              {/* Volume Slider for Inline Player */}
+              <div className="w-0 overflow-hidden group-hover/volume:w-16 sm:group-hover/volume:w-20 transition-all duration-300 ease-in-out flex items-center">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step="any"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => {
+                    const newVol = parseFloat(e.target.value);
+                    setVolume(newVol);
+                    if (newVol > 0) setIsMuted(false);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-14 sm:w-16 h-1 bg-white/30 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                />
+              </div>
+            </div>
+
+            <div className="font-mono text-[10px] sm:text-[11px] text-white/90 font-medium tracking-wide ml-1 drop-shadow-md">
+              {formatTime(currentTime)} <span className="opacity-50 mx-0.5">/</span> {formatTime(duration)}
+            </div>
+          </div>
+          
+          {/* Right Side: Fullscreen */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer w-[32px] h-[32px] sm:w-[36px] sm:h-[36px]"
+            >
+              <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom edge progress bar */}
+        <div 
+          className="w-full relative h-[3px] bg-white/20 cursor-pointer group/seek hover:h-[5px] transition-all"
+          onMouseDown={onSeekMouseDown}
+          onTouchStart={onSeekMouseDown}
+        >
           <input
             type="range"
             min={0}
             max={0.999999}
             step="any"
             value={played}
-            onMouseDown={onSeekMouseDown}
             onChange={(e) => onSeekChange(parseFloat(e.target.value))}
             onMouseUp={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
-            onTouchStart={onSeekMouseDown}
             onTouchEnd={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
-            className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
+            className="absolute inset-0 w-full h-[15px] -top-[6px] opacity-0 z-20 cursor-pointer"
+            title="Progreso del vídeo"
           />
-          <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full pointer-events-none overflow-hidden group-hover/seek:h-1.5 transition-all">
+          <div className="absolute left-0 top-0 bottom-0 bg-red-600 transition-all pointer-events-none" style={{ width: `${played * 100}%` }} />
+          <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-600 rounded-full opacity-0 group-hover/seek:opacity-100 transition-opacity transform -translate-x-1/2 shadow-[0_0_8px_rgba(220,38,38,0.9)]" style={{ left: `${played * 100}%` }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="flex flex-col w-full absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-[100] transition-all duration-300 pointer-events-auto pb-[max(env(safe-area-inset-bottom),24px)] pt-16 px-4 sm:px-8"
+    >
+      {/* LEVEL 2: Progress Bar & Timers */}
+      <div className="flex flex-col w-full max-w-4xl mx-auto mb-6">
+        {/* Sleek Progress Bar */}
+        <div className="flex items-center w-full group/seek relative cursor-pointer mb-2.5">
+          <div className="relative h-7 flex items-center w-full">
+            <input
+              type="range"
+              min={0}
+              max={0.999999}
+              step="any"
+              value={played}
+              onMouseDown={onSeekMouseDown}
+              onChange={(e) => onSeekChange(parseFloat(e.target.value))}
+              onMouseUp={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
+              onTouchStart={onSeekMouseDown}
+              onTouchEnd={(e) => onSeekMouseUp(parseFloat((e.target as any).value))}
+              className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
+              title="Progreso del vídeo"
+            />
+            {/* Track Background */}
+            <div className="absolute left-0 right-0 bg-white/20 rounded-full pointer-events-none overflow-hidden transition-all h-1 sm:h-1.5 group-hover/seek:h-1.5 sm:group-hover/seek:h-2">
+              {/* Played Track */}
+              <div 
+                className="h-full bg-red-600 transition-all pointer-events-none"
+                style={{ width: `${played * 100}%` }}
+              />
+            </div>
+            {/* Thumb indicator */}
             <div 
-              className="h-full bg-red-600 transition-all pointer-events-none"
-              style={{ width: `${played * 100}%` }}
+              className="absolute bg-red-600 rounded-full pointer-events-none shadow-[0_0_12px_rgba(220,38,38,0.9)] opacity-0 group-hover/seek:opacity-100 transition-opacity transform -translate-x-1/2 h-3 w-3 sm:h-4 sm:w-4"
+              style={{ left: `${played * 100}%` }}
             />
           </div>
-          {/* Thumb indicator */}
-          <div 
-            className="absolute h-3 w-3 bg-red-600 rounded-full pointer-events-none shadow-md opacity-0 group-hover/seek:opacity-100 transition-opacity transform -translate-x-1/2"
-            style={{ left: `${played * 100}%` }}
-          />
+        </div>
+        {/* Timers */}
+        <div className="flex items-center justify-between font-medium font-mono text-white/90 select-none tracking-wide text-[13px] sm:text-sm px-1">
+          <span className="drop-shadow-sm">{formatTime(currentTime)}</span>
+          <span className="opacity-70 drop-shadow-sm">{formatTime(duration)}</span>
         </div>
       </div>
 
-      {/* Bottom Controls Row */}
-      <div className="flex items-center justify-between gap-2 w-full">
-        {/* Left: Play/Pause/Next + Timestamp */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+      {/* LEVEL 3: Main Controls Row */}
+      <div className="flex items-center justify-between w-full max-w-4xl mx-auto px-1 sm:px-2 gap-1 sm:gap-4">
+        
+        {/* Previous (10s Back) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            let newPlayed = Math.max(0, (currentTime - 10) / (duration || 1));
+            onSeekChange(newPlayed);
+            onSeekMouseUp(newPlayed);
+          }}
+          className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+          title="Retroceder 10s"
+        >
+          <SkipBack className="fill-current w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
+
+        {/* Play / Pause */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsPlaying(!isPlaying);
+          }}
+          className="flex shrink-0 items-center justify-center text-white hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-white/5 w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+          title={isPlaying ? "Pausar" : "Reproducir"}
+        >
+          {isPlaying ? (
+            <Pause className="fill-current w-7 h-7 sm:w-8 sm:h-8" />
+          ) : (
+            <Play className="fill-current ml-0.5 w-7 h-7 sm:w-8 sm:h-8" />
+          )}
+        </button>
+        
+        {/* Next */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext?.();
+          }}
+          className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+          title="Siguiente video"
+        >
+          <SkipForward className="fill-current w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
+
+        {/* Volume */}
+        <div className="group/volume relative flex items-center">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setIsPlaying(!isPlaying);
+              setIsMuted(!isMuted);
             }}
-            className="text-white hover:text-red-400 hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-lg p-1"
+            className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+            title="Volumen"
           >
-            {isPlaying ? (
-              <Pause className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+            {isMuted || volume === 0 ? (
+              <VolumeX className="text-red-400 w-6 h-6 sm:w-7 sm:h-7" />
             ) : (
-              <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current ml-0.5" />
+              <Volume2 className="w-6 h-6 sm:w-7 sm:h-7" />
             )}
           </button>
           
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNext?.();
-            }}
-            className="text-white/80 hover:text-white hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-md p-1"
-            title="Siguiente video"
-          >
-            <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
-          </button>
-
-          {/* Volume Control */}
-          <div className="hidden sm:flex items-center gap-1.5 group/vol ml-1">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMuted(!isMuted);
-              }}
-              className="text-white/80 hover:text-white transition-colors cursor-pointer drop-shadow-md p-1"
-            >
-              {isMuted || volume === 0 ? (
-                <VolumeX className="w-4 h-4 text-red-400" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
-            </button>
+          {/* Volume Slider */}
+          <div className="w-0 overflow-hidden group-hover/volume:w-24 sm:group-hover/volume:w-32 transition-all duration-300 ease-in-out flex items-center">
             <input
               type="range"
-              min="0"
-              max="1"
-              step="0.05"
+              min={0}
+              max={1}
+              step="any"
               value={isMuted ? 0 : volume}
               onChange={(e) => {
-                e.stopPropagation();
-                setVolume(parseFloat(e.target.value));
+                const newVol = parseFloat(e.target.value);
+                setVolume(newVol);
+                if (newVol > 0) setIsMuted(false);
               }}
-              className="w-0 opacity-0 group-hover/vol:w-16 group-hover/vol:opacity-100 h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-white transition-all duration-300 origin-left"
+              onClick={(e) => e.stopPropagation()}
+              className="w-20 sm:w-28 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full shadow-[0_0_10px_rgba(255,255,255,0.1)]"
             />
           </div>
-
-          {/* Clean Inline Time Readout */}
-          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-mono text-white/90 ml-1 sm:ml-2 drop-shadow-sm select-none">
-            <span>{formatTime(currentTime)}</span>
-            <span className="opacity-40">/</span>
-            <span className="opacity-60">{formatTime(duration)}</span>
-          </div>
         </div>
 
-        {/* Right: Fullscreen & Baby Lock */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsBabyLock(true);
-            }}
-            className="text-white/80 hover:text-red-400 hover:scale-110 transition-all active:scale-95 cursor-pointer flex items-center justify-center drop-shadow-md p-1"
-            title="Bloqueo Infantil"
-          >
-            <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+        {/* Lock */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsBabyLock(true);
+          }}
+          className="flex shrink-0 items-center justify-center text-white/90 hover:text-red-400 hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+          title="Bloqueo Infantil"
+        >
+          <Lock className="w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleFullscreen();
-            }}
-            className="text-white/80 hover:text-white hover:scale-110 transition-all active:scale-95 flex items-center justify-center cursor-pointer drop-shadow-md p-1"
-            title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
-          >
-            {isFullscreen ? <Minimize className="w-5 h-5 sm:w-6 sm:h-6" /> : <Maximize className="w-5 h-5 sm:w-6 sm:h-6" />}
-          </button>
-        </div>
+        {/* Fullscreen */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+          }}
+          className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer backdrop-blur-sm w-[48px] h-[48px] sm:w-[56px] sm:h-[56px]"
+          title="Salir de pantalla completa"
+        >
+          <Minimize className="w-6 h-6 sm:w-7 sm:h-7" />
+        </button>
+
       </div>
     </div>
   );
@@ -371,42 +502,74 @@ const VideoPlayerWithControls = ({
 }: any) => {
   const isFS = !!fullscreenId;
   const [videoReady, setVideoReady] = useState(false);
+  const [isActuallyPlaying, setIsActuallyPlaying] = useState(false);
+  const [hasStartedPlaying, setHasStartedPlaying] = useState(false);
 
   const playerContent = (
     <div
       id={`player-card-${displayVideo.id}`}
-      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[99999999] h-full" : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl"} bg-slate-950 group/player overflow-hidden shadow-2xl`}
-      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' } : {}}
+      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[999999999] h-[100dvh] w-screen bg-black" : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black"} group/player overflow-hidden shadow-2xl`}
+      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 } : {}}
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
+      onMouseMove={() => {
+        if (!isBabyLock) resetControlsTimeout();
+      }}
+      onTouchStart={() => {
+        if (!isBabyLock) resetControlsTimeout();
+      }}
     >
-      {/* Background Poster Overlay while loading to prevent raw YouTube first-second flashes */}
-      {!videoReady && (
-        <div className="absolute inset-0 z-[1] bg-slate-950 flex items-center justify-center overflow-hidden transition-opacity duration-500">
+      {/* Background Poster Overlay - Stays until video ACTUALLY starts playing to hide YouTube's big red button */}
+      {(!videoReady || !hasStartedPlaying) && (
+        <div className="absolute inset-0 z-[10] bg-black flex items-center justify-center overflow-hidden transition-opacity duration-700">
           <img
             src={displayVideo.thumbnail}
             alt={displayVideo.title}
-            className="w-full h-full object-cover blur-sm opacity-50 scale-105"
+            className="w-full h-full object-cover blur-md opacity-60 scale-110"
           />
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/80" />
+          
+          {/* Custom Elegant Loading Spinner */}
+          {!hasStartedPlaying && isPlaying && (
+            <div className="absolute z-20 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-red-500 animate-spin" />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Cropped YouTube Iframe Container - scale-[1.14] crops out native YouTube top title bar & watermark */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none flex items-center justify-center">
-        <div className="w-full h-full scale-[1.14] origin-center">
+      {/* Invisible Shield Overlay to completely block ALL interaction with the YouTube iframe */}
+      <div className="absolute inset-0 z-[5] w-full h-full bg-transparent" />
+
+      {/* PERFECT YOUTUBE CROP HACK: 
+          We make the iframe 300% taller than the container and shift it up by 100%. 
+          YouTube will letterbox the 16:9 video in the center (which exactly matches our container).
+          The native YouTube title, play button, and progress bar are pushed into the top/bottom black bars
+          which are completely hidden outside the overflow-hidden container. */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
+        <div 
+          className="absolute w-full pointer-events-none opacity-90"
+          style={{ height: '300%', top: '-100%', left: 0 }}
+        >
           <ReactPlayer
             ref={playerRef}
             url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
             width="100%"
             height="100%"
             className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            style={{ pointerEvents: 'none' }}
             playing={isPlaying}
             volume={isMuted ? 0 : volume}
             muted={isMuted}
             onProgress={onProgress}
             onDuration={onDuration}
+            onPlay={() => {
+              setIsActuallyPlaying(true);
+              setHasStartedPlaying(true);
+            }}
+            onPause={() => setIsActuallyPlaying(false)}
+            onBuffer={() => setIsActuallyPlaying(false)}
             onReady={(e: any) => {
               setVideoReady(true);
               if (onReady) onReady(e);
@@ -416,7 +579,7 @@ const VideoPlayerWithControls = ({
               if (onEnded) onEnded();
             }}
             controls={false}
-            playsinline
+            playsinline={true}
             config={{
               youtube: {
                 playerVars: {
@@ -439,10 +602,10 @@ const VideoPlayerWithControls = ({
       </div>
 
       {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[2] opacity-80 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[6] opacity-80 transition-opacity duration-300" />
 
-      {/* Top Header Title Overlay when controls are active (Netflix / Apple TV style) */}
-      {!isBabyLock && (
+      {/* Top Header Title Overlay when controls are active (Only in Fullscreen) */}
+      {!isBabyLock && isFS && (
         <div
           className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/90 via-black/40 to-transparent z-20 pointer-events-none transition-opacity duration-300 flex items-center justify-between ${
             showControls || !isPlaying ? "opacity-100" : "opacity-0"
@@ -460,7 +623,7 @@ const VideoPlayerWithControls = ({
         </div>
       )}
 
-      {/* Central Play/Pause on Tap Overlay */}
+      {/* Central Play/Pause on Tap Area (Invisible) */}
       {!isBabyLock && (
         <div
           onClick={(e) => {
@@ -469,22 +632,11 @@ const VideoPlayerWithControls = ({
             resetControlsTimeout();
           }}
           onMouseMove={resetControlsTimeout}
-          className={`absolute inset-0 z-10 cursor-pointer flex items-center justify-center transition-all duration-300 ${
+          onTouchStart={resetControlsTimeout}
+          className={`absolute inset-0 z-10 cursor-pointer transition-all duration-300 ${
             showControls && !isPlaying ? "bg-black/30" : "bg-transparent"
           }`}
-        >
-          <div
-            className={`w-20 h-20 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-md transition-all transform ${
-              showControls || !isPlaying ? "opacity-100 scale-100" : "opacity-0 scale-90"
-            } shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-white/20`}
-          >
-            {isPlaying ? (
-              <Pause className="w-10 h-10 fill-current" />
-            ) : (
-              <Play className="w-10 h-10 fill-current ml-1.5" />
-            )}
-          </div>
-        </div>
+        />
       )}
 
       {/* Control Bar Overlay (Always shown when active) */}
@@ -897,12 +1049,19 @@ export const VideoView = ({
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    const isActuallyFullscreen = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el;
+    // We check if there's any inner iframe/video that supports native iOS iPhone fullscreen (webkitEnterFullscreen)
+    // ReactPlayer renders an iframe. We'll try to find it.
+    const innerMedia = el.querySelector('video') || el.querySelector('iframe');
+    const hasWebkitEnterFS = innerMedia && typeof (innerMedia as any).webkitEnterFullscreen === 'function';
+
+    const isActuallyFullscreen = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el || (innerMedia && (innerMedia as any).webkitDisplayingFullscreen);
     const isPseudoFullscreen = fullscreenId === containerId;
 
     if (isActuallyFullscreen || isPseudoFullscreen) {
       // EXIT
-      if (document.exitFullscreen) {
+      if (innerMedia && (innerMedia as any).webkitDisplayingFullscreen && typeof (innerMedia as any).webkitExitFullscreen === 'function') {
+        (innerMedia as any).webkitExitFullscreen();
+      } else if (document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
       } else if ((document as any).webkitExitFullscreen) {
         (document as any).webkitExitFullscreen();
@@ -913,29 +1072,40 @@ export const VideoView = ({
       }
     } else {
       // ENTER
-      const requestFS = el.requestFullscreen || (el as any).webkitRequestFullscreen || (el as any).msRequestFullscreen;
-      if (requestFS) {
+      if (hasWebkitEnterFS) {
+        // Native iOS iPhone video fullscreen
         try {
-          const promise = requestFS.call(el);
-          if (promise && typeof promise.then === 'function') {
-            promise.then(() => {
-              setFullscreenId(containerId);
-              if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
-                (window.screen as any).orientation.lock("landscape").catch(() => {});
-              }
-            }).catch(() => {
-              // Fallback for iOS
-              setFullscreenId(containerId);
-            });
-          } else {
-            setFullscreenId(containerId);
-          }
+          (innerMedia as any).webkitEnterFullscreen();
+          setFullscreenId(containerId);
         } catch (e) {
           setFullscreenId(containerId);
         }
       } else {
-        // Fallback for iOS iPhone where API is missing
-        setFullscreenId(containerId);
+        // HTML5 Standard & Webkit (iPad, Desktop, Android)
+        const requestFS = el.requestFullscreen || (el as any).webkitRequestFullscreen || (el as any).msRequestFullscreen;
+        if (requestFS) {
+          try {
+            const promise = requestFS.call(el);
+            if (promise && typeof promise.then === 'function') {
+              promise.then(() => {
+                setFullscreenId(containerId);
+                if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
+                  (window.screen as any).orientation.lock("landscape").catch(() => {});
+                }
+              }).catch(() => {
+                // Fallback for iOS pseudo
+                setFullscreenId(containerId);
+              });
+            } else {
+              setFullscreenId(containerId);
+            }
+          } catch (e) {
+            setFullscreenId(containerId);
+          }
+        } else {
+          // Fallback for iOS iPhone where API is missing entirely on DIVs
+          setFullscreenId(containerId);
+        }
       }
     }
   };
@@ -1505,7 +1675,7 @@ export const VideoView = ({
   if (immersiveModeSelection === 'select') {
     return (
       <div 
-        className="fixed inset-0 z-[999999999] h-screen w-screen bg-[#040612] text-white flex flex-col justify-between p-4 sm:p-10 md:p-12 overflow-y-auto font-sans selection:bg-rose-500 selection:text-white"
+        className="fixed inset-0 z-[999999999] h-screen w-screen bg-[#040612] text-white flex flex-col justify-between pt-[max(env(safe-area-inset-top,24px),24px)] pb-4 px-4 sm:p-10 md:p-12 overflow-y-auto font-sans selection:bg-rose-500 selection:text-white"
         style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 }}
       >
         {/* Ambient Glowing Background Layers */}
@@ -1515,7 +1685,7 @@ export const VideoView = ({
         <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:32px_32px] opacity-[0.03] pointer-events-none -z-10" />
 
         {/* Top Header with Back/Close button */}
-        <div className="flex items-center justify-end w-full max-w-5xl mx-auto pt-2 sm:pt-0 z-10">
+        <div className="flex items-center justify-end w-full max-w-5xl mx-auto pt-4 sm:pt-0 z-10">
           <button
             onClick={() => {
               if (onClose) {
@@ -1828,13 +1998,19 @@ export const VideoView = ({
                 className="relative h-full aspect-video shrink-0 bg-black rounded-xl overflow-hidden border border-white/15 cursor-pointer group shadow-md"
                 title="Ampliar vídeo"
               >
-                <div className="w-full h-full scale-[1.14] origin-center">
+                {/* Shield Overlay */}
+                <div className="absolute inset-0 z-[5] w-full h-full bg-transparent" />
+                <div 
+                  className="absolute w-full pointer-events-none opacity-90"
+                  style={{ height: '300%', top: '-100%', left: 0 }}
+                >
                   <ReactPlayer
                     ref={playerRef}
                     url={`https://www.youtube.com/watch?v=${currentVideo.id}`}
                     width="100%"
                     height="100%"
                     className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                    style={{ pointerEvents: 'none' }}
                     playing={isPlaying}
                     onProgress={handleProgress}
                     onDuration={handleDuration}
@@ -1842,19 +2018,21 @@ export const VideoView = ({
                     onEnded={playNextVideo}
                     onError={playNextVideo}
                     controls={false}
-                    playsinline
+                    playsinline={true}
                     config={{
                       youtube: {
                         playerVars: {
                           autoplay: 0,
+                          controls: 0,
                           modestbranding: 1,
                           rel: 0,
                           iv_load_policy: 3,
                           cc_load_policy: 0,
                           fs: 0,
-                          playsinline: 1,
-                        },
-                      },
+                          disablekb: 1,
+                          playsinline: 1
+                        }
+                      }
                     }}
                   />
                 </div>
