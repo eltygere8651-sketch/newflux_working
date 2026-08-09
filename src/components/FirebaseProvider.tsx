@@ -115,8 +115,9 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
         
-        const snapshotUnsubscribe = onSnapshot(userRef, async (snapshot) => {
+        const fetchAndSyncUserData = async (retryCount = 0) => {
           try {
+            const snapshot = await getDoc(userRef);
             
             const isVipAccount = u.email?.startsWith('vip_');
             let tStart = null;
@@ -134,8 +135,22 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 signOut(auth);
                 return;
               }
-            }
-            if (snapshot.exists()) {
+
+              // Create default user document
+              const defaultAvatar = u.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.displayName || u.email || u.uid)}`;
+              await setDoc(userRef, {
+                email: u.email || "anonymous",
+                displayName: u.displayName || "Usuario",
+                photoURL: defaultAvatar,
+                createdAt: serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                lastActiveAt: Date.now(),
+                totalUsageTime: 0,
+                trialStart: null,
+                plan: "none",
+                maxUsers: 1
+              });
+            } else {
               const data = snapshot.data();
               setDbUserProfile({
                 displayName: data.displayName,
@@ -147,6 +162,12 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               planType = data.plan || (isVipAccount ? "free" : "none");
               allowedUsers = data.maxUsers || 1;
               activeSessionId = data.activeSessionId || null;
+
+              // Update last login & active timestamps silently
+              await setDoc(userRef, { 
+                lastLogin: serverTimestamp(),
+                lastActiveAt: Date.now()
+              }, { merge: true });
             }
 
             const now = Date.now();
@@ -190,120 +211,14 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               activeSessionId: activeSessionId
             });
           } catch(err) {
-            console.error("Firestore getDoc error:", err);
-          }
-        });
-
-        // fetchUserData();
-
-        // High precision & low-resource session time tracking
-        const lastSyncTimeRef = { current: Date.now() };
-        const lastActiveTimeRef = { current: Date.now() };
-
-        const syncUsageAndActivity = async (isClosing = false) => {
-          if (!auth.currentUser) return;
-          const now = Date.now();
-          const diffSeconds = Math.floor((now - lastSyncTimeRef.current) / 1000);
-          
-          // Only update if at least 15 seconds have passed, or we are explicitly closing/refreshing
-          if (diffSeconds >= 15 || isClosing) {
-            lastSyncTimeRef.current = now;
-            lastActiveTimeRef.current = now;
-            
-            try {
-              const userRef = doc(db, "users", auth.currentUser.uid);
-              // Update both the online status timestamp and the accumulated usage time safely in 1 single light update
-              await setDoc(userRef, {
-                lastActiveAt: now,
-                totalUsageTime: increment(diffSeconds)
-              }, { merge: true });
-            } catch (err) {
-              console.warn("Could not sync user usage stats:", err);
-            }
-          }
-        };
-
-        const pollInterval = setInterval(() => {
-          if (document.visibilityState === "visible") {
-            syncUsageAndActivity();
-          }
-        }, 5 * 60 * 1000);
-
-        // User activity detector (clicks/keys) to keep status fresh, with a 3 minute debounce limit to avoid excessive writes
-        const handleUserInteraction = () => {
-          const now = Date.now();
-          if (now - lastActiveTimeRef.current > 3 * 60 * 1000 && document.visibilityState === "visible") {
-            syncUsageAndActivity();
-          }
-        };
-
-        window.addEventListener("click", handleUserInteraction);
-        window.addEventListener("keydown", handleUserInteraction);
-        
-        // Unload hook to sync any pending usage before tab closes
-        const handleBeforeUnload = () => {
-          // Use synchronous-like sync profile if possible
-          syncUsageAndActivity(true);
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-
-        unsubscribeFirestore = () => {
-          snapshotUnsubscribe();
-          clearInterval(pollInterval);
-          window.removeEventListener("click", handleUserInteraction);
-          window.removeEventListener("keydown", handleUserInteraction);
-          window.removeEventListener("beforeunload", handleBeforeUnload);
-          // Sync final remaining usage when auth state changes or provider unmounts
-          syncUsageAndActivity(true);
-        };
-
-        const syncProfile = async (retryCount = 0) => {
-          try {
-            const userRef = doc(db, "users", u.uid);
-            const userSnap = await getDoc(userRef);
-            
-            if (!userSnap.exists()) {
-              // Distinguish between a new sign up and an administratively deleted user
-              const creationTime = new Date(u.metadata.creationTime).getTime();
-              const isNewUser = (Date.now() - creationTime) < 120000; // 2 minutes window
-              
-              if (!isNewUser) {
-                 // User was deleted by admin from Firestore! Force logout.
-                 console.warn("User document deleted by admin. Logging out.");
-                 signOut(auth);
-                 return;
-              }
-
-              // Create user doc without trial
-              const defaultAvatar = u.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.displayName || u.email || u.uid)}`;
-              await setDoc(userRef, {
-                email: u.email || "anonymous",
-                displayName: u.displayName || "Usuario",
-                photoURL: defaultAvatar,
-                createdAt: serverTimestamp(),
-                lastLogin: serverTimestamp(),
-                lastActiveAt: Date.now(),
-                totalUsageTime: 0,
-                trialStart: null,
-                plan: "none",
-                maxUsers: 1
-              });
-              // fetchUserData();
-            } else {
-              // Update last login & active
-              await setDoc(userRef, { 
-                lastLogin: serverTimestamp(),
-                lastActiveAt: Date.now()
-              }, { merge: true });
-            }
-          } catch (e) {
-            console.error("Profile sync attempt failed", e);
+            console.error("Firestore getDoc / syncProfile error:", err);
             if (retryCount < 2) {
-              setTimeout(() => syncProfile(retryCount + 1), 2000);
+              setTimeout(() => fetchAndSyncUserData(retryCount + 1), 2000);
             }
           }
         };
-        syncProfile();
+
+        fetchAndSyncUserData();
       } else {
         setAccessData(null);
         setDbUserProfile(null);

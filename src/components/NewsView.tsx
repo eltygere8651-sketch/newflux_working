@@ -265,9 +265,9 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     let isMounted = true;
     try {
       const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(40));
-      import("firebase/firestore").then(({ onSnapshot }) => {
-        if (!isMounted) return;
-        unsubscribe = onSnapshot(q, (snap) => {
+      import("firebase/firestore").then(({ getDocs }) => {
+        getDocs(q).then((snap) => {
+          if (!isMounted) return;
           const firebaseList: Announcement[] = [];
           const deletedIds = new Set<string>();
           snap.forEach((docSnap) => {
@@ -306,8 +306,8 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
           );
           setAnnouncements(merged);
           setLoading(false);
-        }, (err) => {
-          console.error("Error fetching news realtime:", err);
+        }).catch((err) => {
+          console.error("Error fetching news:", err);
           setAnnouncements([
             ...COMPILED_UPDATES,
             ...COMPILED_COMMUNITY,
@@ -328,7 +328,6 @@ export const NewsView: React.FC<NewsViewProps> = ({ isAdmin, onClose }) => {
     
     return () => {
       isMounted = false;
-      if (unsubscribe) unsubscribe();
     };
   }, []);
 

@@ -328,8 +328,8 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
       !(window as any).MSStream;
 
-    import("firebase/firestore").then(({ onSnapshot }) => {
-      unsubscribe = onSnapshot(q, (querySnap) => {
+    import("firebase/firestore").then(({ getDocs }) => {
+      getDocs(q).then((querySnap) => {
         if (!isMounted) return;
         const firebaseList: Announcement[] = [];
         const deletedIds = new Set<string>();
@@ -373,7 +373,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
           }
         }
         setLoading(false);
-      }, (err) => {
+      }).catch((err) => {
         console.error("Error al cargar comunicados:", err);
         setAnnouncements(COMPILED_UPDATES);
         setLoading(false);
@@ -382,7 +382,6 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
     return () => {
       isMounted = false;
-      if (unsubscribe) unsubscribe();
     };
   }, [isOpen]);
 

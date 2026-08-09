@@ -126,16 +126,16 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   >("subscriptions");
 
   useEffect(() => {
-    // Escucha en tiempo real de usuarios con actividad en los últimos 15 minutos
-    const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
-    const q = query(
-      collection(db, "users"),
-      where("lastActiveAt", ">=", fifteenMinsAgo),
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
+    // Carga inicial de usuarios activos en los últimos 15 minutos
+    const fetchActiveUsers = async () => {
+      try {
+        const { getDocs } = await import("firebase/firestore");
+        const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
+        const q = query(
+          collection(db, "users"),
+          where("lastActiveAt", ">=", fifteenMinsAgo)
+        );
+        const snapshot = await getDocs(q);
         const now = Date.now();
         const activeList: any[] = snapshot.docs
           .map((doc) => ({
@@ -144,7 +144,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           }))
           .filter((u: any) => getMs(u.lastActiveAt) >= now - 15 * 60 * 1000);
 
-        // Ordenar en lado del cliente para evitar errores por índices compuestos requeridos de ordenamiento en Firestore
         activeList.sort(
           (a: any, b: any) => getMs(b.lastActiveAt) - getMs(a.lastActiveAt),
         );
@@ -154,19 +153,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           ...prev,
           activeUsers: activeList.length,
         }));
-      },
-      (err) => {
-        console.warn("Real-time active users listener failed:", err);
-        // Fallback usando filtrado en los usuarios ya cargados
-        const clientFiltered = usersRef.current.filter((u) => {
-          const ms = getMs(u.lastActiveAt);
-          return ms && Date.now() - ms <= 15 * 60 * 1000;
-        });
-        setRealtimeActiveUsers(clientFiltered);
-      },
-    );
-
-    return () => unsubscribe();
+      } catch (err) {
+        console.warn("Active users fetch failed:", err);
+      }
+    };
+    fetchActiveUsers();
   }, []);
 
   const [telegramToken, setTelegramToken] = useState("");

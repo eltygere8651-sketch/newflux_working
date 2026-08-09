@@ -49,22 +49,25 @@ export const QRCampaignsAdmin = () => {
 
   useEffect(() => {
     setLoading(true);
-    const q = query(collection(db, 'qr_campaigns'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
-      data.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : Date.now();
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : Date.now();
-        return timeB - timeA;
-      });
-      setCampaigns(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching campaigns:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    const fetchCampaigns = async () => {
+      try {
+        const { getDocs } = await import("firebase/firestore");
+        const q = query(collection(db, 'qr_campaigns'));
+        const snapshot = await getDocs(q);
+        let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
+        data.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : Date.now();
+          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : Date.now();
+          return timeB - timeA;
+        });
+        setCampaigns(data);
+      } catch (error) {
+        console.error("Error fetching campaigns:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCampaigns();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {

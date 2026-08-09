@@ -1933,14 +1933,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           if (intPlayer && typeof intPlayer.playVideo === "function") {
             intPlayer.playVideo();
           } else {
-            youtubePlayerRef.current.seekTo(position / 1000, "seconds");
+            youtubePlayerRef.current.seekTo(positionRef.current / 1000, "seconds");
           }
         } catch (e) {}
       }
     };
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [position]);
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -2049,6 +2049,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     };
     fetchCloudState();
 
+    let lastCloudSaveTime = 0;
     const saveStateToCloud = async () => {
       const plId = playingPlaylistRef.current?.id;
       if (!plId) return;
@@ -2063,6 +2064,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         "gym_music_saved_position",
         positionRef.current.toString(),
       );
+
+      // Only save to cloud max once every 30 seconds to save writes
+      if (now - lastCloudSaveTime < 30000) return;
+      lastCloudSaveTime = now;
+
       try {
         const { updateDoc, doc } = await import("firebase/firestore");
         const { db } = await import("../lib/firebase");
@@ -2090,17 +2096,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [user]);
-
-  useEffect(() => {
-    const now = Date.now();
-    if (position === 0 || now - lastPosSaveRef.current > 3000) {
-      try {
-        localStorage.setItem("gym_music_saved_position", position.toString());
-        localStorage.setItem("gym_music_saved_timestamp", now.toString());
-        lastPosSaveRef.current = now;
-      } catch(e) {}
-    }
-  }, [position]);
 
   // Initialize security code from localStorage
   useEffect(() => {
@@ -4559,7 +4554,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         try {
           // Fetch exact native time to prevent lockscreen progress jump backwards
           const actualSeconds =
-            youtubePlayerRef.current?.getCurrentTime() || position / 1000;
+            youtubePlayerRef.current?.getCurrentTime() || positionRef.current / 1000;
           
           const validDuration = Math.max(0, (duration || 0) / 1000);
           if (validDuration > 0 && !isNaN(validDuration)) {
@@ -4575,7 +4570,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         } catch (e) {}
       }
     }
-  }, [position, duration, isPlaying, currentTrackIndex]);
+  }, [duration, isPlaying, currentTrackIndex]);
 
   // Removed generic `isPlaying` sync for fallback audio.
   // We now orchestrate the silent audio track manually:
@@ -5128,13 +5123,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 }
               }
               const currentPosMs = state.playedSeconds * 1000;
-              if (document.visibilityState === "visible") {
-                if (!lastPosUpdateMsRef.current || Math.abs(currentPosMs - lastPosUpdateMsRef.current) >= 500) {
-                  lastPosUpdateMsRef.current = currentPosMs;
-                  setPosition(currentPosMs);
-                }
-              }
-
+              
               // Persist locally for seamless restoration, even if backgrounded, throttle to once every 5s
               if (
                 currentPosMs > 0 &&
@@ -5154,6 +5143,35 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                     "gym_music_current_track_index",
                     currentTrackIndexRef.current.toString(),
                   );
+                }
+              }
+
+              if (document.visibilityState === "visible") {
+                if (!lastPosUpdateMsRef.current || Math.abs(currentPosMs - lastPosUpdateMsRef.current) >= 500) {
+                  lastPosUpdateMsRef.current = currentPosMs;
+                  
+                  // Optimize: DOM manipulation instead of React state set to avoid massive CPU usage
+                  if (durationRef.current > 0) {
+                    const pct = (currentPosMs / durationRef.current) * 100;
+                    const timeStr = formatTime(currentPosMs);
+                    
+                    const pw1 = document.getElementById('player-progress-w-1');
+                    if(pw1) pw1.style.width = `${pct}%`;
+                    const pl1 = document.getElementById('player-progress-l-1');
+                    if(pl1) pl1.style.left = `calc(${pct}% - 7px)`;
+                    const pt1 = document.getElementById('player-time-1');
+                    if(pt1) pt1.innerText = timeStr;
+
+                    const pw2 = document.getElementById('player-progress-w-2');
+                    if(pw2) pw2.style.width = `${pct}%`;
+                    const pl2 = document.getElementById('player-progress-l-2');
+                    if(pl2) pl2.style.left = `calc(${pct}% - 6px)`;
+                    const pt2 = document.getElementById('player-time-2');
+                    if(pt2) pt2.innerText = timeStr;
+
+                    const pw3 = document.getElementById('player-progress-w-3');
+                    if(pw3) pw3.style.width = `${pct}%`;
+                  }
                 }
               }
 
@@ -6107,7 +6125,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
                       {/* Timeline Row */}
                       <div className="flex items-center w-full gap-3">
-                        <span className="text-[10px] font-bold text-slate-500 font-mono w-[35px] text-right">
+                        <span id="player-time-1" className="text-[10px] font-bold text-slate-500 font-mono w-[35px] text-right">
                           {formatTime(position)}
                         </span>
                         <div
@@ -6116,6 +6134,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         >
                           <div className="w-full h-1.5 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/timeline:h-2 transition-all">
                             <div
+                              id="player-progress-w-1"
                               className="h-full bg-white rounded-full relative"
                               style={{
                                 width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
@@ -6123,6 +6142,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                             />
                           </div>
                           <div
+                            id="player-progress-l-1"
                             className="absolute w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 shadow-md pointer-events-none transition-opacity"
                             style={{
                               left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 7px)`,
@@ -6487,6 +6507,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         >
                           <div className="w-full h-1 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/timeline:h-1.5 transition-all">
                             <div
+                              id="player-progress-w-2"
                               className="h-full bg-white rounded-full relative"
                               style={{
                                 width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
@@ -6494,6 +6515,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                             />
                           </div>
                           <div
+                            id="player-progress-l-2"
                             className="absolute w-3 h-3 bg-white rounded-full opacity-100 shadow-md pointer-events-none"
                             style={{
                               left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 6px)`,
@@ -6502,7 +6524,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                         </div>
 
                         <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-widest px-0.5 font-mono">
-                          <span>{formatTime(position)}</span>
+                          <span id="player-time-2">{formatTime(position)}</span>
                           <span>{formatTime(duration)}</span>
                         </div>
                       </div>
@@ -8084,6 +8106,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
               {/* Progress Bar background */}
               <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/[0.05]">
                 <div
+                  id="player-progress-w-3"
                   className="h-full bg-white transition-all duration-300"
                   style={{
                     width: `${duration > 0 ? (position / duration) * 100 : 0}%`,

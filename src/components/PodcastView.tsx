@@ -220,11 +220,18 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
       audio.addEventListener('ended', () => setIsPlaying(false));
       
       let lastSave = 0;
+      let lastUiUpdate = 0;
       audio.addEventListener('timeupdate', () => {
         const current = audio.currentTime;
         const duration = audio.duration || 0;
-        setAudioCurrentTime(current);
-        setAudioDuration(duration);
+        
+        // Throttle UI updates to once per second
+        if (current - lastUiUpdate >= 1 || current === 0) {
+          lastUiUpdate = current;
+          setAudioCurrentTime(current);
+          setAudioDuration(duration);
+        }
+
         if (current - lastSave > 5) {
           lastSave = current;
           const currentEpId = audioRef.current?.getAttribute('data-episode-id');

@@ -62,9 +62,9 @@ function AppContent() {
 
     const effectiveOS: "ios" | "android" = isIosDevice ? "ios" : "android";
 
-    // 1. Real-time subscription to config/onboarding so publishing triggers instantly
+    // 1. One-time fetch for config/onboarding to avoid unnecessary realtime listeners
     const configRef = doc(db, "config", "onboarding");
-    const unsubscribeOnboarding = onSnapshot(configRef, async (docSnap) => {
+    getDoc(configRef).then(async (docSnap) => {
       try {
         const osStorageKey = `flux_onboarding_version_${effectiveOS}`;
         const completedStr = localStorage.getItem(osStorageKey) || localStorage.getItem("flux_onboarding_version");
@@ -119,7 +119,7 @@ function AppContent() {
           setShowOnboarding(true);
         }
       } catch (e) {
-        console.error("Error en escucha tiempo real de onboarding:", e);
+        console.error("Error fetching onboarding config:", e);
       }
     });
     
@@ -177,7 +177,6 @@ function AppContent() {
     
     return () => {
       isMounted = false;
-      unsubscribeOnboarding();
       window.removeEventListener("preview-onboarding", handlePreview);
     };
   }, []);
@@ -798,41 +797,38 @@ function AppContent() {
 
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(5));
 
-    let isInitialAnnounceLoad = true;
-    const unsubscribeAnnouncements = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
+    import("firebase/firestore").then(async ({ getDocs }) => {
+      try {
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const lastSeenId = localStorage.getItem("flux_last_seen_announcement_id");
 
-        const validDoc = snapshot.docs.find(d => {
-          const data = d.data();
-          if (data.deleted || data.active === false) return false;
-          if (data.category === "onboarding") return false;
-          const targetOS = data.targetOS || "all";
-          if (targetOS === "ios" && !isIosDevice) return false;
-          if (targetOS === "android" && isIosDevice) return false;
-          return true;
-        });
+          const validDoc = snapshot.docs.find(d => {
+            const data = d.data();
+            if (data.deleted || data.active === false) return false;
+            if (data.category === "onboarding") return false;
+            const targetOS = data.targetOS || "all";
+            if (targetOS === "ios" && !isIosDevice) return false;
+            if (targetOS === "android" && isIosDevice) return false;
+            return true;
+          });
 
-        if (validDoc) {
-          const newestId = validDoc.id;
-          latestAnnouncementIdRef.current = newestId;
+          if (validDoc) {
+            const newestId = validDoc.id;
+            latestAnnouncementIdRef.current = newestId;
 
-          const data = validDoc.data();
-          const createdAt = data.createdAt;
-          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
+            const data = validDoc.data();
+            const createdAt = data.createdAt;
+            const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
 
-          // Si el anuncio tiene menos de 7 días y no ha sido visto
-          if (lastSeenId !== newestId && Date.now() - dbDate.getTime() < 604800000) {
-            setHasUnread(true);
-            if (!isInitialAnnounceLoad) {
-              playNotificationSound();
+            if (lastSeenId !== newestId && Date.now() - dbDate.getTime() < 604800000) {
+              setHasUnread(true);
             }
           }
         }
+      } catch (err) {
+        console.warn("Error fetcheando novedades:", err);
       }
-      isInitialAnnounceLoad = false;
-    }, (err) => {
-      console.warn("Error escuchando novedades en tiempo real:", err);
     });
 
     const handleRead = () => {
@@ -845,7 +841,6 @@ function AppContent() {
     window.addEventListener("notifications-read", handleRead);
 
     return () => {
-      unsubscribeAnnouncements();
       window.removeEventListener("notifications-read", handleRead);
     };
   }, []);
