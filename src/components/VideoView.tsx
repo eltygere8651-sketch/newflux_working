@@ -475,6 +475,27 @@ const ActivePlayerControlBar = ({
   );
 };
 
+const STATIC_YOUTUBE_CONFIG = {
+  youtube: {
+    playerVars: {
+      autoplay: 1,
+      controls: 0,
+      modestbranding: 1,
+      rel: 0,
+      showinfo: 0,
+      iv_load_policy: 3,
+      cc_load_policy: 0,
+      fs: 0,
+      playsinline: 1,
+      disablekb: 1,
+      enablejsapi: 1,
+      vq: 'hd1080',
+      origin: typeof window !== "undefined" ? window.location.origin : undefined,
+      widget_referrer: typeof window !== "undefined" ? window.location.origin : undefined,
+    },
+  },
+};
+
 const VideoPlayerWithControls = ({
   displayVideo,
   isPlaying,
@@ -509,7 +530,7 @@ const VideoPlayerWithControls = ({
     <div
       id={`player-card-${displayVideo.id}`}
       className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[999999999] h-[100dvh] w-screen bg-black" : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black"} group/player overflow-hidden shadow-2xl`}
-      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 } : {}}
+      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999, WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' } : {}}
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
@@ -549,7 +570,7 @@ const VideoPlayerWithControls = ({
           which are completely hidden outside the overflow-hidden container. */}
       <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
         <div 
-          className="absolute w-full pointer-events-none opacity-90"
+          className="absolute w-full pointer-events-none opacity-100"
           style={{ height: '300%', top: '-100%', left: 0 }}
         >
           <ReactPlayer
@@ -572,6 +593,12 @@ const VideoPlayerWithControls = ({
             onBuffer={() => setIsActuallyPlaying(false)}
             onReady={(e: any) => {
               setVideoReady(true);
+              try {
+                const internalPlayer = e?.target;
+                if (internalPlayer && typeof internalPlayer.setPlaybackQuality === 'function') {
+                  internalPlayer.setPlaybackQuality('hd1080');
+                }
+              } catch (err) {}
               if (onReady) onReady(e);
             }}
             onEnded={onEnded}
@@ -580,29 +607,13 @@ const VideoPlayerWithControls = ({
             }}
             controls={false}
             playsinline={true}
-            config={{
-              youtube: {
-                playerVars: {
-                  autoplay: 1,
-                  controls: 0,
-                  modestbranding: 1,
-                  rel: 0,
-                  showinfo: 0,
-                  iv_load_policy: 3,
-                  cc_load_policy: 0,
-                  fs: 0,
-                  playsinline: 1,
-                  disablekb: 1,
-                  origin: typeof window !== "undefined" ? window.location.origin : undefined,
-                },
-              },
-            }}
+            config={STATIC_YOUTUBE_CONFIG}
           />
         </div>
       </div>
 
-      {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[6] opacity-80 transition-opacity duration-300" />
+      {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth - Only active when controls are shown */}
+      <div className={`absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[6] transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-80" : "opacity-0"}`} />
 
       {/* Top Header Title Overlay when controls are active (Only in Fullscreen) */}
       {!isBabyLock && isFS && (
@@ -683,11 +694,6 @@ const VideoPlayerWithControls = ({
       {isBabyLock && <BabyLockOverlay onUnlock={() => setIsBabyLock(false)} />}
     </div>
   );
-
-  const isNativeFS = typeof document !== 'undefined' && !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
-  if (isFS && !isNativeFS && typeof document !== 'undefined') {
-    return createPortal(playerContent, document.body);
-  }
 
   return playerContent;
 };
@@ -2001,7 +2007,7 @@ export const VideoView = ({
                 {/* Shield Overlay */}
                 <div className="absolute inset-0 z-[5] w-full h-full bg-transparent" />
                 <div 
-                  className="absolute w-full pointer-events-none opacity-90"
+                  className="absolute w-full pointer-events-none opacity-100"
                   style={{ height: '300%', top: '-100%', left: 0 }}
                 >
                   <ReactPlayer
@@ -2030,7 +2036,10 @@ export const VideoView = ({
                           cc_load_policy: 0,
                           fs: 0,
                           disablekb: 1,
-                          playsinline: 1
+                          playsinline: 1,
+                          enablejsapi: 1,
+                          vq: 'hd720',
+                          origin: typeof window !== "undefined" ? window.location.origin : undefined,
                         }
                       }
                     }}
