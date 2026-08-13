@@ -567,11 +567,13 @@ const VideoPlayerWithControls = ({
           We make the iframe 300% taller than the container and shift it up by 100%. 
           YouTube will letterbox the 16:9 video in the center (which exactly matches our container).
           The native YouTube title, play button, and progress bar are pushed into the top/bottom black bars
-          which are completely hidden outside the overflow-hidden container. */}
+          which are completely hidden outside the overflow-hidden container.
+          NOTE: iOS WebKit fails to render hardware-accelerated 300dvh iframes, causing black screen.
+          We revert to 100% height and width in fullscreen mode to fix iOS playback. */}
       <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
         <div 
-          className="absolute w-full pointer-events-none opacity-100"
-          style={{ height: '300%', top: '-100%', left: 0 }}
+          className="absolute w-full pointer-events-none opacity-100 transition-all duration-300"
+          style={isFS ? { width: '100%', height: '100%', top: 0, left: 0 } : { height: '300%', top: '-100%', left: 0 }}
         >
           <ReactPlayer
             ref={playerRef}
