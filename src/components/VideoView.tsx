@@ -621,6 +621,11 @@ const VideoPlayerWithControls = ({
           className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/90 via-black/40 to-transparent z-20 pointer-events-none transition-opacity duration-300 flex items-center justify-between ${
             showControls || !isPlaying ? "opacity-100" : "opacity-0"
           }`}
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top), 0.875rem)',
+            paddingLeft: 'max(env(safe-area-inset-left), 1rem)',
+            paddingRight: 'max(env(safe-area-inset-right), 1rem)',
+          }}
         >
           <div className="flex items-center gap-2 min-w-0 max-w-[80%] pr-4">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
@@ -1030,6 +1035,16 @@ export const VideoView = ({
       };
     }
   }, [isVisible, pauseBackgroundMusic]);
+
+  useEffect(() => {
+    if (fullscreenId) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [fullscreenId]);
 
   useEffect(() => {
     const handleFS = () => {
@@ -2159,6 +2174,8 @@ export const VideoView = ({
                       ? Math.min(100, Math.max(5, (displayVideo.savedTime / durationSecs) * 100))
                       : null;
 
+                  const isFSActiveHere = isThisTheActivePlayer && !!fullscreenId;
+
                   return (
                     <div
                       key={`hist-${item.id}`}
@@ -2170,11 +2187,24 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md ${
+                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg ${
+                        isFSActiveHere ? "" : "hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md"
+                      } ${
                         isThisTheActivePlayer 
                           ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]" 
                           : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
                       }`}
+                      style={
+                        isFSActiveHere
+                          ? {
+                              transform: "none",
+                              filter: "none",
+                              backdropFilter: "none",
+                              WebkitBackdropFilter: "none",
+                              zIndex: 999999999,
+                            }
+                          : undefined
+                      }
                     >
                       <div className={`flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl relative ${isThisTheActivePlayer ? "bg-black border border-white/10" : "bg-black border border-white/5"}`}>
                         {isThisTheActivePlayer ? (
@@ -2351,23 +2381,36 @@ export const VideoView = ({
                 const classInfo = getVideoClassificationInfo(displayVideo, activeCategory);
                 const highResThumbnail = getHighResVideoThumbnail(displayVideo.thumbnail, displayVideo.id);
 
+                const isFSActiveHere = isThisTheActivePlayer && !!fullscreenId;
+
                 return (
                   <div
                     key={video.id}
                     id={`grid-${video.id}`}
                     className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border ${
                       isKidsMode
-                        ? `rounded-[28px] shadow-xl hover:shadow-2xl hover:shadow-sky-300/30 hover:-translate-y-2 bg-white/80 hover:bg-white border-white backdrop-blur-sm ${
+                        ? `rounded-[28px] shadow-xl ${isFSActiveHere ? "" : "hover:shadow-2xl hover:shadow-sky-300/30 hover:-translate-y-2 backdrop-blur-sm"} bg-white/80 hover:bg-white border-white ${
                             currentVideo?.id === displayVideo.id
                               ? "ring-4 ring-amber-400 bg-white border-transparent"
                               : ""
                           }`
-                        : `rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md ${
+                        : `rounded-[20px] shadow-lg ${isFSActiveHere ? "" : "hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md"} ${
                             currentVideo?.id === displayVideo.id
                               ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]"
                               : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
                           }`
                     }`}
+                    style={
+                      isFSActiveHere
+                        ? {
+                            transform: "none",
+                            filter: "none",
+                            backdropFilter: "none",
+                            WebkitBackdropFilter: "none",
+                            zIndex: 999999999,
+                          }
+                        : undefined
+                    }
                     onClick={(e) => {
                       const sourceId = `grid-${video.id}`;
                       if (isThisTheActivePlayer) {
