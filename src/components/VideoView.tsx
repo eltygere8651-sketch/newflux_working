@@ -567,13 +567,11 @@ const VideoPlayerWithControls = ({
           We make the iframe 300% taller than the container and shift it up by 100%. 
           YouTube will letterbox the 16:9 video in the center (which exactly matches our container).
           The native YouTube title, play button, and progress bar are pushed into the top/bottom black bars
-          which are completely hidden outside the overflow-hidden container.
-          NOTE: iOS WebKit fails to render hardware-accelerated 300dvh iframes, causing black screen.
-          We revert to 100% height and width in fullscreen mode to fix iOS playback. */}
+          which are completely hidden outside the overflow-hidden container. */}
       <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
         <div 
-          className="absolute w-full pointer-events-none opacity-100 transition-all duration-300"
-          style={isFS ? { width: '100%', height: '100%', top: 0, left: 0 } : { height: '300%', top: '-100%', left: 0 }}
+          className="absolute w-full pointer-events-none opacity-100"
+          style={{ height: '300%', top: '-100%', left: 0 }}
         >
           <ReactPlayer
             ref={playerRef}
@@ -1004,7 +1002,6 @@ export const VideoView = ({
   const [isBabyLock, setIsBabyLock] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
-  const isAnyFullscreen = !!fullscreenId;
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const resetControlsTimeout = () => {
@@ -1811,7 +1808,7 @@ export const VideoView = ({
       style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999 }}
     >
       {/* Release Announcement Banner */}
-      {!isKidsMode && !isAnyFullscreen && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
+      {!isKidsMode && Date.now() - 1754332578000 < 24 * 60 * 60 * 1000 && (
         <div className="shrink-0 bg-red-600/10 border-b border-red-500/20 px-4 pb-2 pt-[max(env(safe-area-inset-top),8px)] flex items-center justify-between gap-3 backdrop-blur-sm z-20">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
@@ -1835,9 +1832,8 @@ export const VideoView = ({
       )}
       
       {/* Search & Category Filter Sticky Header */}
-      {!isAnyFullscreen && (
-        isKidsMode ? (
-          <div className={`shrink-0 sticky top-0 z-40 bg-white/60 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgba(0,0,0,0.05)] transition-all duration-300 pb-3 pt-[max(env(safe-area-inset-top),16px)]`}>
+      {isKidsMode ? (
+        <div className={`shrink-0 sticky top-0 z-40 bg-white/60 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgba(0,0,0,0.05)] transition-all duration-300 pb-3 pt-[max(env(safe-area-inset-top),16px)]`}>
           <div className="flex flex-col gap-3 max-w-7xl mx-auto w-full px-4 sm:px-6">
             {/* Top row with Premium back button, Brand Logo and Perfiles */}
             <div className="relative flex items-center justify-between min-h-[44px]">
@@ -2007,13 +2003,12 @@ export const VideoView = ({
             </div>
           </div>
         </div>
-        )
       )}
 
       {/* Main Scrollable Feed */}
-      <div className={`flex-1 min-h-0 relative ${isAnyFullscreen ? 'overflow-visible p-0' : 'overflow-y-auto p-3 sm:p-6 pb-36 sm:pb-32 space-y-6 sm:space-y-8'}`}>
+      <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 pb-36 sm:pb-32 relative space-y-6 sm:space-y-8">
         {/* Minimized Floating Player Dock */}
-        {currentVideo && isMinimized && !isAnyFullscreen && (
+        {currentVideo && isMinimized && (
           <div
             ref={playerContainerRef}
             className="fixed bottom-[62px] left-2 right-2 sm:left-auto sm:right-6 sm:bottom-6 z-[70] sm:w-[380px] h-16 bg-[#121218]/95 border border-white/20 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.9)] backdrop-blur-2xl flex items-center px-3 py-2 gap-3 transition-all duration-300 animate-in slide-in-from-bottom-3"
@@ -2119,7 +2114,7 @@ export const VideoView = ({
         )}
 
         {/* Floating "Ver" Button (When active video scrolls out of view) */}
-        {currentVideo && !isMinimized && !isPlayerInView && !isAnyFullscreen && (
+        {currentVideo && !isMinimized && !isPlayerInView && (
           <button
             onClick={scrollToActiveVideo}
             className="fixed bottom-[66px] right-2 sm:right-6 sm:bottom-[30px] z-[80] bg-black/80 backdrop-blur-xl border border-white/10 hover:bg-black hover:border-red-500/50 shadow-[0_8px_32px_rgba(0,0,0,0.8)] rounded-full px-3 py-1.5 flex items-center gap-1.5 animate-in slide-in-from-bottom-4 fade-in duration-300 transition-all cursor-pointer group active:scale-95"
@@ -2134,38 +2129,36 @@ export const VideoView = ({
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8">
           {/* Continuar Viendo Grid View */}
           {activeCategory === "Continuar Viendo" && videoHistory.length > 0 && (
-            <div className={`${isAnyFullscreen && !fullscreenId?.startsWith('hist-') ? 'hidden' : ''}`}>
-              {!isAnyFullscreen && (
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
-                      <History className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
-                        Continuar Viendo
-                        <span className="text-[11px] font-mono text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
-                          {videoHistory.length} VÍDEOS
-                        </span>
-                      </h2>
-                      <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-                        Continúa donde lo dejaste
-                      </p>
-                    </div>
+            <div>
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
+                    <History className="w-4 h-4" />
                   </div>
-
-                  <button
-                    onClick={clearHistory}
-                    className="px-3 py-1.5 text-slate-300 hover:text-red-400 hover:bg-red-500/10 transition-colors text-xs font-semibold flex items-center gap-1.5 rounded-lg border border-transparent hover:border-red-500/20 cursor-pointer"
-                    title="Borrar historial de vídeos"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Borrar Historial</span>
-                  </button>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
+                      Continuar Viendo
+                      <span className="text-[11px] font-mono text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                        {videoHistory.length} VÍDEOS
+                      </span>
+                    </h2>
+                    <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                      Continúa donde lo dejaste
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              <div className={`${isAnyFullscreen ? 'flex flex-col' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6'}`}>
+                <button
+                  onClick={clearHistory}
+                  className="px-3 py-1.5 text-slate-300 hover:text-red-400 hover:bg-red-500/10 transition-colors text-xs font-semibold flex items-center gap-1.5 rounded-lg border border-transparent hover:border-red-500/20 cursor-pointer"
+                  title="Borrar historial de vídeos"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Borrar Historial</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {videoHistory.map((item) => {
                   const isThisTheActivePlayer = activePlayerContainerId === `hist-${item.id}` && !isMinimized;
                   const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : item;
@@ -2194,9 +2187,13 @@ export const VideoView = ({
                         }
                         handlePlayVideo(item, sourceId);
                       }}
-                      className={`flex flex-col group cursor-pointer transition-all duration-500 ${
-                        isFSActiveHere ? "p-0 border-0 rounded-none w-full h-full" : "gap-3 p-3 sm:p-3.5 border rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md " + (isThisTheActivePlayer ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]" : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10")
-                      } ${isAnyFullscreen && !isFSActiveHere ? 'hidden' : ''}`}
+                      className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border rounded-[20px] shadow-lg ${
+                        isFSActiveHere ? "" : "hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md"
+                      } ${
+                        isThisTheActivePlayer 
+                          ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]" 
+                          : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
+                      }`}
                       style={
                         isFSActiveHere
                           ? {
@@ -2263,7 +2260,7 @@ export const VideoView = ({
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
                             
                             {/* Quality / Classification Top-Left Pill */}
-                            <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass} ${isFSActiveHere ? 'hidden' : ''}`}>
+                            <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass}`}>
                               {classInfo.isKids ? (
                                 <ShieldCheck className="w-3 h-3 text-amber-950 fill-amber-300" />
                               ) : (
@@ -2304,7 +2301,7 @@ export const VideoView = ({
                         )}
                       </div>
 
-                      <div className={`flex flex-col min-w-0 px-1 ${isFSActiveHere ? 'hidden' : ''}`}>
+                      <div className="flex flex-col min-w-0 px-1">
                         <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug group-hover:text-rose-400 transition-colors">
                           {displayVideo.title}
                         </h4>
@@ -2342,42 +2339,40 @@ export const VideoView = ({
 
           {/* Main Videos Grid (Recomendados / Búsqueda) */}
           {activeCategory !== "Continuar Viendo" && (
-            <div className={`${isAnyFullscreen && !fullscreenId?.startsWith('grid-') ? 'hidden' : ''}`}>
-              {!isAnyFullscreen && (
-                <div className="flex items-center justify-between mb-3 sm:mb-5">
-                  <div className="flex items-center gap-2">
-                    {isKidsMode ? (
-                      <div className="flex items-center gap-2">
-                        <Baby className="w-5 h-5 text-amber-400 animate-pulse" />
-                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-300">
-                          {searchQuery
-                            ? `Caricaturas encontradas: "${searchQuery}"`
-                            : `Sección: ${activeKidsSubCategory}`}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-red-500" />
-                        <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
-                          {searchQuery
-                            ? `Resultados: "${searchQuery}"`
-                            : activeCategory !== "Todos"
-                            ? `Vídeos de ${activeCategory}`
-                            : "Vídeos Recomendados HD"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {isLoading && (
-                    <div className={`flex items-center gap-2 text-xs font-semibold ${isKidsMode ? "text-amber-400" : "text-red-400"}`}>
-                      <Loader2 className={`w-4 h-4 animate-spin ${isKidsMode ? "text-amber-500" : "text-red-500"}`} />
-                      <span className="hidden sm:inline">{isKidsMode ? "Cargando diversión segura..." : "Cargando alta definición..."}</span>
+            <div>
+              <div className="flex items-center justify-between mb-3 sm:mb-5">
+                <div className="flex items-center gap-2">
+                  {isKidsMode ? (
+                    <div className="flex items-center gap-2">
+                      <Baby className="w-5 h-5 text-amber-400 animate-pulse" />
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-300">
+                        {searchQuery
+                          ? `Caricaturas encontradas: "${searchQuery}"`
+                          : `Sección: ${activeKidsSubCategory}`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-red-500" />
+                      <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
+                        {searchQuery
+                          ? `Resultados: "${searchQuery}"`
+                          : activeCategory !== "Todos"
+                          ? `Vídeos de ${activeCategory}`
+                          : "Vídeos Recomendados HD"}
+                      </span>
                     </div>
                   )}
                 </div>
-              )}
+                {isLoading && (
+                  <div className={`flex items-center gap-2 text-xs font-semibold ${isKidsMode ? "text-amber-400" : "text-red-400"}`}>
+                    <Loader2 className={`w-4 h-4 animate-spin ${isKidsMode ? "text-amber-500" : "text-red-500"}`} />
+                    <span className="hidden sm:inline">{isKidsMode ? "Cargando diversión segura..." : "Cargando alta definición..."}</span>
+                  </div>
+                )}
+              </div>
 
-            <div className={`${isAnyFullscreen ? 'flex flex-col' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6'}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {videos.map((video) => {
                 const isThisTheActivePlayer = activePlayerContainerId === `grid-${video.id}` && !isMinimized;
                 const displayVideo = isThisTheActivePlayer && currentVideo ? currentVideo : video;
@@ -2392,9 +2387,19 @@ export const VideoView = ({
                   <div
                     key={video.id}
                     id={`grid-${video.id}`}
-                    className={`flex flex-col group cursor-pointer transition-all duration-500 ${
-                      isFSActiveHere ? "p-0 border-0 rounded-none w-full h-full" : "gap-3 p-3 sm:p-3.5 border " + (isKidsMode ? `rounded-[28px] shadow-xl hover:shadow-2xl hover:shadow-sky-300/30 hover:-translate-y-2 backdrop-blur-sm bg-white/80 hover:bg-white border-white ${currentVideo?.id === displayVideo.id ? "ring-4 ring-amber-400 bg-white border-transparent" : ""}` : `rounded-[20px] shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md ${currentVideo?.id === displayVideo.id ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]" : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"}`)
-                    } ${isAnyFullscreen && !isFSActiveHere ? 'hidden' : ''}`}
+                    className={`flex flex-col gap-3 group cursor-pointer transition-all duration-500 p-3 sm:p-3.5 border ${
+                      isKidsMode
+                        ? `rounded-[28px] shadow-xl ${isFSActiveHere ? "" : "hover:shadow-2xl hover:shadow-sky-300/30 hover:-translate-y-2 backdrop-blur-sm"} bg-white/80 hover:bg-white border-white ${
+                            currentVideo?.id === displayVideo.id
+                              ? "ring-4 ring-amber-400 bg-white border-transparent"
+                              : ""
+                          }`
+                        : `rounded-[20px] shadow-lg ${isFSActiveHere ? "" : "hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:-translate-y-1.5 backdrop-blur-md"} ${
+                            currentVideo?.id === displayVideo.id
+                              ? "ring-1 ring-white/20 bg-gradient-to-b from-white/[0.08] to-transparent border-white/20 shadow-[0_0_40px_rgba(255,255,255,0.05)]"
+                              : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5 hover:border-white/10"
+                          }`
+                    }`}
                     style={
                       isFSActiveHere
                         ? {
@@ -2468,7 +2473,7 @@ export const VideoView = ({
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity" />
                           
                           {/* Quality / Classification Top-Left Pill */}
-                          <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass} ${isFSActiveHere ? 'hidden' : ''}`}>
+                          <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider border backdrop-blur-md flex items-center gap-1 shadow-lg ${classInfo.badgeClass}`}>
                             {classInfo.isKids ? (
                               <ShieldCheck className="w-3 h-3 text-amber-950 fill-amber-300" />
                             ) : (
@@ -2499,7 +2504,7 @@ export const VideoView = ({
                       )}
                     </div>
 
-                    <div className={`flex flex-col min-w-0 px-1 ${isFSActiveHere ? 'hidden' : ''}`}>
+                    <div className="flex flex-col min-w-0 px-1">
                       <h4 className={`font-bold text-sm sm:text-base line-clamp-2 leading-snug transition-colors ${isKidsMode ? "text-slate-800 group-hover:text-rose-500" : "text-white group-hover:text-rose-400"}`}>
                         {displayVideo.title}
                       </h4>
