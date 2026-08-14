@@ -520,6 +520,7 @@ const VideoPlayerWithControls = ({
   toggleFullscreen,
   showControls,
   resetControlsTimeout,
+  isKidsMode = false,
 }: any) => {
   const isFS = !!fullscreenId;
   const [videoReady, setVideoReady] = useState(false);
@@ -529,8 +530,30 @@ const VideoPlayerWithControls = ({
   const playerContent = (
     <div
       id={`player-card-${displayVideo.id}`}
-      className={`relative w-full transition-all duration-300 ${isFS ? "fixed inset-0 z-[999999999] h-[100dvh] w-screen bg-black" : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black"} group/player overflow-hidden shadow-2xl`}
-      style={isFS ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', zIndex: 999999999, WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' } : {}}
+      className={`relative w-full transition-all duration-300 ${
+        isFS 
+          ? "fixed inset-0 z-[99999999999] h-[100dvh] w-screen bg-black flex items-center justify-center select-none" 
+          : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black"
+      } group/player overflow-hidden shadow-2xl`}
+      style={
+        isFS 
+          ? { 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              width: '100vw', 
+              height: '100dvh', 
+              zIndex: 99999999999, 
+              WebkitTransform: 'translateZ(0)', 
+              transform: 'translateZ(0)', 
+              backfaceVisibility: 'hidden',
+              backgroundColor: '#000000',
+              touchAction: 'manipulation'
+            } 
+          : {}
+      }
       onClick={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
@@ -563,79 +586,108 @@ const VideoPlayerWithControls = ({
       {/* Invisible Shield Overlay to completely block ALL interaction with the YouTube iframe */}
       <div className="absolute inset-0 z-[5] w-full h-full bg-transparent" />
 
-      {/* PERFECT YOUTUBE CROP HACK: 
-          We make the iframe 300% taller than the container and shift it up by 100%. 
-          YouTube will letterbox the 16:9 video in the center (which exactly matches our container).
-          The native YouTube title, play button, and progress bar are pushed into the top/bottom black bars
-          which are completely hidden outside the overflow-hidden container. */}
+      {/* 16:9 Video Canvas Wrapper with YouTube Crop Hack */}
       <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
         <div 
-          className="absolute w-full pointer-events-none opacity-100"
-          style={{ height: '300%', top: '-100%', left: 0 }}
+          className="relative w-full aspect-video flex items-center justify-center overflow-hidden max-h-full max-w-full"
+          style={
+            isFS 
+              ? { width: '100vw', height: '56.25vw', maxHeight: '100dvh', maxWidth: '177.77dvh' } 
+              : { width: '100%', height: '100%' }
+          }
         >
-          <ReactPlayer
-            ref={playerRef}
-            url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
-            width="100%"
-            height="100%"
-            className="absolute top-0 left-0 w-full h-full pointer-events-none"
-            style={{ pointerEvents: 'none' }}
-            playing={isPlaying}
-            volume={isMuted ? 0 : volume}
-            muted={isMuted}
-            onProgress={onProgress}
-            onDuration={onDuration}
-            onPlay={() => {
-              setIsActuallyPlaying(true);
-              setHasStartedPlaying(true);
-            }}
-            onPause={() => setIsActuallyPlaying(false)}
-            onBuffer={() => setIsActuallyPlaying(false)}
-            onReady={(e: any) => {
-              setVideoReady(true);
-              try {
-                const internalPlayer = e?.target;
-                if (internalPlayer && typeof internalPlayer.setPlaybackQuality === 'function') {
-                  internalPlayer.setPlaybackQuality('hd1080');
-                }
-              } catch (err) {}
-              if (onReady) onReady(e);
-            }}
-            onEnded={onEnded}
-            onError={() => {
-              if (onEnded) onEnded();
-            }}
-            controls={false}
-            playsinline={true}
-            config={STATIC_YOUTUBE_CONFIG}
-          />
+          <div 
+            className="absolute w-full pointer-events-none opacity-100"
+            style={{ height: '300%', top: '-100%', left: 0 }}
+          >
+            <ReactPlayer
+              ref={playerRef}
+              url={`https://www.youtube.com/watch?v=${displayVideo.id}`}
+              width="100%"
+              height="100%"
+              className="absolute top-0 left-0 w-full h-full pointer-events-none"
+              style={{ pointerEvents: 'none' }}
+              playing={isPlaying}
+              volume={isMuted ? 0 : volume}
+              muted={isMuted}
+              onProgress={onProgress}
+              onDuration={onDuration}
+              onPlay={() => {
+                setIsActuallyPlaying(true);
+                setHasStartedPlaying(true);
+              }}
+              onPause={() => setIsActuallyPlaying(false)}
+              onBuffer={() => setIsActuallyPlaying(false)}
+              onReady={(e: any) => {
+                setVideoReady(true);
+                try {
+                  const internalPlayer = e?.target;
+                  if (internalPlayer && typeof internalPlayer.setPlaybackQuality === 'function') {
+                    internalPlayer.setPlaybackQuality('hd1080');
+                  }
+                } catch (err) {}
+                if (onReady) onReady(e);
+              }}
+              onEnded={onEnded}
+              onError={() => {
+                if (onEnded) onEnded();
+              }}
+              controls={false}
+              playsinline={true}
+              config={STATIC_YOUTUBE_CONFIG}
+            />
+          </div>
         </div>
       </div>
 
       {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth - Only active when controls are shown */}
-      <div className={`absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-[6] transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-80" : "opacity-0"}`} />
+      <div className={`absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/95 pointer-events-none z-[6] transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-80" : "opacity-0"}`} />
 
-      {/* Top Header Title Overlay when controls are active (Only in Fullscreen) */}
+      {/* Top Header Title & Back/Minimize Overlay when controls are active (Only in Fullscreen) */}
       {!isBabyLock && isFS && (
         <div
-          className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/90 via-black/40 to-transparent z-20 pointer-events-none transition-opacity duration-300 flex items-center justify-between ${
-            showControls || !isPlaying ? "opacity-100" : "opacity-0"
+          className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/95 via-black/50 to-transparent z-20 pointer-events-auto transition-opacity duration-300 flex items-center justify-between gap-3 ${
+            showControls || !isPlaying ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
           }`}
           style={{
-            paddingTop: 'max(env(safe-area-inset-top), 0.875rem)',
+            paddingTop: 'max(env(safe-area-inset-top), 1rem)',
             paddingLeft: 'max(env(safe-area-inset-left), 1rem)',
             paddingRight: 'max(env(safe-area-inset-right), 1rem)',
           }}
         >
-          <div className="flex items-center gap-2 min-w-0 max-w-[80%] pr-4">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">
-              {displayVideo.title}
-            </span>
+          <div className="flex items-center gap-3 min-w-0 max-w-[75%]">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer w-9 h-9 sm:w-10 sm:h-10 border border-white/10 backdrop-blur-md"
+              title="Salir de pantalla completa"
+            >
+              <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+              <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">
+                {displayVideo.title}
+              </span>
+            </div>
           </div>
-          <span className="text-[10px] font-black uppercase tracking-wider text-white/80 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15 backdrop-blur-md shrink-0 shadow-sm">
-            FLUX HD
-          </span>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isKidsMode ? (
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/40 backdrop-blur-md shrink-0 shadow-sm flex items-center gap-1">
+                <Baby className="w-3 h-3 text-amber-400" />
+                FLUX KIDS
+              </span>
+            ) : (
+              <span className="text-[10px] font-black uppercase tracking-wider text-white/90 bg-white/10 px-2.5 py-1 rounded-full border border-white/15 backdrop-blur-md shrink-0 shadow-sm">
+                FLUX HD
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -653,6 +705,60 @@ const VideoPlayerWithControls = ({
             showControls && !isPlaying ? "bg-black/30" : "bg-transparent"
           }`}
         />
+      )}
+
+      {/* Center Big Skip / Play Overlay Controls in Fullscreen */}
+      {!isBabyLock && isFS && showControls && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center gap-8 sm:gap-16">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              let newPlayed = Math.max(0, ((played * duration) - 10) / (duration || 1));
+              onSeekChange(newPlayed);
+              onSeekMouseUp(newPlayed);
+              resetControlsTimeout();
+            }}
+            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/15 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-black/40 border border-white/10 w-12 h-12 sm:w-16 sm:h-16 shadow-2xl"
+            title="Retroceder 10 segundos"
+          >
+            <SkipBack className="fill-current w-5 h-5 sm:w-7 sm:h-7" />
+            <span className="text-[8px] sm:text-[9px] font-bold mt-0.5">10s</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPlaying(!isPlaying);
+              resetControlsTimeout();
+            }}
+            className="pointer-events-auto flex items-center justify-center text-white hover:text-white hover:scale-105 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-red-600/90 hover:bg-red-600 border border-white/20 w-16 h-16 sm:w-20 sm:h-20 shadow-[0_0_30px_rgba(220,38,38,0.7)]"
+            title={isPlaying ? "Pausar" : "Reproducir"}
+          >
+            {isPlaying ? (
+              <Pause className="fill-current w-8 h-8 sm:w-10 sm:h-10" />
+            ) : (
+              <Play className="fill-current ml-1 w-8 h-8 sm:w-10 sm:h-10" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              let newPlayed = Math.min(0.999, ((played * duration) + 10) / (duration || 1));
+              onSeekChange(newPlayed);
+              onSeekMouseUp(newPlayed);
+              resetControlsTimeout();
+            }}
+            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/15 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-black/40 border border-white/10 w-12 h-12 sm:w-16 sm:h-16 shadow-2xl"
+            title="Adelantar 10 segundos"
+          >
+            <SkipForward className="fill-current w-5 h-5 sm:w-7 sm:h-7" />
+            <span className="text-[8px] sm:text-[9px] font-bold mt-0.5">10s</span>
+          </button>
+        </div>
       )}
 
       {/* Control Bar Overlay (Always shown when active) */}
@@ -699,6 +805,10 @@ const VideoPlayerWithControls = ({
       {isBabyLock && <BabyLockOverlay onUnlock={() => setIsBabyLock(false)} />}
     </div>
   );
+
+  if (isFS && typeof document !== "undefined") {
+    return createPortal(playerContent, document.body);
+  }
 
   return playerContent;
 };
@@ -1049,12 +1159,14 @@ export const VideoView = ({
   useEffect(() => {
     const handleFS = () => {
       const activeFS = document.fullscreenElement || (document as any).webkitFullscreenElement;
-      if (!activeFS) {
-        setFullscreenId(null);
-        if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.unlock) {
-          try {
-            (window.screen as any).orientation.unlock();
-          } catch (e) {}
+      if (!activeFS && fullscreenId) {
+        // If native fullscreen was exited on desktop/Android, sync state
+        const isIos = typeof navigator !== "undefined" && (
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+        );
+        if (!isIos) {
+          setFullscreenId(null);
         }
       }
     };
@@ -1064,27 +1176,14 @@ export const VideoView = ({
       document.removeEventListener("fullscreenchange", handleFS);
       document.removeEventListener("webkitfullscreenchange", handleFS);
     };
-  }, []);
+  }, [fullscreenId]);
 
-  const toggleFullscreen = (containerId: string) => {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-
-    // We check if there's any inner iframe/video that supports native iOS iPhone fullscreen (webkitEnterFullscreen)
-    // ReactPlayer renders an iframe. We'll try to find it.
-    const innerMedia = el.querySelector('video') || el.querySelector('iframe');
-    const hasWebkitEnterFS = innerMedia && typeof (innerMedia as any).webkitEnterFullscreen === 'function';
-
-    const isActuallyFullscreen = document.fullscreenElement === el || (document as any).webkitFullscreenElement === el || (innerMedia && (innerMedia as any).webkitDisplayingFullscreen);
-    const isPseudoFullscreen = fullscreenId === containerId;
-
-    if (isActuallyFullscreen || isPseudoFullscreen) {
-      // EXIT
-      if (innerMedia && (innerMedia as any).webkitDisplayingFullscreen && typeof (innerMedia as any).webkitExitFullscreen === 'function') {
-        (innerMedia as any).webkitExitFullscreen();
-      } else if (document.exitFullscreen) {
+  const toggleFullscreen = (containerId?: string) => {
+    if (fullscreenId) {
+      // EXIT FULLSCREEN
+      if (document.fullscreenElement && document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
-      } else if ((document as any).webkitExitFullscreen) {
+      } else if ((document as any).webkitFullscreenElement && (document as any).webkitExitFullscreen) {
         (document as any).webkitExitFullscreen();
       }
       setFullscreenId(null);
@@ -1092,41 +1191,27 @@ export const VideoView = ({
         try { (window.screen as any).orientation.unlock(); } catch (e) {}
       }
     } else {
-      // ENTER
-      if (hasWebkitEnterFS) {
-        // Native iOS iPhone video fullscreen
+      // ENTER FULLSCREEN
+      const targetId = containerId || (currentVideo ? `player-card-${currentVideo.id}` : "fullscreen-player");
+      setFullscreenId(targetId);
+
+      // Try browser Fullscreen API if supported (Android, Desktop, iPad OS 16+)
+      const docEl = document.documentElement;
+      const requestFS = docEl.requestFullscreen || (docEl as any).webkitRequestFullscreen || (docEl as any).msRequestFullscreen;
+      if (requestFS && typeof requestFS === "function") {
         try {
-          (innerMedia as any).webkitEnterFullscreen();
-          setFullscreenId(containerId);
-        } catch (e) {
-          setFullscreenId(containerId);
-        }
-      } else {
-        // HTML5 Standard & Webkit (iPad, Desktop, Android)
-        const requestFS = el.requestFullscreen || (el as any).webkitRequestFullscreen || (el as any).msRequestFullscreen;
-        if (requestFS) {
-          try {
-            const promise = requestFS.call(el);
-            if (promise && typeof promise.then === 'function') {
-              promise.then(() => {
-                setFullscreenId(containerId);
-                if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
-                  (window.screen as any).orientation.lock("landscape").catch(() => {});
-                }
-              }).catch(() => {
-                // Fallback for iOS pseudo
-                setFullscreenId(containerId);
-              });
-            } else {
-              setFullscreenId(containerId);
-            }
-          } catch (e) {
-            setFullscreenId(containerId);
+          const p = requestFS.call(docEl);
+          if (p && typeof p.catch === "function") {
+            p.catch(() => {});
           }
-        } else {
-          // Fallback for iOS iPhone where API is missing entirely on DIVs
-          setFullscreenId(containerId);
-        }
+        } catch (e) {}
+      }
+
+      // Try landscape lock where supported
+      if (typeof window !== "undefined" && window.screen && (window.screen as any).orientation && (window.screen as any).orientation.lock) {
+        try {
+          (window.screen as any).orientation.lock("landscape").catch(() => {});
+        } catch (e) {}
       }
     }
   };
@@ -2209,6 +2294,23 @@ export const VideoView = ({
                       <div className={`flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl relative ${isThisTheActivePlayer ? "bg-black border border-white/10" : "bg-black border border-white/5"}`}>
                         {isThisTheActivePlayer ? (
                           <>
+                            {fullscreenId && (
+                              <div className="relative w-full aspect-video bg-black flex flex-col items-center justify-center overflow-hidden">
+                                <img
+                                  src={highResImg}
+                                  alt={displayVideo.title}
+                                  className="w-full h-full object-cover opacity-25 blur-sm"
+                                />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                  <div className="w-10 h-10 rounded-full bg-red-600/90 text-white flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.6)]">
+                                    <Maximize className="w-5 h-5" />
+                                  </div>
+                                  <span className="text-[11px] font-black text-white uppercase tracking-wider">
+                                    Reproduciendo en Pantalla Completa
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <VideoPlayerWithControls
                               displayVideo={displayVideo}
                               isPlaying={isPlaying}
@@ -2233,6 +2335,7 @@ export const VideoView = ({
                               toggleFullscreen={toggleFullscreen}
                               showControls={showControls}
                               resetControlsTimeout={resetControlsTimeout}
+                              isKidsMode={isKidsMode}
                             />
                           </>
                         ) : (
@@ -2422,6 +2525,23 @@ export const VideoView = ({
                     <div className={`flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl relative ${isKidsMode ? "bg-slate-100 border-2 border-white/40" : isThisTheActivePlayer ? "bg-black border border-white/10" : "bg-black border border-white/5"}`}>
                       {isThisTheActivePlayer ? (
                         <>
+                          {fullscreenId && (
+                            <div className="relative w-full aspect-video bg-black flex flex-col items-center justify-center overflow-hidden">
+                              <img
+                                src={highResThumbnail}
+                                alt={displayVideo.title}
+                                className="w-full h-full object-cover opacity-25 blur-sm"
+                              />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                <div className="w-10 h-10 rounded-full bg-red-600/90 text-white flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.6)]">
+                                  <Maximize className="w-5 h-5" />
+                                </div>
+                                <span className="text-[11px] font-black text-white uppercase tracking-wider">
+                                  Reproduciendo en Pantalla Completa
+                                </span>
+                              </div>
+                            </div>
+                          )}
                           <VideoPlayerWithControls
                             displayVideo={displayVideo}
                             isPlaying={isPlaying}
@@ -2446,6 +2566,7 @@ export const VideoView = ({
                             toggleFullscreen={toggleFullscreen}
                             showControls={showControls}
                             resetControlsTimeout={resetControlsTimeout}
+                            isKidsMode={isKidsMode}
                           />
                         </>
                       ) : (
