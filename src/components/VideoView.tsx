@@ -20,6 +20,8 @@ import {
   LockKeyholeOpen,
   Maximize,
   Minimize,
+  Maximize2,
+  Minimize2,
   ShieldCheck,
   CheckCircle2,
   Tv2,
@@ -32,6 +34,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Shield,
+  RotateCw,
+  Expand,
+  Shrink,
+  Smartphone,
+  Sliders,
 } from "lucide-react";
 import ReactPlayer from "react-player";
 import { useDraggable } from "../hooks/useDraggable";
@@ -526,15 +533,108 @@ const VideoPlayerWithControls = ({
   const [videoReady, setVideoReady] = useState(false);
   const [isActuallyPlaying, setIsActuallyPlaying] = useState(false);
   const [hasStartedPlaying, setHasStartedPlaying] = useState(false);
+  const [isZoomFill, setIsZoomFill] = useState(false);
+  const [isForcedLandscape, setIsForcedLandscape] = useState(false);
+  const [doubleTapPulse, setDoubleTapPulse] = useState<{ type: 'rewind' | 'forward' | 'zoom'; key: number } | null>(null);
+
+  // Gesture handling refs
+  const touchStartY = useRef<number | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+  const lastTapXRef = useRef<number>(0);
+  const singleTapTimeoutRef = useRef<any>(null);
+
+  // Sync theme-color and body overflow when in fullscreen
+  useEffect(() => {
+    if (isFS) {
+      const originalThemeMeta = document.querySelector('meta[name="theme-color"]');
+      const originalColor = originalThemeMeta?.getAttribute('content') || '#080809';
+      if (originalThemeMeta) originalThemeMeta.setAttribute('content', '#000000');
+
+      const prevBodyBg = document.body.style.backgroundColor;
+      const prevDocBg = document.documentElement.style.backgroundColor;
+      document.body.style.backgroundColor = '#000000';
+      document.documentElement.style.backgroundColor = '#000000';
+
+      return () => {
+        if (originalThemeMeta) originalThemeMeta.setAttribute('content', originalColor);
+        document.body.style.backgroundColor = prevBodyBg;
+        document.documentElement.style.backgroundColor = prevDocBg;
+      };
+    }
+  }, [isFS]);
+
+  // Handle double tap and single tap on video area
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isBabyLock) return;
+
+    // Check for swipe down to dismiss in fullscreen
+    if (touchStartY.current !== null && isFS) {
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaY = touchEndY - touchStartY.current;
+      touchStartY.current = null;
+      if (deltaY > 80) {
+        toggleFullscreen();
+        return;
+      }
+    }
+
+    const now = Date.now();
+    const touch = e.changedTouches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const tapX = touch.clientX - rect.left;
+    const width = rect.width;
+    const timeDiff = now - lastTapTimeRef.current;
+    const distanceDiff = Math.abs(tapX - lastTapXRef.current);
+
+    if (timeDiff < 320 && distanceDiff < 80) {
+      // DOUBLE TAP DETECTED
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+
+      if (tapX < width * 0.35) {
+        // Double tap left: Rewind 10s
+        let newPlayed = Math.max(0, ((played * duration) - 10) / (duration || 1));
+        onSeekChange(newPlayed);
+        onSeekMouseUp(newPlayed);
+        setDoubleTapPulse({ type: 'rewind', key: Date.now() });
+        resetControlsTimeout();
+      } else if (tapX > width * 0.65) {
+        // Double tap right: Forward 10s
+        let newPlayed = Math.min(0.999, ((played * duration) + 10) / (duration || 1));
+        onSeekChange(newPlayed);
+        onSeekMouseUp(newPlayed);
+        setDoubleTapPulse({ type: 'forward', key: Date.now() });
+        resetControlsTimeout();
+      } else {
+        // Double tap center: Toggle Zoom to Fill
+        setIsZoomFill((prev) => !prev);
+        setDoubleTapPulse({ type: 'zoom', key: Date.now() });
+        resetControlsTimeout();
+      }
+      lastTapTimeRef.current = 0;
+    } else {
+      // SINGLE TAP (wait to distinguish from double tap)
+      lastTapTimeRef.current = now;
+      lastTapXRef.current = tapX;
+
+      if (singleTapTimeoutRef.current) clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = setTimeout(() => {
+        resetControlsTimeout();
+        singleTapTimeoutRef.current = null;
+      }, 300);
+    }
+  };
 
   const playerContent = (
     <div
       id={`player-card-${displayVideo.id}`}
       className={`relative w-full transition-all duration-300 ${
         isFS 
-          ? "fixed inset-0 z-[99999999999] h-[100dvh] w-screen bg-black flex items-center justify-center select-none" 
-          : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black"
-      } group/player overflow-hidden shadow-2xl`}
+          ? "fixed inset-0 z-[99999999999] h-[100dvh] w-screen bg-black flex items-center justify-center select-none overflow-hidden" 
+          : "aspect-video h-auto rounded-t-2xl lg:rounded-2xl bg-black overflow-hidden shadow-2xl"
+      } group/player`}
       style={
         isFS 
           ? { 
@@ -546,25 +646,33 @@ const VideoPlayerWithControls = ({
               width: '100vw', 
               height: '100dvh', 
               zIndex: 99999999999, 
-              WebkitTransform: 'translateZ(0)', 
-              transform: 'translateZ(0)', 
+              WebkitTransform: isForcedLandscape ? 'rotate(90deg)' : 'translateZ(0)', 
+              transform: isForcedLandscape ? 'rotate(90deg)' : 'translateZ(0)', 
+              transformOrigin: 'center center',
               backfaceVisibility: 'hidden',
               backgroundColor: '#000000',
-              touchAction: 'manipulation'
+              touchAction: 'none',
+              overscrollBehavior: 'none'
             } 
           : {}
       }
-      onClick={() => {
-        if (!isBabyLock) resetControlsTimeout();
-      }}
       onMouseMove={() => {
         if (!isBabyLock) resetControlsTimeout();
       }}
-      onTouchStart={() => {
-        if (!isBabyLock) resetControlsTimeout();
-      }}
     >
-      {/* Background Poster Overlay - Stays until video ACTUALLY starts playing to hide YouTube's big red button */}
+      {/* AMBIENT LIGHTING GLOW LAYER (Cinema Aura in Fullscreen) */}
+      {isFS && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-[1]">
+          <img
+            src={displayVideo.thumbnail}
+            alt=""
+            className="w-full h-full object-cover scale-150 blur-3xl opacity-35 saturate-150 transition-opacity duration-1000"
+          />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl" />
+        </div>
+      )}
+
+      {/* Background Poster Overlay - Stays until video ACTUALLY starts playing */}
       {(!videoReady || !hasStartedPlaying) && (
         <div className="absolute inset-0 z-[10] bg-black flex items-center justify-center overflow-hidden transition-opacity duration-700">
           <img
@@ -576,23 +684,32 @@ const VideoPlayerWithControls = ({
           
           {/* Custom Elegant Loading Spinner */}
           {!hasStartedPlaying && isPlaying && (
-            <div className="absolute z-20 flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-red-500 animate-spin" />
+            <div className="absolute z-20 flex flex-col items-center justify-center gap-3">
+              <div className="w-14 h-14 rounded-full border-4 border-white/20 border-t-red-500 animate-spin shadow-2xl" />
+              <span className="text-xs font-bold text-white/80 uppercase tracking-widest animate-pulse">
+                Cargando Flux HD...
+              </span>
             </div>
           )}
         </div>
       )}
 
-      {/* Invisible Shield Overlay to completely block ALL interaction with the YouTube iframe */}
-      <div className="absolute inset-0 z-[5] w-full h-full bg-transparent" />
+      {/* Invisible Shield Overlay to completely block ALL direct click hijacking with the YouTube iframe */}
+      <div className="absolute inset-0 z-[5] w-full h-full bg-transparent pointer-events-none" />
 
-      {/* 16:9 Video Canvas Wrapper with YouTube Crop Hack */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black">
+      {/* 16:9 Video Canvas Wrapper with YouTube Crop Hack & Zoom-to-Fill Support */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center pointer-events-none bg-black z-[2]">
         <div 
-          className="relative w-full aspect-video flex items-center justify-center overflow-hidden max-h-full max-w-full"
+          className="relative aspect-video flex items-center justify-center overflow-hidden transition-transform duration-300 ease-out"
           style={
             isFS 
-              ? { width: '100vw', height: '56.25vw', maxHeight: '100dvh', maxWidth: '177.77dvh' } 
+              ? { 
+                  width: isZoomFill ? '100vw' : '100vw', 
+                  height: isZoomFill ? '100dvh' : '56.25vw', 
+                  maxHeight: '100dvh', 
+                  maxWidth: isZoomFill ? '100vw' : '177.77dvh',
+                  transform: isZoomFill ? 'scale(1.22)' : 'scale(1)',
+                } 
               : { width: '100%', height: '100%' }
           }
         >
@@ -640,14 +757,67 @@ const VideoPlayerWithControls = ({
         </div>
       </div>
 
-      {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth - Only active when controls are shown */}
-      <div className={`absolute inset-0 bg-gradient-to-b from-black/90 via-transparent to-black/95 pointer-events-none z-[6] transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-80" : "opacity-0"}`} />
+      {/* Double Tap Seek / Zoom Feedback Pulse Animations */}
+      {doubleTapPulse && (
+        <div
+          key={doubleTapPulse.key}
+          className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center"
+        >
+          {doubleTapPulse.type === 'rewind' && (
+            <div className="absolute left-[15%] flex flex-col items-center justify-center p-4 rounded-full bg-black/60 border border-white/20 backdrop-blur-md animate-ping duration-500">
+              <SkipBack className="w-8 h-8 text-white fill-current" />
+              <span className="text-xs font-black text-white mt-1">-10s</span>
+            </div>
+          )}
+          {doubleTapPulse.type === 'forward' && (
+            <div className="absolute right-[15%] flex flex-col items-center justify-center p-4 rounded-full bg-black/60 border border-white/20 backdrop-blur-md animate-ping duration-500">
+              <SkipForward className="w-8 h-8 text-white fill-current" />
+              <span className="text-xs font-black text-white mt-1">+10s</span>
+            </div>
+          )}
+          {doubleTapPulse.type === 'zoom' && (
+            <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-black/80 border border-white/20 backdrop-blur-xl text-white shadow-2xl animate-fade-in">
+              {isZoomFill ? <Expand className="w-5 h-5 text-red-400" /> : <Shrink className="w-5 h-5 text-emerald-400" />}
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {isZoomFill ? "Llenar Pantalla Completa" : "Ajustar a 16:9 Original"}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Top Header Title & Back/Minimize Overlay when controls are active (Only in Fullscreen) */}
+      {/* Gradient Vignette Layer (Top & Bottom) for Cinematic Depth */}
+      <div 
+        className={`absolute inset-0 bg-gradient-to-b from-black/95 via-transparent to-black/95 pointer-events-none z-[6] transition-opacity duration-300 ${
+          showControls || !isPlaying ? "opacity-80" : "opacity-0"
+        }`} 
+      />
+
+      {/* Touch Interaction Zone (Detects Single/Double Taps and Downward Swipe) */}
+      {!isBabyLock && (
+        <div
+          onTouchStart={(e) => {
+            touchStartY.current = e.touches[0].clientY;
+          }}
+          onTouchEnd={handleTouchEnd}
+          onClick={() => {
+            if (!isFS) {
+              setIsPlaying(!isPlaying);
+            } else {
+              resetControlsTimeout();
+            }
+          }}
+          className="absolute inset-0 z-10 cursor-pointer"
+        />
+      )}
+
+      {/* TOP HEADER OVERLAY (In Fullscreen or Hover) */}
       {!isBabyLock && isFS && (
         <div
-          className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/95 via-black/50 to-transparent z-20 pointer-events-auto transition-opacity duration-300 flex items-center justify-between gap-3 ${
-            showControls || !isPlaying ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          className={`absolute top-0 left-0 right-0 p-4 pt-3.5 bg-gradient-to-b from-black/95 via-black/60 to-transparent z-20 pointer-events-auto transition-all duration-300 flex items-center justify-between gap-3 ${
+            showControls || !isPlaying 
+              ? "opacity-100 translate-y-0 pointer-events-auto" 
+              : "opacity-0 -translate-y-3 pointer-events-none"
           }`}
           style={{
             paddingTop: 'max(env(safe-area-inset-top), 1rem)',
@@ -655,35 +825,87 @@ const VideoPlayerWithControls = ({
             paddingRight: 'max(env(safe-area-inset-right), 1rem)',
           }}
         >
-          <div className="flex items-center gap-3 min-w-0 max-w-[75%]">
+          {/* Left: Back / Minimize button and Title */}
+          <div className="flex items-center gap-3 min-w-0 max-w-[65%] sm:max-w-[70%]">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleFullscreen();
               }}
-              className="flex shrink-0 items-center justify-center text-white/90 hover:text-white hover:bg-white/10 active:bg-white/20 rounded-full transition-all cursor-pointer w-9 h-9 sm:w-10 sm:h-10 border border-white/10 backdrop-blur-md"
+              className="flex shrink-0 items-center justify-center text-white hover:text-white bg-black/50 hover:bg-white/20 active:scale-95 rounded-full transition-all cursor-pointer w-10 h-10 border border-white/15 backdrop-blur-xl shadow-lg"
               title="Salir de pantalla completa"
             >
-              <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6" />
+              <ChevronDown className="w-6 h-6 text-white" />
             </button>
 
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-              <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">
-                {displayVideo.title}
-              </span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">
+                  {displayVideo.title}
+                </span>
+              </div>
+              {displayVideo.artist && (
+                <span className="text-[11px] font-medium text-white/70 truncate">
+                  {displayVideo.artist}
+                </span>
+              )}
             </div>
           </div>
 
+          {/* Right: Zoom Toggle, Rotate Toggle & Quality Pill */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Zoom to Fill Toggle */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsZoomFill((prev) => !prev);
+                resetControlsTimeout();
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border backdrop-blur-xl cursor-pointer ${
+                isZoomFill 
+                  ? "bg-red-600 text-white border-red-400/50 shadow-[0_0_12px_rgba(220,38,38,0.5)]" 
+                  : "bg-white/10 hover:bg-white/20 text-white/90 border-white/15"
+              }`}
+              title={isZoomFill ? "Ajustar a 16:9 original" : "Llenar pantalla completa"}
+            >
+              {isZoomFill ? <Shrink className="w-3.5 h-3.5" /> : <Expand className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline text-[11px]">
+                {isZoomFill ? "Ajustar" : "Llenar"}
+              </span>
+            </button>
+
+            {/* Force Rotation Toggle (for iOS Portrait Lock) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsForcedLandscape((prev) => !prev);
+                resetControlsTimeout();
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border backdrop-blur-xl cursor-pointer ${
+                isForcedLandscape 
+                  ? "bg-indigo-600 text-white border-indigo-400/50" 
+                  : "bg-white/10 hover:bg-white/20 text-white/90 border-white/15"
+              }`}
+              title="Rotar orientación de pantalla"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[11px]">
+                {isForcedLandscape ? "Vertical" : "Rotar"}
+              </span>
+            </button>
+
+            {/* Quality Badge */}
             {isKidsMode ? (
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/40 backdrop-blur-md shrink-0 shadow-sm flex items-center gap-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/40 backdrop-blur-xl shrink-0 shadow-sm flex items-center gap-1">
                 <Baby className="w-3 h-3 text-amber-400" />
                 FLUX KIDS
               </span>
             ) : (
-              <span className="text-[10px] font-black uppercase tracking-wider text-white/90 bg-white/10 px-2.5 py-1 rounded-full border border-white/15 backdrop-blur-md shrink-0 shadow-sm">
+              <span className="text-[10px] font-black uppercase tracking-wider text-white/90 bg-white/10 px-2.5 py-1 rounded-full border border-white/15 backdrop-blur-xl shrink-0 shadow-sm">
                 FLUX HD
               </span>
             )}
@@ -691,25 +913,16 @@ const VideoPlayerWithControls = ({
         </div>
       )}
 
-      {/* Central Play/Pause on Tap Area (Invisible) */}
-      {!isBabyLock && (
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsPlaying(!isPlaying);
-            resetControlsTimeout();
-          }}
-          onMouseMove={resetControlsTimeout}
-          onTouchStart={resetControlsTimeout}
-          className={`absolute inset-0 z-10 cursor-pointer transition-all duration-300 ${
-            showControls && !isPlaying ? "bg-black/30" : "bg-transparent"
+      {/* CENTER CONTROLS (Big Frosted Glass Buttons) */}
+      {!isBabyLock && isFS && (
+        <div 
+          className={`absolute inset-0 z-20 pointer-events-none flex items-center justify-center gap-8 sm:gap-20 transition-all duration-300 ${
+            showControls || !isPlaying 
+              ? "opacity-100 scale-100 pointer-events-auto" 
+              : "opacity-0 scale-95 pointer-events-none"
           }`}
-        />
-      )}
-
-      {/* Center Big Skip / Play Overlay Controls in Fullscreen */}
-      {!isBabyLock && isFS && showControls && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center gap-8 sm:gap-16">
+        >
+          {/* -10s Rewind */}
           <button
             type="button"
             onClick={(e) => {
@@ -717,15 +930,17 @@ const VideoPlayerWithControls = ({
               let newPlayed = Math.max(0, ((played * duration) - 10) / (duration || 1));
               onSeekChange(newPlayed);
               onSeekMouseUp(newPlayed);
+              setDoubleTapPulse({ type: 'rewind', key: Date.now() });
               resetControlsTimeout();
             }}
-            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/15 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-black/40 border border-white/10 w-12 h-12 sm:w-16 sm:h-16 shadow-2xl"
+            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/20 active:scale-90 rounded-full transition-all cursor-pointer backdrop-blur-xl bg-black/50 border border-white/15 w-13 h-13 sm:w-16 sm:h-16 shadow-2xl"
             title="Retroceder 10 segundos"
           >
             <SkipBack className="fill-current w-5 h-5 sm:w-7 sm:h-7" />
             <span className="text-[8px] sm:text-[9px] font-bold mt-0.5">10s</span>
           </button>
 
+          {/* Big Center Play / Pause */}
           <button
             type="button"
             onClick={(e) => {
@@ -733,16 +948,17 @@ const VideoPlayerWithControls = ({
               setIsPlaying(!isPlaying);
               resetControlsTimeout();
             }}
-            className="pointer-events-auto flex items-center justify-center text-white hover:text-white hover:scale-105 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-red-600/90 hover:bg-red-600 border border-white/20 w-16 h-16 sm:w-20 sm:h-20 shadow-[0_0_30px_rgba(220,38,38,0.7)]"
+            className="pointer-events-auto flex items-center justify-center text-white hover:scale-105 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-xl bg-red-600/90 hover:bg-red-600 border border-white/25 w-18 h-18 sm:w-22 sm:h-22 shadow-[0_0_40px_rgba(220,38,38,0.75)]"
             title={isPlaying ? "Pausar" : "Reproducir"}
           >
             {isPlaying ? (
-              <Pause className="fill-current w-8 h-8 sm:w-10 sm:h-10" />
+              <Pause className="fill-current w-9 h-9 sm:w-11 sm:h-11" />
             ) : (
-              <Play className="fill-current ml-1 w-8 h-8 sm:w-10 sm:h-10" />
+              <Play className="fill-current ml-1 w-9 h-9 sm:w-11 sm:h-11" />
             )}
           </button>
 
+          {/* +10s Forward */}
           <button
             type="button"
             onClick={(e) => {
@@ -750,9 +966,10 @@ const VideoPlayerWithControls = ({
               let newPlayed = Math.min(0.999, ((played * duration) + 10) / (duration || 1));
               onSeekChange(newPlayed);
               onSeekMouseUp(newPlayed);
+              setDoubleTapPulse({ type: 'forward', key: Date.now() });
               resetControlsTimeout();
             }}
-            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/15 active:scale-95 rounded-full transition-all cursor-pointer backdrop-blur-md bg-black/40 border border-white/10 w-12 h-12 sm:w-16 sm:h-16 shadow-2xl"
+            className="pointer-events-auto flex flex-col items-center justify-center text-white/90 hover:text-white hover:bg-white/20 active:scale-90 rounded-full transition-all cursor-pointer backdrop-blur-xl bg-black/50 border border-white/15 w-13 h-13 sm:w-16 sm:h-16 shadow-2xl"
             title="Adelantar 10 segundos"
           >
             <SkipForward className="fill-current w-5 h-5 sm:w-7 sm:h-7" />
@@ -761,13 +978,24 @@ const VideoPlayerWithControls = ({
         </div>
       )}
 
-      {/* Control Bar Overlay (Always shown when active) */}
+      {/* BOTTOM CONTROL BAR OVERLAY */}
       {!isBabyLock && (
         <div
           onMouseMove={resetControlsTimeout}
-          className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-end ${
-            showControls || !isPlaying ? "opacity-100" : "opacity-0"
+          className={`absolute inset-0 z-20 pointer-events-none transition-all duration-300 flex flex-col justify-end ${
+            showControls || !isPlaying 
+              ? "opacity-100 translate-y-0 pointer-events-auto" 
+              : "opacity-0 translate-y-3 pointer-events-none"
           }`}
+          style={
+            isFS 
+              ? {
+                  paddingBottom: 'max(env(safe-area-inset-bottom), 1.25rem)',
+                  paddingLeft: 'max(env(safe-area-inset-left), 1rem)',
+                  paddingRight: 'max(env(safe-area-inset-right), 1rem)',
+                }
+              : {}
+          }
         >
           <ActivePlayerControlBar
             isPlaying={isPlaying}
@@ -792,11 +1020,18 @@ const VideoPlayerWithControls = ({
         </div>
       )}
 
-      {/* Ultra-thin ambient progress bar pinned at bottom edge when controls auto-hide */}
+      {/* Ambient Progress Line pinned at bottom edge when controls hide */}
       {!isBabyLock && !showControls && isPlaying && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white/20 z-10 pointer-events-none overflow-hidden">
+        <div 
+          className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/20 z-10 pointer-events-none overflow-hidden"
+          style={
+            isFS 
+              ? { bottom: 'max(env(safe-area-inset-bottom), 0px)' } 
+              : {}
+          }
+        >
           <div
-            className="h-full bg-red-600 transition-all duration-200"
+            className="h-full bg-red-600 transition-all duration-200 shadow-[0_0_8px_rgba(220,38,38,0.8)]"
             style={{ width: `${played * 100}%` }}
           />
         </div>
