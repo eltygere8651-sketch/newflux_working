@@ -1162,6 +1162,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
   const [exploreMode, setExploreMode] = useState<"audio" | "video">("audio");
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
   const [videoTabQuery, setVideoTabQuery] = useState("");
   const [videoTabResults, setVideoTabResults] = useState<any[]>([]);
   const [videoTabInitialFeed, setVideoTabInitialFeed] = useState<any[]>([]);
@@ -2315,7 +2316,43 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     img.style.display = "none";
   }, []);
 
+  const ensurePremiumValid = useCallback(() => {
+    if (accessData && !accessData.isValid) {
+      setShowExpiredModal(true);
+      if (isPlaying) {
+         setIsPlaying(false);
+         expectedPlayingRef.current = false;
+         if (youtubePlayerRef.current) {
+            try {
+               const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+               if (intPlayer && typeof intPlayer.pauseVideo === 'function') intPlayer.pauseVideo();
+            } catch(e){}
+         }
+      }
+      return false;
+    }
+    return true;
+  }, [accessData, isPlaying]);
+
+  useEffect(() => {
+    if (isPlaying && accessData && !accessData.isValid) {
+      setIsPlaying(false);
+      setShowExpiredModal(true);
+      expectedPlayingRef.current = false;
+      if (youtubePlayerRef.current) {
+        try {
+           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+           if (intPlayer && typeof intPlayer.pauseVideo === 'function') intPlayer.pauseVideo();
+        } catch(e){}
+      }
+      if (fallbackSilentAudioRef.current) {
+         fallbackSilentAudioRef.current.pause();
+      }
+    }
+  }, [isPlaying, accessData]);
+
   const togglePlayback = useCallback(() => {
+    if (!isPlaying && !ensurePremiumValid()) return;
     const nextPlaying = !isPlaying;
     expectedPlayingRef.current = nextPlaying;
 
@@ -2335,6 +2372,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   const lastSkipTimeRef = useRef<number>(0);
 
   const loadIframeVideoDirectly = (targetTrack: any) => {
+    if (!ensurePremiumValid()) return;
     hasStolenLockForTrackRef.current = false;
     if (!targetTrack) return;
     if ("mediaSession" in navigator) {
@@ -2371,6 +2409,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   };
 
   const handleNext = useCallback((_isAutomaticParam = false) => {
+    if (!ensurePremiumValid()) return;
     const now = Date.now();
     if (now - lastSkipTimeRef.current < 400) return;
     lastSkipTimeRef.current = now;
@@ -2548,6 +2587,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   ]);
 
   const handlePrev = useCallback(() => {
+    if (!ensurePremiumValid()) return;
     const now = Date.now();
     if (now - lastSkipTimeRef.current < 400) return;
     lastSkipTimeRef.current = now;
@@ -9749,12 +9789,23 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         )}
       </AnimatePresence>
 
-      {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
-        <div className="absolute inset-0 z-[99999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
+      <AnimatePresence>
+      {showExpiredModal && (
+        <motion.div 
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           exit={{ opacity: 0, scale: 0.95 }}
+           className="absolute inset-0 z-[99999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto"
+        >
           {/* Authentic Spotify premium subtle ambient green glow */}
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[radial-gradient(circle,_rgba(30,215,96,0.15)_0%,_transparent_70%)] pointer-events-none" />
 
           <div className="relative z-10 max-w-sm w-full bg-[#121212] border border-white/10 rounded-2xl sm:rounded-[28px] p-4 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.9)] flex flex-col items-center">
+            
+            <button onClick={() => setShowExpiredModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+               <X className="w-5 h-5" />
+            </button>
+
             {/* Spotify Brand Emblem / Tech Vibe Dot */}
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black rounded-full border border-[#1ED760]/20 flex items-center justify-center mb-4 sm:mb-6 shadow-inner relative group">
               <span className="absolute inset-0 rounded-full bg-[#1ED760]/10 blur-sm group-hover:bg-[#1ED760]/20 transition-all pointer-events-none" />
@@ -9815,6 +9866,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                   {/* Siempre mostramos el boton de contactar */}
                   <button
                     onClick={async () => {
+                      setShowExpiredModal(false);
                       window.dispatchEvent(new CustomEvent('open-sidebar-menu', { detail: { openSupport: true, message: 'Hola.\n\nHe utilizado mi prueba gratuita de Flux Music y quiero activar la suscripción Premium de 5 €/mes.\n\nQuedo pendiente.' } }));
                     }}
                     className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20"
@@ -9857,8 +9909,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             )}
 
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
       
       {exploreMode === "video" && typeof document !== "undefined" && createPortal(
         <React.Suspense
