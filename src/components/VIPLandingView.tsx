@@ -396,6 +396,19 @@ export const VIPLandingView = () => {
                Ya tengo una prueba activa
              </button>
           )}
+
+          {auth.currentUser && (
+             <button
+               onClick={() => {
+                 signOut(auth);
+                 window.location.reload();
+               }}
+               className="mt-12 text-white/40 hover:text-white/80 transition-colors text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 z-10"
+             >
+               <LogOut className="w-4 h-4" />
+               Cerrar Sesión
+             </button>
+          )}
        </div>
     </div>
   );

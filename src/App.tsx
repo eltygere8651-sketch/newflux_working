@@ -916,8 +916,8 @@ function AppContent() {
   const canShowInstallHelper = deferredPrompt && !isStandalone && !isIOS;
 
   const isVIPMode = typeof window !== 'undefined' && (window.location.pathname === '/vip' || window.location.search.includes('vip=1'));
-  const isAnonymousExpired = user?.isAnonymous && accessData && !accessData.isValid && accessData.trialStart;
-  if (isVIPMode || isAnonymousExpired) {
+  const isSubscriptionEnded = accessData && !accessData.isValid;
+  if (isVIPMode || isSubscriptionEnded) {
     return <VIPLandingView />;
   }
 
