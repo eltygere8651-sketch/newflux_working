@@ -52,7 +52,6 @@ import { Play,
   UserPlus,
   Library,
   Globe,
-  Mic, 
   Youtube,
 } from "lucide-react";
 import { DEFAULT_MUSIC_COVER } from "../lib/constants";
@@ -105,13 +104,9 @@ const LazyExploreView = React.lazy(() =>
 // Feature Release Timestamps (for "NEW" badges)
 const VIDEOS_FEATURE_RELEASE = Date.now(); // Set to current time to ensure it shows for the next 24h
 const VIDEOS_RELEASE_MESSAGE = "¡Novedad! Sección de Vídeos HD ya disponible en Explorar 🎬";
-const LazyPodcastView = React.lazy(() =>
-  import("./PodcastView").then((m) => ({ default: m.PodcastView })),
-);
 const LazyVideoView = React.lazy(() =>
   import("./VideoView").then((m) => ({ default: m.VideoView })),
 );
-const LazyFluxKaraoke = React.lazy(() => import("./FluxKaraoke"));
 const LazyUserManagementAdmin = React.lazy(() =>
   import("./UserManagementAdmin").then((m) => ({
     default: m.UserManagementAdmin,
@@ -1248,10 +1243,11 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
   }, [selectedCountry]);
 
   useEffect(() => {
+    let isCancelled = false;
     const fetchCustomExplorePlaylists = async (force = false) => {
       try {
         const { getDocs, collection, query, orderBy } = await import("firebase/firestore");
-        let lists = await fetchWithCache("gym_music_explore_custom_playlists_cache", 1000 * 60 * 60 * 12, async () => {
+        let lists = await fetchWithCache("gym_music_explore_custom_playlists_cache", 1000 * 60 * 15, async () => {
            const q = query(
              collection(db, "explore_custom_playlists"),
              orderBy("createdAt", "desc"),
@@ -1269,7 +1265,53 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           (!p.country && selectedCountry === "ES")
         );
         
-        setCustomExplorePlaylists(lists);
+        if (isCancelled) return;
+
+        // Reuse synced 30-min localStorage cache to avoid redundant serverless POST calls on Vercel Free Plan
+        const syncedCacheKey = `gym_music_explore_custom_playlists_synced_${selectedCountry}`;
+        let usedSyncedCache = false;
+        if (!force && lists.length > 0) {
+          try {
+            const rawSynced = localStorage.getItem(syncedCacheKey);
+            if (rawSynced) {
+              const parsedSynced = JSON.parse(rawSynced);
+              if (
+                Date.now() - parsedSynced.timestamp < 1000 * 60 * 30 &&
+                Array.isArray(parsedSynced.data) &&
+                parsedSynced.data.length === lists.length &&
+                parsedSynced.data.every((p: any, idx: number) => p?.id === lists[idx]?.id)
+              ) {
+                setCustomExplorePlaylists(parsedSynced.data);
+                usedSyncedCache = true;
+              }
+            }
+          } catch {}
+        }
+
+        if (!usedSyncedCache) {
+          setCustomExplorePlaylists(lists);
+          // Background sync with live YouTube Music metadata & cover repair (keeps exact count, order, and valid covers)
+          if (lists.length > 0) {
+            fetch("/api/youtube/sync-explore-playlists", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items: lists }),
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((synced) => {
+                if (!isCancelled && Array.isArray(synced) && synced.length === lists.length) {
+                  setCustomExplorePlaylists(synced);
+                  try {
+                    localStorage.setItem(
+                      syncedCacheKey,
+                      JSON.stringify({ timestamp: Date.now(), data: synced }),
+                    );
+                  } catch {}
+                }
+              })
+              .catch(() => {});
+          }
+        }
       } catch (error) {
         console.warn(
           "Permiso denegado para explorar listas personalizadas, o reglas no propagadas:",
@@ -1281,7 +1323,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
 
     const handleRefresh = () => fetchCustomExplorePlaylists(true);
     window.addEventListener("refreshExplore", handleRefresh);
-    return () => window.removeEventListener("refreshExplore", handleRefresh);
+    return () => {
+      isCancelled = true;
+      window.removeEventListener("refreshExplore", handleRefresh);
+    };
   }, [selectedCountry]);
 
   const handleAddCustomExplorePlaylist = async (
@@ -1507,8 +1552,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   }, [trackQueue]);
   const [trackListTab, setTrackListTab] = useState<
-    "playlist" | "search" | "queue" | "entertainment" | "radio-fai" | "karaoke" | "artist" | "news"
-  >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
+    "playlist" | "search" | "queue" | "radio-fai" | "artist" | "news"
+  >(() => {
+    const saved = localStorage.getItem("gym_music_last_tab");
+    if (saved === "karaoke" || saved === "entertainment") {
+      return "search";
+    }
+    return (saved as any) || "search";
+  });
   const [previousTab, setPreviousTab] = useState<string>("search");
   
   const [hasNewExplore, setHasNewExplore] = useState(Date.now() - VIDEOS_FEATURE_RELEASE < 24 * 60 * 60 * 1000);
@@ -2884,10 +2935,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         }
 
         if (playingFound || selectedFound) {
-          const lastTab = localStorage.getItem("gym_music_last_tab");
-          if (lastTab !== "entertainment") {
-            setTrackListTab("playlist");
-          }
+          setTrackListTab("playlist");
           if (playingFound) setMobileView("player");
           pendingRestorePlayingRef.current = null;
           pendingRestoreSelectedRef.current = null;
@@ -3087,58 +3135,69 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
     }
   }, [isPlaying, playingPlaylist?.id, currentTrack?.id]);
 
+  const exploreLastFetchedAtRef = useRef<number>(0);
+  const exploreLastCountryRef = useRef<string>(selectedCountry);
+
   useEffect(() => {
-    if (trackListTab === "search" && !exploreData && !isLoadingExplore) {
+    const isStale =
+      exploreData !== null &&
+      (exploreLastCountryRef.current !== selectedCountry ||
+        Date.now() - exploreLastFetchedAtRef.current > 1000 * 60 * 30);
+
+    if (trackListTab === "search" && (!exploreData || isStale) && !isLoadingExplore) {
       const fetchExplore = async () => {
-        setIsLoadingExplore(true);
+        const hasExistingData = Boolean(exploreData && exploreLastCountryRef.current === selectedCountry);
+        if (!hasExistingData) {
+          setIsLoadingExplore(true);
+        }
         try {
           const res = await fetch(
             `/api/youtube/explore?country=${selectedCountry || "ES"}`,
           );
           if (res.ok) {
             const data = await res.json();
+            exploreLastFetchedAtRef.current = Date.now();
+            exploreLastCountryRef.current = selectedCountry;
 
             // --- SILENT MIX PARA TI INJECTION ---
             try {
               const history = getPlayHistory();
               const historyList = Object.values(history);
               if (historyList.length > 2) {
-                // Ensure arrays exist
-                data.mixParaTi = [];
+                // Preserve live YouTube Music mixes and prepend user mixes
+                const existingYTMixes = Array.isArray(data.mixParaTi) ? data.mixParaTi : [];
+                const localMixes: any[] = [];
 
                 // Mix 1: Tus Más Escuchados
                 const topPlayed = [...historyList]
                   .sort((a, b) => b.playCount - a.playCount)
                   .slice(0, 30);
                 if (topPlayed.length > 0) {
-                  data.mixParaTi.push({
+                  const mappedTracks = topPlayed.map((t, i) => {
+                    let vId = t.trackId;
+                    if (t.url && typeof t.url === "string" && t.url.includes("v=")) {
+                      vId = t.url.split("v=")[1]?.split("&")[0] || t.trackId;
+                    }
+                    return {
+                      id: `local_his_${i}_${vId}`,
+                      title: t.title,
+                      artist: t.artist,
+                      duration: "0:00",
+                      url: t.url || `https://www.youtube.com/watch?v=${vId}`,
+                      thumbnail: `https://i.ytimg.com/vi/${vId}/mqdefault.jpg`,
+                    };
+                  });
+                  localMixes.push({
                     id: "mix_mas_escuchados",
                     title: "Tus Más Escuchados",
                     artist: "Historia Flux",
                     isPlaylist: true,
                     isLocalMix: true,
-                    thumbnail: topPlayed[0].url
-                      ? undefined
-                      : `https://i.ytimg.com/vi/${topPlayed[0].trackId}/mqdefault.jpg`,
-                    tracks: topPlayed.map((t, i) => {
-                      let vId = t.trackId;
-                      if (t.url && typeof t.url === "string" && t.url.includes("v=")) {
-                        vId = t.url.split("v=")[1]?.split("&")[0] || t.trackId;
-                      }
-                      return {
-                        id: `local_his_${i}_${vId}`,
-                        title: t.title,
-                        artist: t.artist,
-                        duration: "0:00",
-                        url: t.url || `https://www.youtube.com/watch?v=${vId}`,
-                        thumbnail: `https://i.ytimg.com/vi/${vId}/mqdefault.jpg`,
-                      };
-                    }),
+                    thumbnail: mappedTracks[0]?.thumbnail,
+                    tracks: mappedTracks,
                   });
-                  // Fix thumbnail
-                  const firstTrack = data.mixParaTi[0].tracks[0];
-                  data.mixParaTi[0].thumbnail = firstTrack.thumbnail;
                 }
+                data.mixParaTi = [...localMixes, ...existingYTMixes];
 
                 // Mix 2: Mix Descubrimiento (Silent YouTube search based on multiple top played artists)
                 const topUniqueArtists: string[] = [];
@@ -5459,65 +5518,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
             </span>
           )}
         </button>
-
-        {/* Karaoke - Moved to top for mobile */}
-        <button
-          onClick={() => {
-            setSearchQuery("");
-            setYoutubeResults([]);
-            setPreviewPlaylist(null);
-            
-            setTrackListTab("karaoke");
-            setIsTrackListExpanded(true);
-            setShowLibrary(false);
-            setIsSidebarExpanded(false);
-            if (window.innerWidth < 768) {
-              setMobileView("player");
-            }
-          }}
-          className={`relative flex shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start items-center justify-center ${
-            trackListTab === "karaoke" &&
-            !showLibrary &&
-            !isSidebarExpanded &&
-            (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
-              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-emerald-400 rounded-full blur-[6px] animate-pulse opacity-85"></div>
-              <Mic className="relative w-4 h-4 text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" />
-            </div>
-            <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Karaoke</span>
-          </span>
-        </button>
-        {/* Podcasts */}
-        <button
-          onClick={() => {
-            setSearchQuery("");
-            setYoutubeResults([]);
-            setPreviewPlaylist(null);
-            setTrackListTab("entertainment");
-            setIsTrackListExpanded(true);
-            setShowLibrary(false);
-            setIsSidebarExpanded(false);
-            if (window.innerWidth < 768) {
-              setMobileView("player");
-            }
-          }}
-          className={`relative shrink-0 px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
-            trackListTab === "entertainment" &&
-            !showLibrary &&
-            !isSidebarExpanded &&
-            (window.innerWidth >= 768 || mobileView === "player")
-              ? "bg-gradient-to-b from-[#1a1a20] to-[#0a0a0c] backdrop-blur-2xl border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] ring-1 ring-white/20"
-              : "bg-white/[0.03] backdrop-blur-md border-white/[0.05] hover:bg-white/[0.08] shadow-sm"
-          }`}
-        >
-          <span className="font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">Podcasts</span>
-
-        </button>
       </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
@@ -6077,7 +6077,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
         >
           {/* PLAYER BAR */}
           <div
-            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" || (trackListTab === "search" && exploreMode === "video") ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-hidden md:overflow-y-auto md:overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85 border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
+            className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || (trackListTab === "search" && exploreMode === "video") ? "hidden" : !isTrackListExpanded ? "flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-hidden md:overflow-y-auto md:overflow-x-hidden" : "hidden md:flex flex-none p-3 border-b border-white/5"} bg-[#0a0a0b]/85 border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}
           >
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -6663,14 +6663,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
           {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
           {selectedPlaylist ||
           trackListTab === "search" ||
-          trackListTab === "entertainment" ||
           trackListTab === "news" ||
-          trackListTab === "karaoke" ||
           trackListTab === "radio-fai" ? (
             <div
               className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) && trackListTab !== "radio-fai" && !(trackListTab === "search" && exploreMode === "video") ? "hidden" : "flex"}`}
             >
-              {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
+              {trackListTab !== "news" && trackListTab !== "radio-fai" && (
                 <div className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40">
                   <div className="flex flex-col w-full">
                     {/* Search Bar matching Tab */}
@@ -6837,50 +6835,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                 {/* Unified ambient background glow matching FAIView (FLUX) tab */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60%] bg-[radial-gradient(ellipse_at_top,_rgba(192,38,211,0.12),_rgba(6,182,212,0.05),_transparent_70%)] pointer-events-none z-0" />
                 <div
-                  className={`flex-1 ${trackListTab === "entertainment" || trackListTab === "news" || trackListTab === "radio-fai" || trackListTab === "karaoke" || (trackListTab === "search" && exploreMode === "video") ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
+                  className={`flex-1 ${trackListTab === "news" || trackListTab === "radio-fai" || (trackListTab === "search" && exploreMode === "video") ? "overflow-hidden pb-0" : "overflow-y-auto pb-[120px] sm:pb-0"} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}
                 >
-                  {trackListTab === "karaoke" ? (
-                    <React.Suspense
-                      fallback={
-                        <div className="p-12 text-center text-slate-500">
-                          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
-                        </div>
-                      }
-                    >
-                      <LazyFluxKaraoke />
-                    </React.Suspense>
-                  ) : trackListTab === "entertainment" ? (
-                    <React.Suspense
-                      fallback={
-                        <div className="p-12 text-center text-slate-500">
-                          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
-                        </div>
-                      }
-                    >
-                      <LazyPodcastView
-                        isVisible={true}
-                        pauseBackgroundMusic={() => {
-                          setIsPlaying(false);
-                          expectedPlayingRef.current = false;
-                          if (youtubePlayerRef.current) {
-                            try {
-                              const intPlayer =
-                                youtubePlayerRef.current.getInternalPlayer();
-                              if (
-                                intPlayer &&
-                                typeof intPlayer.pauseVideo === "function"
-                              ) {
-                                intPlayer.pauseVideo();
-                              }
-                            } catch (e) {}
-                          }
-                          if (fallbackSilentAudioRef.current) {
-                            fallbackSilentAudioRef.current.pause();
-                          }
-                        }}
-                      />
-                    </React.Suspense>
-                  ) : trackListTab === "news" ? (
+                  {trackListTab === "news" ? (
                     <div className="flex-1 overflow-y-auto bg-[#070709]" />
                   ) : trackListTab === "radio-fai" ? (
                     <div className="flex-1 h-full overflow-hidden">
@@ -8092,7 +8049,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
                   )}
                 </div>
 
-                {trackListTab !== "entertainment" && trackListTab !== "news" && trackListTab !== "radio-fai" && trackListTab !== "karaoke" && (
+                {trackListTab !== "news" && trackListTab !== "radio-fai" && (
                   <div className="bg-[#050505] border-t border-white/5 flex flex-col shrink-0">
                     <div className="px-3 py-1.5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest">
                       <span>Total: {viewedTracks.length || 0} canciones</span>
@@ -8132,7 +8089,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0, hasUnreadNews =
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
       {currentTrack &&
         isTrackListExpanded &&
-        trackListTab !== "entertainment" &&
         trackListTab !== "radio-fai" &&
         !(trackListTab === "search" && exploreMode === "video") && (
           <div className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]">

@@ -47,13 +47,6 @@ const COMPILED_COMMUNITY: Announcement[] = [
 
 const COMPILED_GUIDES: Announcement[] = [
   {
-    id: "guide-v1",
-    title: "🎥 Paso a paso: Cómo sacar el máximo partido al Ecualizador y Karaoke",
-    category: "guia",
-    createdAt: new Date("2026-07-26T16:00:00Z"),
-    content: "1. Toca en el botón de ecualizador para ajustar graves y presencia vocal.\n2. Inicia cualquier canción y presiona el icono de Karaoke para ver las letras dinámicas.\n3. Activa los efectos de eco nativos para cantar en tiempo real."
-  },
-  {
     id: "guide-v2",
     title: "🎥 Guía rápida: Crear playlists personalizadas y reordenar tu biblioteca",
     category: "guia",

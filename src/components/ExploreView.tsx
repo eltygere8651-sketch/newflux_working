@@ -1066,24 +1066,32 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                               item.thumbnail = src;
                               item.imageUrl = src;
                               setSrc(src);
-                              if (item.docId) {
+                              if (item.docId && isAdmin) {
                                 updateDoc(doc(db, "explore_custom_playlists", item.docId), { thumbnail: src }).catch(() => {});
                               }
                             };
                             if (item.id) {
-                              const isPlaylist = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE");
+                              const isPlaylist = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE") || item.id.startsWith("RDCLAK") || item.id.startsWith("OLAK");
                               if (isPlaylist) {
-                                fetch(`/api/youtube/playlist?id=${item.id}`)
-                                  .then(res => {
-                                    if (!res.ok) throw new Error("Backend error");
-                                    return res.json();
-                                  })
-                                  .then(tracks => {
-                                    if (Array.isArray(tracks) && tracks.length > 0 && tracks[0].id) {
-                                      handleSetSrc(`https://i.ytimg.com/vi/${tracks[0].id}/hqdefault.jpg`);
-                                    } else {
-                                      throw new Error("No tracks");
+                                fetch(`/api/youtube/playlist-info?id=${item.id}`)
+                                  .then(res => res.ok ? res.json() : null)
+                                  .then(info => {
+                                    if (info && info.thumbnail && !info.thumbnail.includes("i9.ytimg.com/s_p/")) {
+                                      handleSetSrc(info.thumbnail);
+                                      return;
                                     }
+                                    return fetch(`/api/youtube/playlist?id=${item.id}`)
+                                      .then(res => {
+                                        if (!res.ok) throw new Error("Backend error");
+                                        return res.json();
+                                      })
+                                      .then(tracks => {
+                                        if (Array.isArray(tracks) && tracks.length > 0 && tracks[0].id) {
+                                          handleSetSrc(`https://i.ytimg.com/vi/${tracks[0].id}/hqdefault.jpg`);
+                                        } else {
+                                          throw new Error("No tracks");
+                                        }
+                                      });
                                   })
                                   .catch(() => {
                                     const fallbackUrl = `https://pipedapi.kavin.rocks/playlists/${item.id}`;
